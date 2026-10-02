@@ -6,9 +6,9 @@ The project focuses on a simple car-insurance pricing platform. It is not intend
 
 ## Current Project Status
 
-**Current Phase: Phase 0 — Repository and Project Foundation**
+**Phase 1 — Local Infrastructure: Complete**
 
-Only repository structure and documentation are present. No application implementation has started yet. Implementation will proceed phase by phase.
+Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 has not started. No application implementation has started yet. Implementation will proceed phase by phase.
 
 ## Main Users
 
@@ -41,7 +41,7 @@ All features below are planned, not implemented:
 - **Kafka** for asynchronous domain events
 - **PostgreSQL** for all backend services
 
-REST will be used for synchronous communication when an immediate response is needed. Each microservice will own its own logical database, with no cross-service database access. Transactional Outbox will be introduced in a later phase. These are planned components; no services or runtime configuration exist yet.
+REST will be used for synchronous communication when an immediate response is needed. Each microservice will own its own logical database, with no cross-service database access. Transactional Outbox will be introduced in a later phase. PostgreSQL and Kafka are configured for local development. The frontend, gateway, and five backend services remain planned and unimplemented.
 
 ## Repository Structure
 
@@ -61,19 +61,70 @@ infrastructure/              Shared runtime/deployment support
 docs/                        Project planning documentation
   adr/                       Architecture Decision Records
   specs/                     Future implementation specifications
-docker-compose.yml           Empty Compose placeholder
+docker-compose.yml           Shared PostgreSQL and Kafka infrastructure
 ```
 
 Empty runtime directories contain `.gitkeep` files so Git retains them. `infrastructure/` is reserved for shared Docker, Kafka, and PostgreSQL support. Future service-owned Flyway migrations must live in the owning Spring Boot service, never in `infrastructure/`.
 
 Start with [project context](docs/project-context.md), [architecture](docs/architecture.md), and the [implementation roadmap](docs/implementation-roadmap.md). Detailed planning that has not yet been supplied is explicitly marked as pending.
 
-## Future Local Development
+## Local Infrastructure
 
-In Phase 1, shared local infrastructure will be added. Later, the intended command is:
+### Prerequisites
+
+Install Docker with Docker Compose and start the Docker daemon (for example, Docker Desktop). No Java or Node installation is required for this phase.
+
+### Start Infrastructure
+
+From the repository root:
 
 ```bash
 docker compose up -d
 ```
 
-This command does **not** start infrastructure yet: the Compose file currently defines no services. Local setup instructions will be added alongside the infrastructure implementation.
+Defaults work without an `.env` file. Optionally copy `.env.example` to `.env` and adjust the ports or development credentials before first startup. `.env` is ignored by Git. The example credentials are public and development-only.
+
+### Check Status
+
+```bash
+docker compose ps
+docker compose ps -a
+docker compose logs kafka-init
+```
+
+Wait for `postgres` and `kafka` to become healthy and `kafka-init` to exit with code `0`. The one-shot initialization job creates all six topics; `up -d` alone does not mean topic initialization has finished. No application containers run yet.
+
+### Stop Infrastructure
+
+```bash
+docker compose down
+```
+
+Named volumes are intentionally preserved. Starting again reuses the databases and Kafka data. `docker compose down -v` explicitly deletes these volumes and their data; it is not a normal stop or restart command.
+
+### Local Connections
+
+| Component | Host applications | Containers on the Compose network |
+| --- | --- | --- |
+| PostgreSQL | `localhost:5432` | `postgres:5432` |
+| Kafka bootstrap servers | `localhost:9092` | `kafka:19092` |
+
+Host ports can be changed with `POSTGRES_PORT` and `KAFKA_EXTERNAL_PORT`. On the machine used for Phase 1 validation, an ignored `.env` sets PostgreSQL to `localhost:15432` and Kafka to `localhost:29092` because another project occupies the defaults. This local file is not included in a fresh clone. Kafka's advertised host listener follows `KAFKA_EXTERNAL_PORT`. Published ports bind to IPv4 loopback only; container clients use the internal addresses on the Compose network.
+
+PostgreSQL defaults to username `insurance_dev` and password `local_dev_only`, overridden by `POSTGRES_USER` and `POSTGRES_PASSWORD`. The five service databases are:
+
+| Future service | Logical database |
+| --- | --- |
+| Auth Service | `auth_db` |
+| Quote Service | `quote_db` |
+| Pricing Service | `pricing_db` |
+| Notification Service | `notification_db` |
+| Audit Service | `audit_db` |
+
+Each future service must access only its own database. The shared local bootstrap account is an administrative development convenience, not enforcement of service isolation. No business tables exist.
+
+Kafka main topics are `insurance.user.events`, `insurance.quote.events`, and `insurance.pricing.events`. Each has a matching `.dlq` topic. All six use **3 partitions and replication factor 1**. DLQ processing, event contracts, and application producers/consumers come later.
+
+See [infrastructure guidance](infrastructure/README.md) for initialization behavior, verification commands, persistence checks, and troubleshooting.
+
+Validation results and the machine-specific port overrides are recorded in [Phase 1 validation](infrastructure/phase-1-validation.md).

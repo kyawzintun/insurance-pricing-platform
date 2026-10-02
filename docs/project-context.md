@@ -9,3 +9,5 @@ Planned technologies: Angular + NgRx, Spring Boot 4, Spring Security, Kafka, Pos
 The main users are CUSTOMER and ADMIN. Work proceeds incrementally, phase by phase, in one monorepo. Phase 0 provides only repository and documentation foundations; no application implementation has started.
 
 Detailed approved planning notes have not yet been supplied. Future specifications should capture agreed behavior before implementation; unresolved details must not be treated as approved requirements.
+
+Phase 1 adds shared local PostgreSQL and Kafka infrastructure only. Application code remains unimplemented; Phase 2 has not started.

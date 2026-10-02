@@ -24,3 +24,9 @@ Spring Boot 4 and Spring Security are planned backend technologies. No additiona
 Future Flyway migrations belong inside the owning Spring Boot service, never in `infrastructure/`. Kubernetes and Terraform are outside Phase 0 and are not configured.
 
 No service scaffolding, runtime infrastructure, database schemas, or communication contracts are implemented in Phase 0. Detailed topology, API contracts, and deployment choices remain pending.
+
+## Phase 1 — Local Infrastructure
+
+One local PostgreSQL container hosts five logical service databases. One Kafka broker runs in combined broker/controller KRaft mode, without ZooKeeper. A one-shot Compose initialization job creates the approved domain topics after Kafka passes its health check. Named volumes persist both systems across container recreation.
+
+Host applications use `localhost:5432` and `localhost:9092` by default; future containers on the Compose network use `postgres:5432` and `kafka:19092`. No application services are containerized yet. Local setup details are in [infrastructure/README.md](../infrastructure/README.md).
