@@ -1,0 +1,3 @@
+# Phase 0 placeholder only: no shared infrastructure is configured.
+# Shared local infrastructure will be added in Phase 1.
+services: {}

@@ -1,0 +1,34 @@
+# Java / Spring
+target/
+build/
+.gradle/
+*.class
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+
+# IDEs (no shared workspace settings currently exist)
+.idea/
+.vscode/
+*.iml
+
+# Operating systems
+.DS_Store
+Thumbs.db
+
+# Local environment and secrets; examples must contain safe placeholders only
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Logs
+*.log
+logs/
