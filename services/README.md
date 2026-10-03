@@ -1,6 +1,6 @@
 # Backend Service Skeletons
 
-Phase 2 supplies six independently runnable applications, with no business APIs, entities, migrations, Kafka message handlers, or gateway routes.
+Phase 2 supplied six independently runnable applications. Phase 3 adds service-owned Flyway migrations and educational seeds; no business APIs, entities, Kafka message handlers, or gateway routes exist.
 
 ## Build Baseline
 
@@ -70,7 +70,7 @@ No local override values or real secrets are stored in application configuration
 
 Notification includes Web MVC and the same small Security baseline for consistent HTTP health behavior. Only `health` and `info` are exposed. All database services use a temporary `Phase2SecurityConfiguration`: health/info are public, all other requests are denied, and form login/HTTP Basic are disabled. Default user auto-configuration is excluded to avoid a generated password. There is no authentication implementation. Replace this baseline when approved security features are introduced. Gateway exposes health/info and has no application routes or JWT configuration.
 
-Hibernate uses `ddl-auto: none`, SQL initialization is disabled, and no entities/repositories are present. Flyway is included with no migration scripts. Flyway automatically creates an empty `flyway_schema_history` metadata table in each database; its no-migrations warning is expected until Phase 3. This is not a business schema. Phase 3 will own migrations inside each service.
+Hibernate uses `ddl-auto: none`, SQL initialization is disabled, and no entities/repositories are present. Flyway now owns the Phase 3 tables and seeds, applying service-owned migrations on startup. Its history records each applied migration; normal restarts validate checksums and do not repeat seeds.
 
 Kafka configuration contains only bootstrap addresses. No listeners, producers, topic beans, retry settings, or DLQ processing are implemented. Broker connectivity is not exercised by application messaging in Phase 2.
 
@@ -90,3 +90,29 @@ done
 Expect HTTP 200 with `"status":"UP"`; standard liveness/readiness group names may also appear. Database-backed services include the datasource health check, while response details remain hidden by default. Startup logs and separate PostgreSQL checks provide additional database-connectivity evidence during validation.
 
 See [Phase 2 validation](../docs/phase-2-validation.md) for the executed commands, results, and remaining boundaries.
+
+## Phase 3 — Database Foundation
+
+Migration files live in `services/<service>/src/main/resources/db/migration/`. There are 15 versioned migrations across the five database services; Gateway remains database-free. See [database design](../docs/database-design.md) for the complete table, constraint, index, and seed inventory.
+
+Start infrastructure, export `.env`, and run each database service with the `local` profile using the commands above. Flyway runs before JPA initializes. A healthy application indicates startup completed; inspect logs for the applied migration versions. The normal Maven context tests deliberately exclude persistence, so `clean verify` alone does not validate SQL migrations against PostgreSQL.
+
+### Intentional Local Database Rebuild
+
+Normal restarts preserve data and never require a reset. For a deliberate clean rebuild of a disposable local database, first stop all applications connected to that database and back up any data you need. The commands below destroy **only `quote_db`**, including its migration history; they are an example to run only when that data loss is intended. They do not remove Kafka data or Docker volumes.
+
+Optional backup (replace the output path with a location outside the repository):
+
+```bash
+docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -Fc quote_db' > /path/outside/repository/quote_db-before-reset.dump
+```
+
+After confirming that the backup succeeded or that the data is disposable:
+
+```bash
+docker compose exec -T postgres sh -c 'dropdb -U "$POSTGRES_USER" quote_db && createdb -U "$POSTGRES_USER" quote_db'
+# With .env exported as described above:
+./mvnw -pl services/quote-service spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+Flyway recreates Quote's schema and seeds from its migrations. Do not recreate tables manually or delete only the history table. If connections remain, `dropdb` fails rather than forcibly disconnecting other clients. Replace the database and matching service only when intentionally rebuilding another service's database. No reset was required during Phase 3 validation.

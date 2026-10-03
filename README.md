@@ -6,9 +6,9 @@ The project focuses on a simple car-insurance pricing platform. It is not intend
 
 ## Current Project Status
 
-**Phase 2 — Spring Boot Service Skeletons: Complete**
+**Phase 3 — Database Foundation and Flyway: Complete**
 
-Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 adds six Maven-based service skeletons. No business functionality is implemented; Phase 3 has not started. Implementation will proceed phase by phase.
+Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Business behavior remains unimplemented; Phase 4 has not started. Implementation will proceed phase by phase.
 
 ## Main Users
 
@@ -121,7 +121,7 @@ PostgreSQL defaults to username `insurance_dev` and password `local_dev_only`, o
 | Notification Service | `notification_db` |
 | Audit Service | `audit_db` |
 
-Each future service must access only its own database. The shared local bootstrap account is an administrative development convenience, not enforcement of service isolation. No business tables exist. Phase 2 Flyway startup creates only its empty `flyway_schema_history` metadata table in each service database.
+Each future service must access only its own database. The shared local bootstrap account is an administrative development convenience, not enforcement of service isolation. Phase 3 Flyway migrations now create each service's tables and educational seeds. See the schema inventory below.
 
 Kafka main topics are `insurance.user.events`, `insurance.quote.events`, and `insurance.pricing.events`. Each has a matching `.dlq` topic. All six use **3 partitions and replication factor 1**. DLQ processing, event contracts, and application producers/consumers come later.
 
@@ -152,8 +152,24 @@ set +a
 ./mvnw -pl services/auth-service spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-Replace the module path to run another service in a separate terminal. All six expose `/actuator/health`; only health/info are exposed through Actuator. Ports and infrastructure connections support environment overrides. No business APIs, gateway routes, authentication, entities, migrations, or application Kafka messaging exist yet.
+Replace the module path to run another service in a separate terminal. All six expose `/actuator/health`; only health/info are exposed through Actuator. Ports and infrastructure connections support environment overrides. No business APIs, gateway routes, authentication, entities, or application Kafka messaging exist yet. Database migrations and seeds are implemented in Phase 3.
 
 See [backend startup and dependency guidance](services/README.md) for per-service packages, environment variables, temporary security behavior, test boundaries, and Maven commands.
 
 Phase 2 startup, health, database, and Kafka safety evidence is recorded in [validation results](docs/phase-2-validation.md).
+
+## Phase 3 — Database Foundation and Flyway
+
+Flyway owns all service schemas. Migrations live under `services/<service>/src/main/resources/db/migration/`; Hibernate schema generation remains disabled.
+
+| Database | Tables (excluding Flyway history) |
+| --- | --- |
+| `auth_db` | `users`, `refresh_tokens`, `outbox_events` |
+| `quote_db` | `vehicle_brands`, `vehicle_models`, `quotes`, `quote_drivers`, `quote_vehicles`, `pricing_breakdowns`, `pricing_adjustments`, `outbox_events` |
+| `pricing_db` | `pricing_rules`, `outbox_events` |
+| `notification_db` | `notifications`, `processed_events` |
+| `audit_db` | `audit_records`, `processed_events` |
+
+Starting the five database services with the local profile applies 15 migrations, including four brands, twelve models, and seven learning-only pricing rules. Normal restarts validate existing migrations without duplicating seeds. No user accounts are seeded. Outbox and processed-event tables do not implement messaging behavior.
+
+See [database design](docs/database-design.md), [validation results](docs/phase-3-validation.md), and [intentional local database rebuild instructions](services/README.md#intentional-local-database-rebuild). No database reset is needed for ordinary development. Phase 4 — Authentication Basics has not started.

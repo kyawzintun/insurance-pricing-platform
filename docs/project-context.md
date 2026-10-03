@@ -13,3 +13,5 @@ Detailed approved planning notes have not yet been supplied. Future specificatio
 Phase 1 adds shared local PostgreSQL and Kafka infrastructure only. Application code remains unimplemented; Phase 2 has not started.
 
 Phase 2 adds six startup-only Spring Boot 4 Maven applications. No business implementation exists. Phase 3 (Database Foundation and Flyway) has not started.
+
+Phase 3 provides service-owned Flyway schemas and fixed educational seeds only. Phase 4 — Authentication Basics has not started.

@@ -17,3 +17,37 @@ The shared PostgreSQL container initializes `auth_db`, `quote_db`, `pricing_db`,
 ## Phase 2 — Connectivity Baseline
 
 All five backend applications connect to their assigned database using environment-driven local configuration. Hibernate DDL is disabled (`ddl-auto: none`), SQL initialization is disabled, and there are no entities, repositories, or migrations. Flyway remains enabled and starts cleanly with zero migrations; it automatically creates an empty `flyway_schema_history` metadata table in each database. No business tables were created. Service-owned migrations remain for Phase 3.
+
+## Phase 3 — Service-Owned Flyway Schemas
+
+Flyway is the schema source of truth. Each service loads its own `src/main/resources/db/migration/` directory. Hibernate remains `ddl-auto: none`; no entities, repositories, business APIs, or message-processing code exist.
+
+| Database | Application tables | Migrations |
+| --- | --- | --- |
+| `auth_db` | `users`, `refresh_tokens`, `outbox_events` | V1 users; V2 refresh tokens; V3 outbox |
+| `quote_db` | `vehicle_brands`, `vehicle_models`, `quotes`, `quote_drivers`, `quote_vehicles`, `pricing_breakdowns`, `pricing_adjustments`, `outbox_events` | V1 catalog; V2 quotes/driver/vehicle; V3 pricing snapshots; V4 outbox; V5 catalog seed |
+| `pricing_db` | `pricing_rules`, `outbox_events` | V1 rules; V2 outbox; V3 pricing seed |
+| `notification_db` | `notifications`, `processed_events` | V1 notifications; V2 processed events |
+| `audit_db` | `audit_records`, `processed_events` | V1 audit records; V2 processed events |
+
+Each database also contains its own `flyway_schema_history`. Applied migrations are immutable: add a new numbered migration for subsequent schema or seed changes, rather than editing an applied file or using Flyway repair to hide checksum changes.
+
+### Constraints and Indexes
+
+Primary keys use application-supplied UUIDs, except `processed_events`, whose key is `(event_id, consumer_name)`. Required fields are NOT NULL. Email, quote references, catalog names, per-quote driver/vehicle/breakdown rows, and relevant event IDs have uniqueness constraints.
+
+Foreign keys exist only for Auth refresh-token ownership and Quote's catalog/model, quote/driver, quote/vehicle, quote/breakdown, and breakdown/adjustment relationships. Delete behavior uses PostgreSQL's default NO ACTION; no cascade policy is invented. Cross-service IDs (`customer_id`, `pricing_rule_id`, notification references, and audit identifiers) have no foreign keys. Quote vehicle catalog IDs/names remain unconstrained historical snapshots.
+
+Checks enforce the supplied Auth role/status values, non-negative experience/claims, monetary amounts/factors, retry counts, sequence numbers, and rule versions; vehicle value, engine size, manufacturing year, and event version must be positive. Other workflow statuses and pricing operators/types remain strings, pending later behavior specifications.
+
+Indexes support refresh-token user/hash lookup, customer quote history, status/expiry lookup, pricing-breakdown adjustments, outbox status/time, active pricing rules, and audit entity/time/event lookup. The `(brand_id, name)` unique index also serves brand-only lookup. The `(event_type, occurred_at DESC)` audit index serves event-only lookup, avoiding redundant single-column indexes.
+
+### Seed Data and Assumptions
+
+Quote V5 adds four active brands and twelve models: Toyota (Yaris, Corolla, Camry), Honda (City, Civic, Accord), Mazda (Mazda 2, Mazda 3, CX-5), and Nissan (Almera, Sylphy, X-Trail).
+
+Pricing V3 adds the seven requested educational rules: base premium 8000.00; age under 25 ×1.25; experience under 3 ×1.15; vehicle age over 10 ×1.20; previous claims at least 2 ×1.30; comprehensive ×1.40; third-party ×1.00. They are enabled with version 0 and effective from `2026-01-01T00:00:00Z`. No calculation order or pricing behavior is implemented.
+
+Seed UUIDs are fixed literals derived once from a stable namespace; timestamps are fixed for reproducible rebuilds. `BASE_PREMIUM` uses `EQUALS` with no comparison operand because the required operator column is non-null; this is a storage placeholder for an unconditional base amount, not an implemented evaluation rule. Email uniqueness follows PostgreSQL's ordinary case-sensitive VARCHAR behavior; normalization is deferred to authentication design. IDs and timestamps have no automatic generation/update triggers. Quote expiry is stored but no expiration scheduler or default is added.
+
+Outbox and processed-event tables are schema preparation only: no publishing, retries, deduplication, or consumer behavior has been implemented. There are no user/account/password seeds.

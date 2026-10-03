@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0, 1, and 2 complete; Phase 3 not started.
+Status: Phases 0 through 3 complete; Phase 4 not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -18,8 +18,12 @@ Completed. Six Spring Boot 4 Maven applications build and start independently, w
 
 ## Phase 3 — Database Foundation and Flyway
 
-Not started. Service-owned database migrations and schema foundations remain deferred. Phase 2 added no migration scripts or business tables.
+Completed. Fifteen service-owned Flyway migrations create the five database schemas and educational vehicle/pricing seeds. Live migration, restart, schema, seed, and Kafka-safety checks passed. See [validation results](phase-3-validation.md).
+
+## Phase 4 — Authentication Basics
+
+Not started. Auth schema foundations exist, but registration, login, password hashing, JWT, and other authentication behavior remain unimplemented.
 
 ## Later Phases
 
-Detailed phase sequencing is pending approved planning notes. Application implementation will proceed incrementally through feature specifications. Transactional Outbox is explicitly deferred to a later phase.
+Detailed phase sequencing is pending approved planning notes. Application implementation will proceed incrementally through feature specifications. Transactional Outbox publishing is deferred; Phase 3 provides only its tables.

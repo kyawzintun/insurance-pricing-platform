@@ -34,3 +34,7 @@ Host applications use `localhost:5432` and `localhost:9092` by default; future c
 ## Phase 2 — Spring Boot Skeletons
 
 Six independent Java 25 / Spring Boot 4.1.1 applications now use a root Maven parent/aggregator and Maven Wrapper. Gateway uses the compatible Spring Cloud 2025.1.3 release train and Gateway Server WebFlux 5.0.3. The gateway has no datasource or routes; the five backend skeletons use their own PostgreSQL databases. No shared Java business code is introduced. See [service guidance](../services/README.md) for dependencies, packages, ports, and official compatibility sources.
+
+## Phase 3 — Schema Ownership
+
+Each database service owns its Flyway files under its own `src/main/resources/db/migration/`. Gateway remains database-free. Only service-local foreign keys are used; cross-service identifiers remain plain references. The existing Maven build and Docker infrastructure are unchanged. Outbox and processed-event schemas prepare later messaging work without implementing it.

@@ -26,3 +26,7 @@ Event schemas, application producers/consumers, retry/DLQ behavior, consumer ide
 ## Phase 2 — Connection Configuration Only
 
 Quote, Pricing, Notification, and Audit include Spring Kafka through the Boot Kafka starter. Their local bootstrap addresses support `KAFKA_BOOTSTRAP_SERVERS`, falling back to `localhost:${KAFKA_EXTERNAL_PORT:9092}`. No application producer, listener, consumer, or topic declaration exists. Live validation found no changes to domain topic offsets or topic configuration. Auth and Gateway have no Kafka dependency.
+
+## Phase 3 — Messaging Storage Only
+
+Auth, Quote, and Pricing now own `outbox_events` tables. Notification and Audit own `processed_events` tables. These are schema foundations only: no publishers, consumers, processing, retries, or DLQ behavior exist. Live validation preserved Kafka topics, partition offsets, and consumer groups.
