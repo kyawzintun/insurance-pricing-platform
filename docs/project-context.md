@@ -11,3 +11,5 @@ The main users are CUSTOMER and ADMIN. Work proceeds incrementally, phase by pha
 Detailed approved planning notes have not yet been supplied. Future specifications should capture agreed behavior before implementation; unresolved details must not be treated as approved requirements.
 
 Phase 1 adds shared local PostgreSQL and Kafka infrastructure only. Application code remains unimplemented; Phase 2 has not started.
+
+Phase 2 adds six startup-only Spring Boot 4 Maven applications. No business implementation exists. Phase 3 (Database Foundation and Flyway) has not started.

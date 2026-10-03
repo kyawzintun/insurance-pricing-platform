@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 and 1 complete; Phase 2 not started.
+Status: Phases 0, 1, and 2 complete; Phase 3 not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -14,7 +14,11 @@ Completed. Added one PostgreSQL container with five logical databases, one Kafka
 
 ## Phase 2 — Spring Boot Service Skeletons
 
-Not started. Application skeletons remain deferred until Phase 1 is validated.
+Completed. Six Spring Boot 4 Maven applications build and start independently, with minimal health endpoints and local environment configuration. The five database services connect to their own databases. No business functionality exists. See [validation results](phase-2-validation.md).
+
+## Phase 3 — Database Foundation and Flyway
+
+Not started. Service-owned database migrations and schema foundations remain deferred. Phase 2 added no migration scripts or business tables.
 
 ## Later Phases
 

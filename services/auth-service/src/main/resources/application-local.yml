@@ -1,0 +1,9 @@
+# Explicit opt-in for applications running on the developer host.
+server:
+  address: ${SERVER_ADDRESS:127.0.0.1}
+  port: ${AUTH_SERVICE_PORT:8081}
+spring:
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/auth_db
+    username: ${POSTGRES_USER:insurance_dev}
+    password: ${POSTGRES_PASSWORD:local_dev_only}

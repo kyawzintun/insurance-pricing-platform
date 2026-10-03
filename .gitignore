@@ -1,7 +1,6 @@
 # Java / Spring
 target/
 build/
-.gradle/
 *.class
 
 # Node / Angular

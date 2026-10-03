@@ -1,0 +1,4 @@
+# Explicit opt-in for applications running on the developer host.
+server:
+  address: ${SERVER_ADDRESS:127.0.0.1}
+  port: ${API_GATEWAY_PORT:8080}

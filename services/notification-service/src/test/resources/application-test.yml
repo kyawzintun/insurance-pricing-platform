@@ -1,0 +1,9 @@
+# Context/HTTP smoke test only. Live PostgreSQL connectivity is validated separately.
+# No database substitute, local credentials, Docker, or Kafka broker needed for tests.
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
+      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration

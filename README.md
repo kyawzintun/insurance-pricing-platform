@@ -6,9 +6,9 @@ The project focuses on a simple car-insurance pricing platform. It is not intend
 
 ## Current Project Status
 
-**Phase 1 — Local Infrastructure: Complete**
+**Phase 2 — Spring Boot Service Skeletons: Complete**
 
-Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 has not started. No application implementation has started yet. Implementation will proceed phase by phase.
+Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 adds six Maven-based service skeletons. No business functionality is implemented; Phase 3 has not started. Implementation will proceed phase by phase.
 
 ## Main Users
 
@@ -41,13 +41,13 @@ All features below are planned, not implemented:
 - **Kafka** for asynchronous domain events
 - **PostgreSQL** for all backend services
 
-REST will be used for synchronous communication when an immediate response is needed. Each microservice will own its own logical database, with no cross-service database access. Transactional Outbox will be introduced in a later phase. PostgreSQL and Kafka are configured for local development. The frontend, gateway, and five backend services remain planned and unimplemented.
+REST will be used for synchronous communication when an immediate response is needed. Each microservice will own its own logical database, with no cross-service database access. Transactional Outbox will be introduced in a later phase. PostgreSQL and Kafka are configured for local development. The gateway and five backend services now have startup-only skeletons. The frontend and all business features remain planned.
 
 ## Repository Structure
 
 ```text
 frontend/                    Planned Angular + NgRx application
-services/                    Planned gateway and five backend services
+services/                    Gateway and five backend service skeletons
   api-gateway/
   auth-service/
   quote-service/
@@ -72,7 +72,7 @@ Start with [project context](docs/project-context.md), [architecture](docs/archi
 
 ### Prerequisites
 
-Install Docker with Docker Compose and start the Docker daemon (for example, Docker Desktop). No Java or Node installation is required for this phase.
+Install Docker with Docker Compose and start the Docker daemon (for example, Docker Desktop). No Java or Node installation is required for infrastructure alone. Backend skeletons require JDK 25.
 
 ### Start Infrastructure
 
@@ -121,10 +121,39 @@ PostgreSQL defaults to username `insurance_dev` and password `local_dev_only`, o
 | Notification Service | `notification_db` |
 | Audit Service | `audit_db` |
 
-Each future service must access only its own database. The shared local bootstrap account is an administrative development convenience, not enforcement of service isolation. No business tables exist.
+Each future service must access only its own database. The shared local bootstrap account is an administrative development convenience, not enforcement of service isolation. No business tables exist. Phase 2 Flyway startup creates only its empty `flyway_schema_history` metadata table in each service database.
 
 Kafka main topics are `insurance.user.events`, `insurance.quote.events`, and `insurance.pricing.events`. Each has a matching `.dlq` topic. All six use **3 partitions and replication factor 1**. DLQ processing, event contracts, and application producers/consumers come later.
 
 See [infrastructure guidance](infrastructure/README.md) for initialization behavior, verification commands, persistence checks, and troubleshooting.
 
 Validation results and the machine-specific port overrides are recorded in [Phase 1 validation](infrastructure/phase-1-validation.md).
+
+## Backend Services
+
+| Service | Port | Database | Phase 2 Status |
+| --- | ---: | --- | --- |
+| API Gateway | 8080 | None | Skeleton |
+| Auth Service | 8081 | auth_db | Skeleton |
+| Quote Service | 8082 | quote_db | Skeleton |
+| Pricing Service | 8083 | pricing_db | Skeleton |
+| Notification Service | 8084 | notification_db | Skeleton |
+| Audit Service | 8085 | audit_db | Skeleton |
+
+Use JDK 25. The root parent/aggregator pins Spring Boot 4.1.1 and Spring Cloud 2025.1.3 (Gateway 5.0.3). Maven Wrapper 3.3.4 supplies Maven 3.9.16; no separately installed Maven is required.
+
+```bash
+./mvnw clean verify
+docker compose up -d
+# Export the trusted local .env in each terminal; Spring Boot does not load it automatically.
+set -a
+[ ! -f .env ] || . ./.env
+set +a
+./mvnw -pl services/auth-service spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+Replace the module path to run another service in a separate terminal. All six expose `/actuator/health`; only health/info are exposed through Actuator. Ports and infrastructure connections support environment overrides. No business APIs, gateway routes, authentication, entities, migrations, or application Kafka messaging exist yet.
+
+See [backend startup and dependency guidance](services/README.md) for per-service packages, environment variables, temporary security behavior, test boundaries, and Maven commands.
+
+Phase 2 startup, health, database, and Kafka safety evidence is recorded in [validation results](docs/phase-2-validation.md).

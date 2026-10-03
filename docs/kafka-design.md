@@ -22,3 +22,7 @@ The following domain-oriented topics are initialized automatically:
 All six topics use exactly 3 partitions and replication factor 1 locally. Broker-side automatic topic creation is disabled. The initialization script uses `--if-not-exists`, so existing topics are preserved; it does not alter existing partition counts or replication factors. Kafka's metadata API supplies the readiness check before initialization starts.
 
 Event schemas, application producers/consumers, retry/DLQ behavior, consumer idempotency, and Transactional Outbox remain deferred. Creating DLQ topics does not implement error handling.
+
+## Phase 2 — Connection Configuration Only
+
+Quote, Pricing, Notification, and Audit include Spring Kafka through the Boot Kafka starter. Their local bootstrap addresses support `KAFKA_BOOTSTRAP_SERVERS`, falling back to `localhost:${KAFKA_EXTERNAL_PORT:9092}`. No application producer, listener, consumer, or topic declaration exists. Live validation found no changes to domain topic offsets or topic configuration. Auth and Gateway have no Kafka dependency.

@@ -30,3 +30,7 @@ No service scaffolding, runtime infrastructure, database schemas, or communicati
 One local PostgreSQL container hosts five logical service databases. One Kafka broker runs in combined broker/controller KRaft mode, without ZooKeeper. A one-shot Compose initialization job creates the approved domain topics after Kafka passes its health check. Named volumes persist both systems across container recreation.
 
 Host applications use `localhost:5432` and `localhost:9092` by default; future containers on the Compose network use `postgres:5432` and `kafka:19092`. No application services are containerized yet. Local setup details are in [infrastructure/README.md](../infrastructure/README.md).
+
+## Phase 2 — Spring Boot Skeletons
+
+Six independent Java 25 / Spring Boot 4.1.1 applications now use a root Maven parent/aggregator and Maven Wrapper. Gateway uses the compatible Spring Cloud 2025.1.3 release train and Gateway Server WebFlux 5.0.3. The gateway has no datasource or routes; the five backend skeletons use their own PostgreSQL databases. No shared Java business code is introduced. See [service guidance](../services/README.md) for dependencies, packages, ports, and official compatibility sources.

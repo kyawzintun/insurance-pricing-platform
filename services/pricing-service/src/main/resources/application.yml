@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: pricing-service
+  autoconfigure:
+    # Temporary Phase 2: no generated user or password; no authentication yet.
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+  sql:
+    init:
+      mode: never
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

@@ -1,0 +1,11 @@
+# Explicit opt-in for applications running on the developer host.
+server:
+  address: ${SERVER_ADDRESS:127.0.0.1}
+  port: ${AUDIT_SERVICE_PORT:8085}
+spring:
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/audit_db
+    username: ${POSTGRES_USER:insurance_dev}
+    password: ${POSTGRES_PASSWORD:local_dev_only}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:${KAFKA_EXTERNAL_PORT:9092}}
