@@ -7,3 +7,5 @@ The approved scope is simple car-insurance quotes and pricing rules, with CUSTOM
 ## Phase 3 — Relational Foundation
 
 The approved Phase 3 table structures, relationships, reference snapshots, constraints, and educational seeds are now recorded in [database design](database-design.md) and implemented by service-owned Flyway migrations. No Java domain entities or domain behavior have been implemented.
+
+Phase 4 maps Auth users to a JPA entity with CUSTOMER/ADMIN roles and ACTIVE/DISABLED status. Other service entities remain unimplemented.

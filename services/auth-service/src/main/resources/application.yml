@@ -1,9 +1,14 @@
 spring:
+  profiles:
+    default: local
   application:
     name: auth-service
   autoconfigure:
-    # Temporary Phase 2: no generated user or password; no authentication yet.
+    # Custom database-backed authentication; never create a generated default user.
     exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
   jpa:
     hibernate:
       ddl-auto: none
@@ -19,3 +24,8 @@ management:
   endpoint:
     health:
       show-details: never
+auth:
+  jwt:
+    secret: ${AUTH_JWT_SECRET:}
+    access-token-ttl: ${AUTH_JWT_ACCESS_TOKEN_TTL:15m}
+    issuer: ${AUTH_JWT_ISSUER:insurance-auth-service}

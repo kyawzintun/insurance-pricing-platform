@@ -15,3 +15,7 @@ Planned, not implemented:
 - 30-day quote expiration
 
 Main users: CUSTOMER and ADMIN. Detailed workflows, validation rules, and expiration semantics remain unspecified.
+
+## Phase 4 Implemented Scope
+
+Auth Service registration/login, canonical email handling, BCrypt passwords, user role/status enforcement, and configurable access-token issuance are implemented. Refresh tokens and all other planned platform features remain deferred. Endpoint contracts are in the [Auth README](../services/auth-service/README.md).

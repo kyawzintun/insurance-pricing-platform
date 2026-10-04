@@ -15,3 +15,5 @@ Phase 1 adds shared local PostgreSQL and Kafka infrastructure only. Application 
 Phase 2 adds six startup-only Spring Boot 4 Maven applications. No business implementation exists. Phase 3 (Database Foundation and Flyway) has not started.
 
 Phase 3 provides service-owned Flyway schemas and fixed educational seeds only. Phase 4 — Authentication Basics has not started.
+
+Phase 4 implements Auth Service registration/login and JWT issuance only. Phase 5 — API Gateway and JWT Validation has not started.

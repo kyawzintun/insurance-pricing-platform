@@ -6,9 +6,9 @@ The project focuses on a simple car-insurance pricing platform. It is not intend
 
 ## Current Project Status
 
-**Phase 3 — Database Foundation and Flyway: Complete**
+**Phase 4 — Authentication Basics: Complete**
 
-Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Business behavior remains unimplemented; Phase 4 has not started. Implementation will proceed phase by phase.
+Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 has not started. Implementation will proceed phase by phase.
 
 ## Main Users
 
@@ -17,9 +17,7 @@ Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has pass
 
 ## Planned Features
 
-All features below are planned, not implemented:
-
-- Customer registration and authentication
+Customer registration and login are implemented in Auth Service (Phase 4). The following features remain planned:
 - Car insurance quote creation
 - Database-driven pricing rules
 - Quote pricing breakdown
@@ -41,7 +39,7 @@ All features below are planned, not implemented:
 - **Kafka** for asynchronous domain events
 - **PostgreSQL** for all backend services
 
-REST will be used for synchronous communication when an immediate response is needed. Each microservice will own its own logical database, with no cross-service database access. Transactional Outbox will be introduced in a later phase. PostgreSQL and Kafka are configured for local development. The gateway and five backend services now have startup-only skeletons. The frontend and all business features remain planned.
+REST will be used for synchronous communication when an immediate response is needed. Each microservice will own its own logical database, with no cross-service database access. Transactional Outbox will be introduced in a later phase. PostgreSQL and Kafka are configured for local development. Auth Service implements registration and login. The gateway and other backend services remain skeletons; the frontend and other business features remain planned.
 
 ## Repository Structure
 
@@ -131,10 +129,10 @@ Validation results and the machine-specific port overrides are recorded in [Phas
 
 ## Backend Services
 
-| Service | Port | Database | Phase 2 Status |
+| Service | Port | Database | Current Status |
 | --- | ---: | --- | --- |
 | API Gateway | 8080 | None | Skeleton |
-| Auth Service | 8081 | auth_db | Skeleton |
+| Auth Service | 8081 | auth_db | Registration and login |
 | Quote Service | 8082 | quote_db | Skeleton |
 | Pricing Service | 8083 | pricing_db | Skeleton |
 | Notification Service | 8084 | notification_db | Skeleton |
@@ -145,14 +143,10 @@ Use JDK 25. The root parent/aggregator pins Spring Boot 4.1.1 and Spring Cloud 2
 ```bash
 ./mvnw clean verify
 docker compose up -d
-# Export the trusted local .env in each terminal; Spring Boot does not load it automatically.
-set -a
-[ ! -f .env ] || . ./.env
-set +a
-./mvnw -pl services/auth-service spring-boot:run -Dspring-boot.run.profiles=local
+./mvnw -pl services/auth-service spring-boot:run
 ```
 
-Replace the module path to run another service in a separate terminal. All six expose `/actuator/health`; only health/info are exposed through Actuator. Ports and infrastructure connections support environment overrides. No business APIs, gateway routes, authentication, entities, or application Kafka messaging exist yet. Database migrations and seeds are implemented in Phase 3.
+Auth defaults to the local profile, PostgreSQL port 15432, and a public development-only signing key. No launcher or environment setup is needed for the current local database. Use the module-specific Maven commands in the backend guide for other services. All six expose `/actuator/health`; only health/info are exposed through Actuator. Ports and infrastructure connections support environment overrides. Auth now exposes registration/login backed by its User entity. Other business APIs, gateway routes, and application Kafka messaging remain unimplemented. Database migrations and seeds were implemented in Phase 3.
 
 See [backend startup and dependency guidance](services/README.md) for per-service packages, environment variables, temporary security behavior, test boundaries, and Maven commands.
 
@@ -172,4 +166,12 @@ Flyway owns all service schemas. Migrations live under `services/<service>/src/m
 
 Starting the five database services with the local profile applies 15 migrations, including four brands, twelve models, and seven learning-only pricing rules. Normal restarts validate existing migrations without duplicating seeds. No user accounts are seeded. Outbox and processed-event tables do not implement messaging behavior.
 
-See [database design](docs/database-design.md), [validation results](docs/phase-3-validation.md), and [intentional local database rebuild instructions](services/README.md#intentional-local-database-rebuild). No database reset is needed for ordinary development. Phase 4 — Authentication Basics has not started.
+See [database design](docs/database-design.md), [validation results](docs/phase-3-validation.md), and [intentional local database rebuild instructions](services/README.md#intentional-local-database-rebuild). No database reset is needed for ordinary development. Phase 4 authentication is documented below; Phase 5 has not started.
+
+## Phase 4 — Authentication Basics
+
+Auth Service now provides `POST /api/v1/auth/register` (201) and `POST /api/v1/auth/login` (200). Registration canonicalizes email, hashes passwords with BCrypt cost 12, and always creates an ACTIVE CUSTOMER. Client-supplied role/status fields are rejected. Login rejects unknown accounts, incorrect passwords, and disabled accounts with the same 401 error.
+
+Login issues an HS256 JWT access token with a 15-minute default lifetime, configurable through `AUTH_JWT_ACCESS_TOKEN_TTL`. The local profile includes a public development-only signing key. `AUTH_JWT_SECRET` can override it and must be supplied outside the local profile; never reuse the local key outside this learning project. No refresh tokens are implemented.
+
+See [Auth Service documentation](services/auth-service/README.md) for request/response details, required environment values, and explicit local ADMIN creation through registration followed by a manual database promotion. See [Phase 4 validation](docs/phase-4-validation.md) for test and live-database evidence. Phase 5 — API Gateway and JWT Validation has not started.

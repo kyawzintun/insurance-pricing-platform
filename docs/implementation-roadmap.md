@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 3 complete; Phase 4 not started.
+Status: Phases 0 through 4 complete; Phase 5 not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -22,7 +22,11 @@ Completed. Fifteen service-owned Flyway migrations create the five database sche
 
 ## Phase 4 — Authentication Basics
 
-Not started. Auth schema foundations exist, but registration, login, password hashing, JWT, and other authentication behavior remain unimplemented.
+Completed. Auth Service supports normalized-email registration, BCrypt login, CUSTOMER/ADMIN roles, ACTIVE/DISABLED handling, and configurable HS256 access tokens. No refresh tokens. See [validation](phase-4-validation.md).
+
+## Phase 5 — API Gateway and JWT Validation
+
+Not started. Gateway routing and distributed JWT validation remain deferred.
 
 ## Later Phases
 

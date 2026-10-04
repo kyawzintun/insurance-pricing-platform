@@ -1,6 +1,6 @@
 # Backend Service Skeletons
 
-Phase 2 supplied six independently runnable applications. Phase 3 adds service-owned Flyway migrations and educational seeds; no business APIs, entities, Kafka message handlers, or gateway routes exist.
+Phase 2 supplied six independently runnable applications. Phase 3 adds service-owned Flyway migrations and educational seeds; Phase 4 now adds registration/login and the User entity in Auth Service only. Other business APIs, Kafka message handlers, and gateway routes remain deferred.
 
 ## Build Baseline
 
@@ -34,20 +34,26 @@ From the repository root with JDK 25 selected (`JAVA_HOME` if necessary):
 
 Windows uses `mvnw.cmd` for the same goals. The first build needs internet access to download Maven and dependencies.
 
-Start infrastructure and export your trusted local environment file before launching an application. Docker Compose loads `.env` itself; Maven/Spring Boot do not automatically read it.
-
+For Auth Service, start infrastructure and run Maven from the repository root:
 ```bash
 docker compose up -d
-# POSIX shell; execute in each terminal used to run a service.
+./mvnw -pl services/auth-service spring-boot:run
+```
+
+Auth defaults to the local profile, PostgreSQL port 15432, and a public development-only signing key. No environment exports are needed for this setup. Stop it with Ctrl+C. See [Auth setup](auth-service/README.md).
+
+For other services, export `.env` in each terminal and use the module-specific Maven command:
+
+```bash
 set -a
 [ ! -f .env ] || . ./.env
 set +a
-./mvnw -pl services/auth-service spring-boot:run -Dspring-boot.run.profiles=local
+./mvnw -pl services/quote-service spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-Replace `services/auth-service` with any module from the table. Open separate terminals for simultaneous startup. Do not add `-am` to the run command: it would attempt to run the aggregator as an application. Stop each application with Ctrl+C; stop infrastructure separately with `docker compose down`.
+Replace `services/quote-service` with the desired module. Do not add `-am` to a run command: it would attempt to run the aggregator. Stop infrastructure separately with `docker compose down`.
 
-The `local` profile is explicit. It binds to `127.0.0.1` by default, uses the module's port, and provides development database credentials. Non-local deployments must supply their own datasource/configuration. No production profile is defined.
+Auth defaults to `local`; other services require explicit profile selection. It binds to `127.0.0.1` by default, uses the module's port, and provides development database credentials. Non-local deployments must supply their own datasource/configuration. No production profile is defined.
 
 ## Environment Overrides
 
@@ -68,15 +74,15 @@ No local override values or real secrets are stored in application configuration
 | Auth, Quote, Pricing | Validation |
 | Quote, Pricing, Notification, Audit | Spring Boot Kafka starter (Spring Kafka integration) |
 
-Notification includes Web MVC and the same small Security baseline for consistent HTTP health behavior. Only `health` and `info` are exposed. All database services use a temporary `Phase2SecurityConfiguration`: health/info are public, all other requests are denied, and form login/HTTP Basic are disabled. Default user auto-configuration is excluded to avoid a generated password. There is no authentication implementation. Replace this baseline when approved security features are introduced. Gateway exposes health/info and has no application routes or JWT configuration.
+Notification includes Web MVC and the same small Security baseline for consistent HTTP health behavior. Only `health` and `info` are exposed. Quote, Pricing, Notification, and Audit use a temporary `Phase2SecurityConfiguration`: health/info are public, all other requests are denied, and form login/HTTP Basic are disabled. Default user auto-configuration is excluded to avoid a generated password. There is no authentication implementation. Replace this baseline when approved security features are introduced. Gateway exposes health/info and has no application routes or JWT configuration.
 
-Hibernate uses `ddl-auto: none`, SQL initialization is disabled, and no entities/repositories are present. Flyway now owns the Phase 3 tables and seeds, applying service-owned migrations on startup. Its history records each applied migration; normal restarts validate checksums and do not repeat seeds.
+Hibernate uses `ddl-auto: none` and SQL initialization is disabled. Auth now has its Phase 4 User entity/repository; other services have no entities/repositories. Flyway now owns the Phase 3 tables and seeds, applying service-owned migrations on startup. Its history records each applied migration; normal restarts validate checksums and do not repeat seeds.
 
 Kafka configuration contains only bootstrap addresses. No listeners, producers, topic beans, retry settings, or DLQ processing are implemented. Broker connectivity is not exercised by application messaging in Phase 2.
 
 ## Tests and Health
 
-Each module's `@SpringBootTest` starts a real HTTP server on a random port and checks `/actuator/health`. The database-service test profile excludes datasource, Hibernate, and Flyway auto-configuration; it intentionally tests context/HTTP startup rather than database integration. No H2, running local PostgreSQL, or Docker is required for `clean verify`. Testcontainers dependencies are prepared but no containers are started by tests.
+Each module's `@SpringBootTest` starts a real HTTP server on a random port and checks `/actuator/health`. The database-service test profile excludes datasource, Hibernate, and Flyway auto-configuration; Auth additionally mocks UserRepository for its HTTP authentication tests; it intentionally tests context/HTTP startup rather than database integration. No H2, running local PostgreSQL, or Docker is required for `clean verify`. Testcontainers dependencies are prepared but no containers are started by tests.
 
 With the six local applications running on their default ports:
 
@@ -116,3 +122,7 @@ docker compose exec -T postgres sh -c 'dropdb -U "$POSTGRES_USER" quote_db && cr
 ```
 
 Flyway recreates Quote's schema and seeds from its migrations. Do not recreate tables manually or delete only the history table. If connections remain, `dropdb` fails rather than forcibly disconnecting other clients. Replace the database and matching service only when intentionally rebuilding another service's database. No reset was required during Phase 3 validation.
+
+## Phase 4 — Auth Service
+
+Auth adds registration/login, BCrypt password storage, and HS256 access-token generation. Its local profile provides a public development key, overridable via `AUTH_JWT_SECRET` (Base64, at least 32 bytes), with `AUTH_JWT_ACCESS_TOKEN_TTL=15m` and optional issuer configuration. Other services remain unchanged. See the [Auth README](auth-service/README.md) for endpoint contracts, environment setup, generic errors, and manual local ADMIN provisioning. Tokens are issued but distributed validation and gateway routes remain for Phase 5; no refresh-token functionality exists.

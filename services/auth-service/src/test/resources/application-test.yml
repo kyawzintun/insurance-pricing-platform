@@ -1,4 +1,4 @@
-# Context/HTTP smoke test only. Live PostgreSQL connectivity is validated separately.
+# HTTP/auth behavior tests use a mocked UserRepository. PostgreSQL is validated separately.
 # No database substitute, local credentials, Docker, or Kafka broker needed for tests.
 spring:
   autoconfigure:
