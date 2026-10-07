@@ -6,9 +6,9 @@ The project focuses on a simple car-insurance pricing platform. It is not intend
 
 ## Current Project Status
 
-**Phase 4 — Authentication Basics: Complete**
+**Phase 5 — API Gateway and JWT Validation: Complete**
 
-Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 has not started. Implementation will proceed phase by phase.
+Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 has not started. Implementation will proceed phase by phase.
 
 ## Main Users
 
@@ -131,7 +131,7 @@ Validation results and the machine-specific port overrides are recorded in [Phas
 
 | Service | Port | Database | Current Status |
 | --- | ---: | --- | --- |
-| API Gateway | 8080 | None | Skeleton |
+| API Gateway | 8080 | None | Auth routing and JWT validation |
 | Auth Service | 8081 | auth_db | Registration and login |
 | Quote Service | 8082 | quote_db | Skeleton |
 | Pricing Service | 8083 | pricing_db | Skeleton |
@@ -166,7 +166,7 @@ Flyway owns all service schemas. Migrations live under `services/<service>/src/m
 
 Starting the five database services with the local profile applies 15 migrations, including four brands, twelve models, and seven learning-only pricing rules. Normal restarts validate existing migrations without duplicating seeds. No user accounts are seeded. Outbox and processed-event tables do not implement messaging behavior.
 
-See [database design](docs/database-design.md), [validation results](docs/phase-3-validation.md), and [intentional local database rebuild instructions](services/README.md#intentional-local-database-rebuild). No database reset is needed for ordinary development. Phase 4 authentication is documented below; Phase 5 has not started.
+See [database design](docs/database-design.md), [validation results](docs/phase-3-validation.md), and [intentional local database rebuild instructions](services/README.md#intentional-local-database-rebuild). No database reset is needed for ordinary development. Phase 4 authentication is documented below; Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 has not started.
 
 ## Phase 4 — Authentication Basics
 
@@ -174,4 +174,18 @@ Auth Service now provides `POST /api/v1/auth/register` (201) and `POST /api/v1/a
 
 Login issues an HS256 JWT access token with a 15-minute default lifetime, configurable through `AUTH_JWT_ACCESS_TOKEN_TTL`. The local profile includes a public development-only signing key. `AUTH_JWT_SECRET` can override it and must be supplied outside the local profile; never reuse the local key outside this learning project. No refresh tokens are implemented.
 
-See [Auth Service documentation](services/auth-service/README.md) for request/response details, required environment values, and explicit local ADMIN creation through registration followed by a manual database promotion. See [Phase 4 validation](docs/phase-4-validation.md) for test and live-database evidence. Phase 5 — API Gateway and JWT Validation has not started.
+See [Auth Service documentation](services/auth-service/README.md) for request/response details, required environment values, and explicit local ADMIN creation through registration followed by a manual database promotion. See [Phase 4 validation](docs/phase-4-validation.md) for test and live-database evidence. Phase 5 is documented below.
+
+## Phase 5 — API Gateway and JWT Validation
+
+Run Auth as above, then in a second terminal run:
+
+```bash
+./mvnw -pl services/api-gateway spring-boot:run
+```
+
+Normal API calls now use `POST http://localhost:8080/api/v1/auth/register` and `POST http://localhost:8080/api/v1/auth/login`. Gateway forwards `/api/v1/auth/**` to `AUTH_SERVICE_URL` (default `http://localhost:8081`). Only those two POST endpoints and GET health/info are public; other requests require a valid HS256 Bearer token with the expected issuer. Missing/invalid/expired tokens receive safe JSON 401 responses. There are no protected business routes yet.
+
+Auth and Gateway share the public local development key; outside local supply the same `AUTH_JWT_SECRET` securely. CORS allows configurable `GATEWAY_CORS_ALLOWED_ORIGINS` (default `http://localhost:4200`) without credentials. Gateway forwards and returns a bounded `X-Correlation-ID`, generating one when needed.
+
+See [Gateway commands, curl examples, configuration, and limitations](services/api-gateway/README.md) and [Phase 5 validation](docs/phase-5-validation.md). Phase 6 — Pricing Service MVP has not started.

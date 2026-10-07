@@ -1,6 +1,6 @@
 # Auth Service — Authentication Basics
 
-Phase 4 implements customer registration and login using the existing `auth_db.users` table. Flyway migrations are unchanged. There is no refresh-token, logout, token rotation, Kafka, outbox-publishing, or gateway-routing implementation.
+Phase 4 implements customer registration and login using the existing `auth_db.users` table. Flyway migrations are unchanged. There is no refresh-token, logout, token rotation, Kafka, outbox-publishing implementation. Phase 5 now routes Auth requests through Gateway.
 
 ## Run Locally
 
@@ -23,6 +23,8 @@ From `services/auth-service/`, the equivalent command is `../../mvnw spring-boot
 | `AUTH_SERVICE_PORT` | Default `8081`; standard `SERVER_PORT` can also override it. |
 | `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Optional overrides; local defaults are localhost:15432, insurance_dev / local_dev_only; database remains `auth_db`. |
 
+Start Gateway in a second terminal with `./mvnw -pl services/api-gateway spring-boot:run`. Use `http://localhost:8080/api/v1/auth/register` and `http://localhost:8080/api/v1/auth/login` for normal API calls. See [Gateway setup and curl examples](../api-gateway/README.md). Gateway health on 8080 describes Gateway; the Auth health endpoint on 8081 is for direct troubleshooting.
+
 ## Public Endpoints
 
 | Method / path | Success | Behavior |
@@ -38,8 +40,8 @@ Registration request (replace the example password before use):
 {
   "email": "customer@example.com",
   "password": "replace-with-your-own-password",
-  "firstName": "Kyaw",
-  "lastName": "Tun"
+  "firstName": "Alex",
+  "lastName": "Morgan"
 }
 ```
 
@@ -81,7 +83,7 @@ Spring Security `BCryptPasswordEncoder` uses cost **12**, with a fresh salt per 
 
 JWT generation uses Spring Security's Boot-managed `spring-security-oauth2-jose` / Nimbus implementation, with **HS256**. Claims are limited to `sub` (user UUID), `roles` (CUSTOMER or ADMIN), `iat`, `exp`, and `iss`. No password, name, or email is embedded. The lifetime is configurable and defaults to 15 minutes. Changing the signing key changes which key a future validator needs.
 
-The API is stateless, uses no login session/cookie, and disables form login, HTTP Basic, CSRF, and logout handlers. Only the four method/path combinations listed above are public. Other requests require authentication. This phase issues tokens but does not install a bearer-token validation filter or distributed JWT validation; no protected business APIs exist yet. Gateway routing and JWT validation belong to Phase 5. Disabling a user prevents subsequent login, but revoking already-issued access tokens is outside this phase.
+The API is stateless, uses no login session/cookie, and disables form login, HTTP Basic, CSRF, and logout handlers. Only the four method/path combinations listed above are public. Other requests require authentication. This phase issues tokens but does not install a bearer-token validation filter or distributed JWT validation; no protected business APIs exist yet. Gateway now validates Bearer tokens in Phase 5; Auth-side validation remains deferred. Disabling a user prevents subsequent login, but revoking already-issued access tokens is outside this phase.
 
 ## Explicit Local ADMIN Creation
 

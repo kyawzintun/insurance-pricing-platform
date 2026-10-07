@@ -38,3 +38,7 @@ Six independent Java 25 / Spring Boot 4.1.1 applications now use a root Maven pa
 ## Phase 3 — Schema Ownership
 
 Each database service owns its Flyway files under its own `src/main/resources/db/migration/`. Gateway remains database-free. Only service-local foreign keys are used; cross-service identifiers remain plain references. The existing Maven build and Docker infrastructure are unchanged. Outbox and processed-event schemas prepare later messaging work without implementing it.
+
+## Phase 5 — Gateway Authentication
+
+Gateway now routes `/api/v1/auth/**` to configurable Auth Service URL (default localhost:8081). POST register/login and GET health/info are public; other requests require a validated HS256 JWT. The local profile shares Auth's public development key; outside local both services require a configured secret. Subject and roles are parsed, with no business role authorization. Authorization is forwarded unchanged; downstream token validation remains future work. Minimal configurable CORS and bounded correlation IDs are implemented. No business routes, messaging, schema changes, or discovery were added. See [Gateway details](../services/api-gateway/README.md) and [validation](phase-5-validation.md). Earlier phase sections describe historical milestones; current status is Phase 5 complete, Phase 6 not started.

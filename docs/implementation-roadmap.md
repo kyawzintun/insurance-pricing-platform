@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 4 complete; Phase 5 not started.
+Status: Phases 0 through 5 complete; Phase 6 not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -26,7 +26,11 @@ Completed. Auth Service supports normalized-email registration, BCrypt login, CU
 
 ## Phase 5 — API Gateway and JWT Validation
 
-Not started. Gateway routing and distributed JWT validation remain deferred.
+Completed. Gateway routes Auth requests, validates HS256 JWTs, and supplies minimal CORS/correlation handling. Downstream JWT validation remains deferred. See [validation](phase-5-validation.md).
+
+## Phase 6 — Pricing Service MVP
+
+Not started. Implement only after the Phase 6 specification is approved.
 
 ## Later Phases
 

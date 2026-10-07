@@ -17,3 +17,7 @@ Phase 2 adds six startup-only Spring Boot 4 Maven applications. No business impl
 Phase 3 provides service-owned Flyway schemas and fixed educational seeds only. Phase 4 — Authentication Basics has not started.
 
 Phase 4 implements Auth Service registration/login and JWT issuance only. Phase 5 — API Gateway and JWT Validation has not started.
+
+## Phase 5 — Gateway Authentication
+
+Gateway now routes `/api/v1/auth/**` to configurable Auth Service URL (default localhost:8081). POST register/login and GET health/info are public; other requests require a validated HS256 JWT. The local profile shares Auth's public development key; outside local both services require a configured secret. Subject and roles are parsed, with no business role authorization. Authorization is forwarded unchanged; downstream token validation remains future work. Minimal configurable CORS and bounded correlation IDs are implemented. No business routes, messaging, schema changes, or discovery were added. See [Gateway details](../services/api-gateway/README.md) and [validation](phase-5-validation.md). Earlier phase sections describe historical milestones; current status is Phase 5 complete, Phase 6 not started.

@@ -1,6 +1,19 @@
 spring:
+  profiles:
+    default: local
   application:
     name: api-gateway
+  autoconfigure:
+    exclude: org.springframework.boot.security.autoconfigure.ReactiveUserDetailsServiceAutoConfiguration
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: auth-service
+              uri: ${AUTH_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/v1/auth/**
 management:
   endpoints:
     web:
@@ -9,3 +22,10 @@ management:
   endpoint:
     health:
       show-details: never
+auth:
+  jwt:
+    secret: ${AUTH_JWT_SECRET:}
+    issuer: ${AUTH_JWT_ISSUER:insurance-auth-service}
+gateway:
+  cors:
+    allowed-origins: ${GATEWAY_CORS_ALLOWED_ORIGINS:http://localhost:4200}

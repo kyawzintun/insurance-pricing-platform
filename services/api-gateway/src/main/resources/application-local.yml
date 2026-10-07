@@ -1,4 +1,9 @@
-# Explicit opt-in for applications running on the developer host.
+# Default host-running local learning configuration.
 server:
   address: ${SERVER_ADDRESS:127.0.0.1}
   port: ${API_GATEWAY_PORT:8080}
+
+auth:
+  jwt:
+    # Same PUBLIC DEVELOPMENT-ONLY KEY as Auth. Never reuse outside local learning.
+    secret: ${AUTH_JWT_SECRET:VnczjVEg+Q2DUmsGnX7ZtEAeji5U42s55cOsNvTc3aY=}

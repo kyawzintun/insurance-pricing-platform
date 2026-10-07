@@ -1,6 +1,6 @@
 # Backend Service Skeletons
 
-Phase 2 supplied six independently runnable applications. Phase 3 adds service-owned Flyway migrations and educational seeds; Phase 4 now adds registration/login and the User entity in Auth Service only. Other business APIs, Kafka message handlers, and gateway routes remain deferred.
+Phase 2 supplied six independently runnable applications. Phase 3 adds service-owned Flyway migrations and educational seeds; Phase 4 now adds registration/login and the User entity in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Other business APIs and Kafka message handlers remain deferred.
 
 ## Build Baseline
 
@@ -53,7 +53,7 @@ set +a
 
 Replace `services/quote-service` with the desired module. Do not add `-am` to a run command: it would attempt to run the aggregator. Stop infrastructure separately with `docker compose down`.
 
-Auth defaults to `local`; other services require explicit profile selection. It binds to `127.0.0.1` by default, uses the module's port, and provides development database credentials. Non-local deployments must supply their own datasource/configuration. No production profile is defined.
+Auth and Gateway default to `local`; other services require explicit profile selection. It binds to `127.0.0.1` by default, uses the module's port, and provides development database credentials. Non-local deployments must supply their own datasource/configuration. No production profile is defined.
 
 ## Environment Overrides
 
@@ -62,7 +62,7 @@ Auth defaults to `local`; other services require explicit profile selection. It 
 - Ports: `API_GATEWAY_PORT`, `AUTH_SERVICE_PORT`, `QUOTE_SERVICE_PORT`, `PRICING_SERVICE_PORT`, `NOTIFICATION_SERVICE_PORT`, `AUDIT_SERVICE_PORT`. Standard Spring `SERVER_PORT` also overrides the port for one process.
 - Bind address: `SERVER_ADDRESS`, default `127.0.0.1`. Future container deployment would need a suitable bind address plus internal database/Kafka addresses; no service containers are added in Phase 2.
 
-No local override values or real secrets are stored in application configuration. `.env.example` contains only public development values.
+Local YAML includes public learning defaults (including the shared Auth/Gateway development signing key), but no real secrets. `.env.example` contains only public development values.
 
 ## Dependencies and Temporary Behavior
 
@@ -74,7 +74,7 @@ No local override values or real secrets are stored in application configuration
 | Auth, Quote, Pricing | Validation |
 | Quote, Pricing, Notification, Audit | Spring Boot Kafka starter (Spring Kafka integration) |
 
-Notification includes Web MVC and the same small Security baseline for consistent HTTP health behavior. Only `health` and `info` are exposed. Quote, Pricing, Notification, and Audit use a temporary `Phase2SecurityConfiguration`: health/info are public, all other requests are denied, and form login/HTTP Basic are disabled. Default user auto-configuration is excluded to avoid a generated password. There is no authentication implementation. Replace this baseline when approved security features are introduced. Gateway exposes health/info and has no application routes or JWT configuration.
+Notification includes Web MVC and the same small Security baseline for consistent HTTP health behavior. Only `health` and `info` are exposed. Quote, Pricing, Notification, and Audit use a temporary `Phase2SecurityConfiguration`: health/info are public, all other requests are denied, and form login/HTTP Basic are disabled. Default user auto-configuration is excluded to avoid a generated password. There is no authentication implementation. Replace this baseline when approved security features are introduced. Gateway now routes Auth requests and validates JWTs; see [Gateway setup](api-gateway/README.md).
 
 Hibernate uses `ddl-auto: none` and SQL initialization is disabled. Auth now has its Phase 4 User entity/repository; other services have no entities/repositories. Flyway now owns the Phase 3 tables and seeds, applying service-owned migrations on startup. Its history records each applied migration; normal restarts validate checksums and do not repeat seeds.
 
@@ -125,4 +125,8 @@ Flyway recreates Quote's schema and seeds from its migrations. Do not recreate t
 
 ## Phase 4 — Auth Service
 
-Auth adds registration/login, BCrypt password storage, and HS256 access-token generation. Its local profile provides a public development key, overridable via `AUTH_JWT_SECRET` (Base64, at least 32 bytes), with `AUTH_JWT_ACCESS_TOKEN_TTL=15m` and optional issuer configuration. Other services remain unchanged. See the [Auth README](auth-service/README.md) for endpoint contracts, environment setup, generic errors, and manual local ADMIN provisioning. Tokens are issued but distributed validation and gateway routes remain for Phase 5; no refresh-token functionality exists.
+Auth adds registration/login, BCrypt password storage, and HS256 access-token generation. Its local profile provides a public development key, overridable via `AUTH_JWT_SECRET` (Base64, at least 32 bytes), with `AUTH_JWT_ACCESS_TOKEN_TTL=15m` and optional issuer configuration. Other services remain unchanged. See the [Auth README](auth-service/README.md) for endpoint contracts, environment setup, generic errors, and manual local ADMIN provisioning. Phase 5 adds Gateway routing and JWT validation; downstream validation remains deferred; no refresh-token functionality exists.
+
+## Phase 5 — Gateway
+
+In a second terminal run `./mvnw -pl services/api-gateway spring-boot:run`. Use port 8080 for normal Auth API requests. Gateway forwards to configurable `AUTH_SERVICE_URL` (default port 8081), sharing Auth's local key and issuer. See [Gateway documentation](api-gateway/README.md) for security, CORS, correlation IDs, and test instructions.
