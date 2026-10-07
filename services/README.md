@@ -1,6 +1,6 @@
 # Backend Service Skeletons
 
-Phase 2 supplied six independently runnable applications. Phase 3 adds service-owned Flyway migrations and educational seeds; Phase 4 now adds registration/login and the User entity in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Other business APIs and Kafka message handlers remain deferred.
+Phase 2 supplied six independently runnable applications. Phase 3 adds service-owned Flyway migrations and educational seeds; Phase 4 now adds registration/login and the User entity in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal Pricing calculation. Other business APIs and Kafka message handlers remain deferred.
 
 ## Build Baseline
 
@@ -42,7 +42,9 @@ docker compose up -d
 
 Auth defaults to the local profile, PostgreSQL port 15432, and a public development-only signing key. No environment exports are needed for this setup. Stop it with Ctrl+C. See [Auth setup](auth-service/README.md).
 
-For other services, export `.env` in each terminal and use the module-specific Maven command:
+Pricing also supports `./mvnw -pl services/pricing-service spring-boot:run` with the local database on 15432. See [Pricing setup](pricing-service/README.md).
+
+For Quote, Notification, and Audit, export `.env` in each terminal and use the module-specific Maven command:
 
 ```bash
 set -a
@@ -53,11 +55,11 @@ set +a
 
 Replace `services/quote-service` with the desired module. Do not add `-am` to a run command: it would attempt to run the aggregator. Stop infrastructure separately with `docker compose down`.
 
-Auth and Gateway default to `local`; other services require explicit profile selection. It binds to `127.0.0.1` by default, uses the module's port, and provides development database credentials. Non-local deployments must supply their own datasource/configuration. No production profile is defined.
+Auth, Gateway, and Pricing default to `local`; other services require explicit profile selection. It binds to `127.0.0.1` by default, uses the module's port, and provides development database credentials. Non-local deployments must supply their own datasource/configuration. No production profile is defined.
 
 ## Environment Overrides
 
-- Database: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`. Defaults are `localhost`, `5432`, `insurance_dev`, `local_dev_only`. The database name stays service-specific.
+- Database: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`. Defaults are `localhost`, `5432` (Auth/Pricing: `15432`), `insurance_dev`, `local_dev_only`. The database name stays service-specific.
 - Kafka: `KAFKA_BOOTSTRAP_SERVERS` takes precedence. Otherwise the local profile uses `localhost:${KAFKA_EXTERNAL_PORT}`, defaulting to `localhost:9092`. This preserves Phase 1 port overrides without duplicating them.
 - Ports: `API_GATEWAY_PORT`, `AUTH_SERVICE_PORT`, `QUOTE_SERVICE_PORT`, `PRICING_SERVICE_PORT`, `NOTIFICATION_SERVICE_PORT`, `AUDIT_SERVICE_PORT`. Standard Spring `SERVER_PORT` also overrides the port for one process.
 - Bind address: `SERVER_ADDRESS`, default `127.0.0.1`. Future container deployment would need a suitable bind address plus internal database/Kafka addresses; no service containers are added in Phase 2.
@@ -74,15 +76,15 @@ Local YAML includes public learning defaults (including the shared Auth/Gateway 
 | Auth, Quote, Pricing | Validation |
 | Quote, Pricing, Notification, Audit | Spring Boot Kafka starter (Spring Kafka integration) |
 
-Notification includes Web MVC and the same small Security baseline for consistent HTTP health behavior. Only `health` and `info` are exposed. Quote, Pricing, Notification, and Audit use a temporary `Phase2SecurityConfiguration`: health/info are public, all other requests are denied, and form login/HTTP Basic are disabled. Default user auto-configuration is excluded to avoid a generated password. There is no authentication implementation. Replace this baseline when approved security features are introduced. Gateway now routes Auth requests and validates JWTs; see [Gateway setup](api-gateway/README.md).
+Notification includes Web MVC and the same small Security baseline for consistent HTTP health behavior. Only `health` and `info` are exposed. Quote, Notification, and Audit use a temporary `Phase2SecurityConfiguration`: health/info are public, all other requests are denied, and form login/HTTP Basic are disabled. Default user auto-configuration is excluded to avoid a generated password. There is no authentication implementation. Replace this baseline when approved security features are introduced. Gateway now routes Auth requests and validates JWTs; see [Gateway setup](api-gateway/README.md).
 
-Hibernate uses `ddl-auto: none` and SQL initialization is disabled. Auth now has its Phase 4 User entity/repository; other services have no entities/repositories. Flyway now owns the Phase 3 tables and seeds, applying service-owned migrations on startup. Its history records each applied migration; normal restarts validate checksums and do not repeat seeds.
+Hibernate uses `ddl-auto: none` and SQL initialization is disabled. Auth has its Phase 4 User entity/repository and Pricing has its Phase 6 PricingRule entity/read-only repository; other services have no entities/repositories. Flyway now owns the Phase 3 tables and seeds, applying service-owned migrations on startup. Its history records each applied migration; normal restarts validate checksums and do not repeat seeds.
 
 Kafka configuration contains only bootstrap addresses. No listeners, producers, topic beans, retry settings, or DLQ processing are implemented. Broker connectivity is not exercised by application messaging in Phase 2.
 
 ## Tests and Health
 
-Each module's `@SpringBootTest` starts a real HTTP server on a random port and checks `/actuator/health`. The database-service test profile excludes datasource, Hibernate, and Flyway auto-configuration; Auth additionally mocks UserRepository for its HTTP authentication tests; it intentionally tests context/HTTP startup rather than database integration. No H2, running local PostgreSQL, or Docker is required for `clean verify`. Testcontainers dependencies are prepared but no containers are started by tests.
+Each module's `@SpringBootTest` starts a real HTTP server on a random port and checks `/actuator/health`. The database-service test profile excludes datasource, Hibernate, and Flyway auto-configuration; Auth mocks UserRepository for its HTTP authentication tests; Pricing mocks PricingRuleRepository for HTTP calculation tests; it intentionally tests context/HTTP startup rather than database integration. No H2, running local PostgreSQL, or Docker is required for `clean verify`. Testcontainers dependencies are prepared but no containers are started by tests.
 
 With the six local applications running on their default ports:
 
@@ -130,3 +132,7 @@ Auth adds registration/login, BCrypt password storage, and HS256 access-token ge
 ## Phase 5 — Gateway
 
 In a second terminal run `./mvnw -pl services/api-gateway spring-boot:run`. Use port 8080 for normal Auth API requests. Gateway forwards to configurable `AUTH_SERVICE_URL` (default port 8081), sharing Auth's local key and issuer. See [Gateway documentation](api-gateway/README.md) for security, CORS, correlation IDs, and test instructions.
+
+## Phase 6 — Pricing
+
+Pricing now allows only its internal calculation POST plus GET health/info, keeping other requests denied. It uses a read-only transaction and returns DTOs with database rule IDs/versions and a sequenced premium breakdown. No Gateway route or service authentication is added; authentication is deferred to Phase 25. See [Pricing guide](pricing-service/README.md) and [validation](../docs/phase-6-validation.md).

@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 5 complete; Phase 6 not started.
+Status: Phases 0 through 6 complete; Phase 7 not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -30,7 +30,11 @@ Completed. Gateway routes Auth requests, validates HS256 JWTs, and supplies mini
 
 ## Phase 6 — Pricing Service MVP
 
-Not started. Implement only after the Phase 6 specification is approved.
+Completed. Internal read-only premium calculation uses existing database rules, deterministic selection/order, BigDecimal rounding, safe validation, and a snapshot breakdown. No admin or Quote integration. See [specification](specs/phase-6-pricing-service-mvp.md) and [validation](phase-6-validation.md).
+
+## Phase 7 — Pricing Administration
+
+Not started. Detailed implementation awaits its approved specification.
 
 ## Later Phases
 

@@ -1,10 +1,10 @@
-# Explicit opt-in for applications running on the developer host.
+# Default host-running local learning configuration.
 server:
   address: ${SERVER_ADDRESS:127.0.0.1}
   port: ${PRICING_SERVICE_PORT:8083}
 spring:
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/pricing_db
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:15432}/pricing_db
     username: ${POSTGRES_USER:insurance_dev}
     password: ${POSTGRES_PASSWORD:local_dev_only}
   kafka:

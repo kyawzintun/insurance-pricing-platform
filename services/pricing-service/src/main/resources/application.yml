@@ -1,4 +1,13 @@
 spring:
+  profiles:
+    default: local
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+      accept-float-as-int: false
+    datatype:
+      enum:
+        fail-on-numbers-for-enums: true
   application:
     name: pricing-service
   autoconfigure:
