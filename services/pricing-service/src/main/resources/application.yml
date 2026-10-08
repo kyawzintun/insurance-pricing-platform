@@ -28,3 +28,8 @@ management:
   endpoint:
     health:
       show-details: never
+
+auth:
+  jwt:
+    secret: ${AUTH_JWT_SECRET:}
+    issuer: ${AUTH_JWT_ISSUER:insurance-auth-service}

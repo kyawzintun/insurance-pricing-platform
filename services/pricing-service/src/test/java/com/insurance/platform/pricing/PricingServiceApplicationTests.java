@@ -26,6 +26,12 @@ class PricingServiceApplicationTests {
             {"dateOfBirth":"1995-04-20","drivingExperienceYears":8,"vehicleManufacturingYear":2021,
              "vehicleValue":700000,"engineSizeCc":1500,"previousClaimsCount":1,"coverageType":"COMPREHENSIVE"}
             """;
+    @org.springframework.test.context.DynamicPropertySource
+    static void jwtSecret(org.springframework.test.context.DynamicPropertyRegistry registry) {
+        byte[] key = new byte[32];
+        new java.security.SecureRandom().nextBytes(key);
+        registry.add("auth.jwt.secret", () -> Base64.getEncoder().encodeToString(key));
+    }
     @LocalServerPort int port;
     @MockitoBean PricingRuleRepository repository;
     @MockitoBean Clock clock;

@@ -14,6 +14,10 @@ spring:
               uri: ${AUTH_SERVICE_URL:http://localhost:8081}
               predicates:
                 - Path=/api/v1/auth/**
+            - id: pricing-admin
+              uri: ${PRICING_SERVICE_URL:http://localhost:8083}
+              predicates:
+                - Path=/api/v1/admin/pricing/**
 management:
   endpoints:
     web:

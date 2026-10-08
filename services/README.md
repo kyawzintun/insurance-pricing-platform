@@ -1,6 +1,6 @@
 # Backend Service Skeletons
 
-Phase 2 supplied six independently runnable applications. Phase 3 adds service-owned Flyway migrations and educational seeds; Phase 4 now adds registration/login and the User entity in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal Pricing calculation. Other business APIs and Kafka message handlers remain deferred.
+Phase 2 supplied six independently runnable applications. Phase 3 adds service-owned Flyway migrations and educational seeds; Phase 4 now adds registration/login and the User entity in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal Pricing calculation; Phase 7 adds ADMIN pricing-rule APIs with independent JWT validation. Other business APIs and Kafka message handlers remain deferred.
 
 ## Build Baseline
 
@@ -136,3 +136,7 @@ In a second terminal run `./mvnw -pl services/api-gateway spring-boot:run`. Use 
 ## Phase 6 — Pricing
 
 Pricing now allows only its internal calculation POST plus GET health/info, keeping other requests denied. It uses a read-only transaction and returns DTOs with database rule IDs/versions and a sequenced premium breakdown. No Gateway route or service authentication is added; authentication is deferred to Phase 25. See [Pricing guide](pricing-service/README.md) and [validation](../docs/phase-6-validation.md).
+
+## Phase 7 — Pricing Administration
+
+Gateway now routes `/api/v1/admin/pricing/**` to Pricing. Both services validate Auth-issued tokens and require ADMIN for that prefix. Pricing's local JWT key/issuer match Auth/Gateway; supply the same configuration outside local. Pricing calculation remains read-only, while the separate admin service writes only pricing_rules using optimistic versions. Normal Maven tests need no infrastructure; `./mvnw -pl services/pricing-service -am -Ppostgres-it verify` additionally runs isolated PostgreSQL persistence/concurrency tests with Docker. See [admin guide](pricing-service/README.md) and [validation](../docs/phase-7-validation.md).

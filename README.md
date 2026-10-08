@@ -6,9 +6,9 @@ The project focuses on a simple car-insurance pricing platform. It is not intend
 
 ## Current Project Status
 
-**Phase 6 — Pricing Service MVP: Complete**
+**Phase 7 — Pricing Administration: Complete**
 
-Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 has not started. Implementation will proceed phase by phase.
+Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 has not started. Implementation will proceed phase by phase.
 
 ## Main Users
 
@@ -17,11 +17,10 @@ Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has pass
 
 ## Planned Features
 
-Customer registration/login, Gateway JWT validation, and internal database-driven pricing are implemented (Phases 4–6). The following features remain planned:
+Customer registration/login, Gateway JWT validation, and internal database-driven pricing, and ADMIN pricing-rule management are implemented (Phases 4–7). The following features remain planned:
 
 - Car insurance quote creation
 - Quote pricing breakdown
-- Admin pricing-rule management
 - Quote ownership security
 - Kafka-based notifications
 - Kafka-based audit logging
@@ -131,10 +130,10 @@ Validation results and the machine-specific port overrides are recorded in [Phas
 
 | Service | Port | Database | Current Status |
 | --- | ---: | --- | --- |
-| API Gateway | 8080 | None | Auth routing and JWT validation |
+| API Gateway | 8080 | None | Auth/admin Pricing routing and JWT authorization |
 | Auth Service | 8081 | auth_db | Registration and login |
 | Quote Service | 8082 | quote_db | Skeleton |
-| Pricing Service | 8083 | pricing_db | Internal premium calculation |
+| Pricing Service | 8083 | pricing_db | Internal calculation and ADMIN rule management |
 | Notification Service | 8084 | notification_db | Skeleton |
 | Audit Service | 8085 | audit_db | Skeleton |
 
@@ -146,7 +145,7 @@ docker compose up -d
 ./mvnw -pl services/auth-service spring-boot:run
 ```
 
-Auth defaults to the local profile, PostgreSQL port 15432, and a public development-only signing key. No launcher or environment setup is needed for the current local database. Use the module-specific Maven commands in the backend guide for other services. All six expose `/actuator/health`; only health/info are exposed through Actuator. Ports and infrastructure connections support environment overrides. Auth now exposes registration/login backed by its User entity. Gateway now routes Auth requests; Pricing exposes only its internal calculation endpoint. Other business APIs and application Kafka messaging remain unimplemented. Database migrations and seeds were implemented in Phase 3.
+Auth defaults to the local profile, PostgreSQL port 15432, and a public development-only signing key. No launcher or environment setup is needed for the current local database. Use the module-specific Maven commands in the backend guide for other services. All six expose `/actuator/health`; only health/info are exposed through Actuator. Ports and infrastructure connections support environment overrides. Auth now exposes registration/login backed by its User entity. Gateway now routes Auth requests; Pricing exposes its internal calculation endpoint and protected admin rule APIs. Other business APIs and application Kafka messaging remain unimplemented. Database migrations and seeds were implemented in Phase 3.
 
 See [backend startup and dependency guidance](services/README.md) for per-service packages, environment variables, temporary security behavior, test boundaries, and Maven commands.
 
@@ -166,7 +165,7 @@ Flyway owns all service schemas. Migrations live under `services/<service>/src/m
 
 Starting the five database services with the local profile applies 15 migrations, including four brands, twelve models, and seven learning-only pricing rules. Normal restarts validate existing migrations without duplicating seeds. No user accounts are seeded. Outbox and processed-event tables do not implement messaging behavior.
 
-See [database design](docs/database-design.md), [validation results](docs/phase-3-validation.md), and [intentional local database rebuild instructions](services/README.md#intentional-local-database-rebuild). No database reset is needed for ordinary development. Phase 4 authentication is documented below; Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 has not started.
+See [database design](docs/database-design.md), [validation results](docs/phase-3-validation.md), and [intentional local database rebuild instructions](services/README.md#intentional-local-database-rebuild). No database reset is needed for ordinary development. Phase 4 authentication is documented below; Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 has not started.
 
 ## Phase 4 — Authentication Basics
 
@@ -184,7 +183,7 @@ Run Auth as above, then in a second terminal run:
 ./mvnw -pl services/api-gateway spring-boot:run
 ```
 
-Normal API calls now use `POST http://localhost:8080/api/v1/auth/register` and `POST http://localhost:8080/api/v1/auth/login`. Gateway forwards `/api/v1/auth/**` to `AUTH_SERVICE_URL` (default `http://localhost:8081`). Only those two POST endpoints and GET health/info are public; other requests require a valid HS256 Bearer token with the expected issuer. Missing/invalid/expired tokens receive safe JSON 401 responses. There are no protected business routes yet.
+Normal API calls now use `POST http://localhost:8080/api/v1/auth/register` and `POST http://localhost:8080/api/v1/auth/login`. Gateway forwards `/api/v1/auth/**` to `AUTH_SERVICE_URL` (default `http://localhost:8081`). Only those two POST endpoints and GET health/info are public; other requests require a valid HS256 Bearer token with the expected issuer. Missing/invalid/expired tokens receive safe JSON 401 responses. Phase 7 adds protected ADMIN pricing-rule routes below.
 
 Auth and Gateway share the public local development key; outside local supply the same `AUTH_JWT_SECRET` securely. CORS allows configurable `GATEWAY_CORS_ALLOWED_ORIGINS` (default `http://localhost:4200`) without credentials. Gateway forwards and returns a bounded `X-Correlation-ID`, generating one when needed.
 
@@ -200,6 +199,14 @@ Run Pricing independently with the existing local database on port 15432:
 
 `POST http://localhost:8083/internal/v1/pricing/calculate` returns an educational THB premium and detailed rule breakdown. It loads enabled/effective rules from `pricing_db`, derives ages using UTC, selects the newest matching rule per category (UUID tie-break), and applies factors in a fixed order with BigDecimal HALF_UP rounding at each step.
 
-This endpoint is internal and temporarily unauthenticated; it is **not routed through Gateway**. Service-to-service authentication is deferred to Phase 25. Calculations do not persist results or write outbox/Kafka events. Existing schemas and seeds are unchanged. Pricing admin CRUD and Quote integration are not implemented.
+This endpoint is internal and temporarily unauthenticated; it is **not routed through Gateway**. Service-to-service authentication is deferred to Phase 25. Calculations do not persist results or write outbox/Kafka events. Existing schemas and seeds are unchanged. Pricing administration is added in Phase 7 below; Quote integration remains deferred.
 
-See [Pricing request/response examples and rule semantics](services/pricing-service/README.md), [Phase 6 specification](docs/specs/phase-6-pricing-service-mvp.md), and [validation results](docs/phase-6-validation.md). Phase 7 — Pricing Administration has not started.
+See [Pricing request/response examples and rule semantics](services/pricing-service/README.md), [Phase 6 specification](docs/specs/phase-6-pricing-service-mvp.md), and [validation results](docs/phase-6-validation.md). Phase 7 is documented below.
+
+## Phase 7 — Pricing Administration
+
+ADMIN users can list/get/create/update/enable/disable pricing rules through `http://localhost:8080/api/v1/admin/pricing/rules`. Gateway forwards to configurable `PRICING_SERVICE_URL` (default localhost:8083). Both Gateway and Pricing validate JWTs and enforce ADMIN; CUSTOMER receives 403 and missing/invalid authentication receives 401. Auth, Gateway, and Pricing share the same local key/issuer; non-local environments require configured secrets.
+
+List supports bounded pagination and optional ruleType/enabled filters. PUT and PATCH require the last returned version; stale or concurrent updates return 409. Future-effective rules are allowed, and existing calculation selection/rounding remain unchanged. No deletes, migrations, seed changes, Kafka/outbox events, or UI were added. Internal calculation stays off Gateway; service-to-service authentication remains deferred.
+
+See [Pricing administration guide](services/pricing-service/README.md), [Gateway guide](services/api-gateway/README.md), [Phase 7 specification](docs/specs/phase-7-pricing-administration.md), and [validation results](docs/phase-7-validation.md). Phase 8 — Quote Service MVP has not started.

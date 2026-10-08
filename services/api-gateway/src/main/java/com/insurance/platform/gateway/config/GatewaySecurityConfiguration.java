@@ -40,6 +40,7 @@ public class GatewaySecurityConfiguration {
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login").permitAll()
                         .pathMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
+                        .pathMatchers("/api/v1/admin/pricing/**").hasRole("ADMIN")
                         .anyExchange().authenticated())
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((exchange, ex) -> unauthorized(exchange))
@@ -57,7 +58,7 @@ public class GatewaySecurityConfiguration {
             @Value("${gateway.cors.allowed-origins}") List<String> origins) {
         var cors = new CorsConfiguration();
         cors.setAllowedOrigins(origins);
-        cors.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+        cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "OPTIONS"));
         cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-ID"));
         cors.setExposedHeaders(List.of("X-Correlation-ID"));
         cors.setAllowCredentials(false);

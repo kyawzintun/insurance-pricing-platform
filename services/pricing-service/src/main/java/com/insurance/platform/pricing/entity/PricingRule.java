@@ -47,6 +47,34 @@ public class PricingRule {
         this.description = description;
     }
 
+    public void initializeTimestamps(Instant now) {
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    public void updateFrom(PricingRule values, Instant now) {
+        this.ruleType = values.ruleType;
+        this.operator = values.operator;
+        this.comparisonValue = values.comparisonValue;
+        this.comparisonValueTo = values.comparisonValueTo;
+        this.factor = values.factor;
+        this.fixedAmount = values.fixedAmount;
+        this.effectiveFrom = values.effectiveFrom;
+        this.enabled = values.enabled;
+        this.description = values.description;
+        touch(now);
+    }
+
+    public void changeEnabled(boolean enabled, Instant now) {
+        this.enabled = enabled;
+        touch(now);
+    }
+
+    private void touch(Instant now) {
+        // Ensure repeated same-state writes still advance @Version, even with a fixed clock.
+        this.updatedAt = updatedAt == null || now.isAfter(updatedAt) ? now : updatedAt.plusNanos(1000);
+    }
+
     public UUID getId() { return id; }
     public RuleType getRuleType() { return ruleType; }
     public RuleOperator getOperator() { return operator; }

@@ -1,6 +1,6 @@
-# API Gateway — Phase 5
+# API Gateway — Auth and Pricing Administration
 
-Gateway runs on **8080**, using Spring Cloud Gateway WebFlux and reactive Spring Security. Its only downstream route is `/api/v1/auth/**` → Auth Service, with the original path and Authorization header preserved. It has no database or business endpoints.
+Gateway runs on **8080**, using Spring Cloud Gateway WebFlux and reactive Spring Security. Its downstream routes are `/api/v1/auth/**` → Auth Service and `/api/v1/admin/pricing/**` → Pricing Service, with the original path and Authorization header preserved. It has no database or business endpoints.
 
 ## Run locally
 
@@ -23,12 +23,13 @@ Both applications default to `local`. No launcher or environment exports are nee
 | --- | --- |
 | `API_GATEWAY_PORT` | `8080` |
 | `AUTH_SERVICE_URL` | `http://localhost:8081`; change if Auth runs elsewhere |
+| `PRICING_SERVICE_URL` | `http://localhost:8083`; admin Pricing route only |
 | `GATEWAY_CORS_ALLOWED_ORIGINS` | `http://localhost:4200`; comma-separated exact origins |
 | `AUTH_JWT_SECRET` | Same Base64 key as Auth; at least 32 bytes |
 | `AUTH_JWT_ISSUER` | `insurance-auth-service`; must match Auth |
 | `SERVER_ADDRESS` | `127.0.0.1` in local profile |
 
-Local YAML reuses Auth's **public development-only key**. Explicitly selecting another profile removes this fallback; supply `AUTH_JWT_SECRET` securely to both processes. A missing, invalid Base64, or short key prevents startup. Environment variables override YAML; Maven does not automatically load `.env`. Gateway has no issuer-discovery network call.
+Local YAML reuses Auth's **public development-only key**, also used by Pricing. Explicitly selecting another profile removes this fallback; supply `AUTH_JWT_SECRET` securely to Auth, Gateway, and Pricing. A missing, invalid Base64, or short key prevents startup. Environment variables override YAML; Maven does not automatically load `.env`. Gateway has no issuer-discovery network call.
 
 ## Requests
 
@@ -57,17 +58,17 @@ Copy `accessToken` from login into Postman's Bearer Token field. For curl, the h
 
 An invalid Bearer token supplied to a public endpoint is also rejected: omit Authorization for registration/login. No form login, HTTP Basic, session, or generated user is enabled.
 
-There is **no protected business endpoint yet**. For a manual authentication check, request `/phase5-authentication-check`: without a token it returns 401; with a valid token it returns 404 because authentication passed but no route exists. This is not a production endpoint or evidence of downstream business authorization. Automated tests use a stub protected Auth path to prove authenticated forwarding. Auth itself still issues tokens and does not yet validate Bearer tokens on its protected paths; downstream JWT validation comes later.
+Phase 7 now adds protected ADMIN pricing-rule endpoints; see below. For a manual authentication check, request `/phase5-authentication-check`: without a token it returns 401; with a valid token it returns 404 because authentication passed but no route exists. This is not a production endpoint or evidence of downstream business authorization. Automated tests use a stub protected Auth path to prove authenticated forwarding. Auth itself still issues tokens and does not yet validate Bearer tokens on its protected paths; downstream JWT validation comes later.
 
 ## Validation and propagation
 
-`config/JwtConfiguration` uses the Boot-managed Nimbus reactive decoder restricted to HS256, plus explicit issuer, expiration (zero clock skew), required expiration, nonblank subject, and nonempty string roles validation. `sub` is the principal name; roles map to `ROLE_` authorities. No role-based business policy is implemented. Auth supplies `iat`; it is not an additional required claim in Gateway.
+`config/JwtConfiguration` uses the Boot-managed Nimbus reactive decoder restricted to HS256, plus explicit issuer, expiration (zero clock skew), required expiration, nonblank subject, and nonempty string roles validation. `sub` is the principal name; roles map to `ROLE_` authorities. Phase 7 requires ROLE_ADMIN for `/api/v1/admin/pricing/**`; other authenticated requests retain the previous rules. Auth supplies `iat`; it is not an additional required claim in Gateway.
 
-`config/GatewaySecurityConfiguration` defines the public method/path combinations, stateless authentication, safe errors, and CORS. Only GET/POST/OPTIONS and Authorization/Content-Type/X-Correlation-ID headers are allowed for configured origins under `/api/**`; credentials are disabled. Expand methods when actual later APIs need them.
+`config/GatewaySecurityConfiguration` defines the public method/path combinations, stateless authentication, safe errors, and CORS. Only GET/POST/PUT/PATCH/OPTIONS and Authorization/Content-Type/X-Correlation-ID headers are allowed for configured origins under `/api/**`; credentials are disabled. Expand methods when actual later APIs need them.
 
 `filter/CorrelationIdFilter` accepts a 1–128 character identifier containing letters, digits, dots, underscores, or hyphens; absent/unsafe values become UUIDs. The same `X-Correlation-ID` is forwarded and returned, including authentication failures, and exposed to the browser. It is diagnostic data, not trusted identity. No tracing or custom user/role headers are introduced.
 
-Gateway authentication is one boundary; downstream services must later validate tokens independently. There are no quote/pricing/admin routes, service discovery, Kafka handlers, refresh tokens, or rate limiting.
+Gateway authentication is one boundary; Pricing now independently validates tokens and requires ADMIN; other downstream services must add their own validation when implemented. There are no quote or internal-calculation routes, service discovery, Kafka handlers, refresh tokens, or rate limiting.
 
 ## Tests and troubleshooting
 
@@ -81,3 +82,11 @@ Tests start a real Gateway and an ephemeral local HTTP stub with a generated sig
 For troubleshooting only, `http://localhost:8081/actuator/health` checks Auth directly; Gateway health checks Gateway itself and does not prove Auth is reachable. Confirm both applications share the key/issuer and that `AUTH_SERVICE_URL` matches Auth's port if routing fails.
 
 Reference: [Spring Security reactive JWT resource server](https://docs.spring.io/spring-security/reference/reactive/oauth2/resource-server/jwt.html).
+
+## Phase 7 — Pricing administration
+
+Start Pricing in another terminal with `./mvnw -pl services/pricing-service spring-boot:run`. Use an ADMIN access token from Auth to call `/api/v1/admin/pricing/rules` through port 8080. Gateway routes only the admin pricing prefix to `PRICING_SERVICE_URL`; it does not route `/internal/v1/pricing/calculate`.
+
+GET list/get, POST create, PUT update, and PATCH enable/disable are supported. Gateway checks ADMIN before forwarding, preserving the original Bearer token. Pricing validates that token independently and repeats ADMIN authorization. Missing/invalid token returns 401; CUSTOMER returns 403 at either boundary. No trusted user headers or service-to-service OAuth2 are introduced.
+
+CORS now permits PUT/PATCH in addition to GET/POST/OPTIONS for the existing configured origins, without credentials. There is no Angular admin UI yet. See [Pricing API examples, pagination and versions](../pricing-service/README.md#phase-7--admin-pricing-rules), [Phase 7 specification](../../docs/specs/phase-7-pricing-administration.md), and [validation](../../docs/phase-7-validation.md). No Kafka/outbox events are emitted.

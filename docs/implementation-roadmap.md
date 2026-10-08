@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 6 complete; Phase 7 not started.
+Status: Phases 0 through 7 complete; Phase 8 not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -33,6 +33,10 @@ Completed. Gateway routes Auth requests, validates HS256 JWTs, and supplies mini
 Completed. Internal read-only premium calculation uses existing database rules, deterministic selection/order, BigDecimal rounding, safe validation, and a snapshot breakdown. No admin or Quote integration. See [specification](specs/phase-6-pricing-service-mvp.md) and [validation](phase-6-validation.md).
 
 ## Phase 7 — Pricing Administration
+
+Completed. ADMIN rule list/get/create/update/enable/disable through Gateway, independent Pricing JWT authorization, bounded pagination/filtering, shared rule validation, and optimistic locking. See [specification](specs/phase-7-pricing-administration.md) and [validation](phase-7-validation.md).
+
+## Phase 8 — Quote Service MVP
 
 Not started. Detailed implementation awaits its approved specification.
 

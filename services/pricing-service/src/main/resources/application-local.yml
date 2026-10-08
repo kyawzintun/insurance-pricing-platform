@@ -9,3 +9,8 @@ spring:
     password: ${POSTGRES_PASSWORD:local_dev_only}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:${KAFKA_EXTERNAL_PORT:9092}}
+
+auth:
+  jwt:
+    # Same PUBLIC DEVELOPMENT-ONLY KEY as Auth/Gateway. Never reuse outside local learning.
+    secret: ${AUTH_JWT_SECRET:VnczjVEg+Q2DUmsGnX7ZtEAeji5U42s55cOsNvTc3aY=}

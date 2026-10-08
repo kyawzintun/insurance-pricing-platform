@@ -43,6 +43,14 @@ class ApiGatewayApplicationTests {
                 exchange.getResponseBody().write(body);
                 exchange.close();
             });
+            DOWNSTREAM.createContext("/api/v1/admin/pricing/", exchange -> {
+                forwardedAuthorization = exchange.getRequestHeaders().getFirst("Authorization");
+                byte[] body = "{\"pricingDownstream\":true}".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+                exchange.close();
+            });
             DOWNSTREAM.start();
         } catch (Exception ex) { throw new ExceptionInInitializerError(ex); }
     }
@@ -50,6 +58,7 @@ class ApiGatewayApplicationTests {
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("auth.jwt.secret", () -> Base64.getEncoder().encodeToString(KEY));
+        registry.add("PRICING_SERVICE_URL", () -> "http://127.0.0.1:" + DOWNSTREAM.getAddress().getPort());
         registry.add("AUTH_SERVICE_URL", () -> "http://127.0.0.1:" + DOWNSTREAM.getAddress().getPort());
     }
 
@@ -158,5 +167,35 @@ class ApiGatewayApplicationTests {
     @Test void unsafeCorrelationIsReplaced() throws Exception {
         var response = request("GET", "/actuator/health", "X-Correlation-ID", "invalid value");
         assertThat(UUID.fromString(response.headers().firstValue("X-Correlation-ID").orElseThrow())).isNotNull();
+    }
+    @Test void pricingAdminRequiresToken() throws Exception {
+        assertUnauthorized(request("GET", "/api/v1/admin/pricing/rules"));
+    }
+    @Test void customerCannotReachPricingAdmin() throws Exception {
+        var response = request("GET", "/api/v1/admin/pricing/rules", "Authorization", "Bearer "
+                + token(claims("insurance-auth-service", Instant.now().getEpochSecond() + 300)));
+        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(response.body()).isEqualTo("{\"code\":\"FORBIDDEN\",\"message\":\"Access denied\"}");
+    }
+    @ParameterizedTest @ValueSource(strings = {"GET", "POST", "PUT", "PATCH"})
+    void adminCanReachPricingWithOriginalToken(String method) throws Exception {
+        String bearer = "Bearer " + token(claims("insurance-auth-service", Instant.now().getEpochSecond() + 300)
+                .replace("CUSTOMER", "ADMIN"));
+        var response = request(method, "/api/v1/admin/pricing/rules", "Authorization", bearer);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("pricingDownstream");
+        assertThat(forwardedAuthorization).isEqualTo(bearer);
+    }
+    @Test void internalCalculationHasNoGatewayRoute() throws Exception {
+        String bearer = "Bearer " + token(claims("insurance-auth-service", Instant.now().getEpochSecond() + 300)
+                .replace("CUSTOMER", "ADMIN"));
+        assertThat(request("POST", "/internal/v1/pricing/calculate", "Authorization", bearer).statusCode()).isEqualTo(404);
+    }
+    @ParameterizedTest @ValueSource(strings = {"PUT", "PATCH"})
+    void adminCorsPreflightAllowsMutationMethods(String method) throws Exception {
+        var response = request("OPTIONS", "/api/v1/admin/pricing/rules", "Origin", "http://localhost:4200",
+                "Access-Control-Request-Method", method, "Access-Control-Request-Headers", "authorization,content-type");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Access-Control-Allow-Methods").orElseThrow()).contains(method);
     }
 }

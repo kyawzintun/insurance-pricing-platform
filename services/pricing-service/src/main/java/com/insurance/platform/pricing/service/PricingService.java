@@ -4,14 +4,13 @@ import com.insurance.platform.pricing.dto.PricingAdjustment;
 import com.insurance.platform.pricing.dto.PricingRequest;
 import com.insurance.platform.pricing.dto.PricingResponse;
 import com.insurance.platform.pricing.entity.PricingRule;
-import com.insurance.platform.pricing.enums.CoverageType;
-import com.insurance.platform.pricing.enums.RuleOperator;
 import com.insurance.platform.pricing.enums.RuleType;
 import com.insurance.platform.pricing.exception.InvalidPricingRequestException;
 import com.insurance.platform.pricing.exception.PricingConfigurationException;
 import com.insurance.platform.pricing.repository.PricingRuleRepository;
 import jakarta.validation.Validator;
 import java.math.BigDecimal;
+import static com.insurance.platform.pricing.service.PricingRuleValidator.numeric;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -60,7 +59,7 @@ public class PricingService {
                 .filter(rule -> rule.isEnabled() && !rule.getEffectiveFrom().isAfter(now))
                 .toList();
         // Validate every active rule, including nonmatching rules, so broken configuration is visible.
-        rules.forEach(this::validateRule);
+        rules.forEach(PricingRuleValidator::validateRule);
         var ordered = rules.stream().sorted(RULE_ORDER).toList();
         var base = ordered.stream().filter(rule -> rule.getRuleType() == RuleType.BASE_PREMIUM)
                 .findFirst().orElseThrow(PricingConfigurationException::new);
@@ -94,43 +93,6 @@ public class PricingService {
         };
     }
 
-    private void validateRule(PricingRule rule) {
-        if (rule.getId() == null || rule.getRuleType() == null || rule.getOperator() == null) {
-            throw new PricingConfigurationException();
-        }
-        if (rule.getRuleType() == RuleType.BASE_PREMIUM) {
-            if (rule.getOperator() != RuleOperator.EQUALS || rule.getFixedAmount() == null
-                    || rule.getFixedAmount().signum() <= 0 || rule.getFactor() != null
-                    || rule.getComparisonValue() != null || rule.getComparisonValueTo() != null) {
-                throw new PricingConfigurationException();
-            }
-            money(rule.getFixedAmount());
-            return;
-        }
-        if (rule.getFactor() == null || rule.getFactor().signum() < 0 || rule.getFixedAmount() != null) {
-            throw new PricingConfigurationException();
-        }
-        if (rule.getRuleType() == RuleType.COVERAGE_TYPE) {
-            if (rule.getOperator() != RuleOperator.EQUALS || rule.getComparisonValueTo() != null) {
-                throw new PricingConfigurationException();
-            }
-            try {
-                CoverageType.valueOf(rule.getComparisonValue());
-            } catch (IllegalArgumentException | NullPointerException ex) {
-                throw new PricingConfigurationException();
-            }
-        } else {
-            var lower = numeric(rule.getComparisonValue());
-            if (rule.getOperator() == RuleOperator.BETWEEN) {
-                if (lower.compareTo(numeric(rule.getComparisonValueTo())) > 0) {
-                    throw new PricingConfigurationException();
-                }
-            } else if (rule.getComparisonValueTo() != null) {
-                throw new PricingConfigurationException();
-            }
-        }
-    }
-
     private boolean matches(PricingRule rule, String input) {
         if (rule.getRuleType() == RuleType.COVERAGE_TYPE) {
             return input.equals(rule.getComparisonValue());
@@ -145,14 +107,6 @@ public class PricingService {
             case GREATER_THAN_OR_EQUAL -> comparison >= 0;
             case BETWEEN -> comparison >= 0 && value.compareTo(numeric(rule.getComparisonValueTo())) <= 0;
         };
-    }
-
-    private BigDecimal numeric(String value) {
-        // Plain decimals only; bound parsing and reject scientific notation/extreme exponents.
-        if (value == null || !value.matches("[+-]?[0-9]{1,15}(\\.[0-9]{1,4})?")) {
-            throw new PricingConfigurationException();
-        }
-        return new BigDecimal(value);
     }
 
     private BigDecimal money(BigDecimal amount) {
