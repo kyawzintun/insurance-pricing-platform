@@ -51,6 +51,14 @@ class ApiGatewayApplicationTests {
                 exchange.getResponseBody().write(body);
                 exchange.close();
             });
+            DOWNSTREAM.createContext("/api/v1/quotes", exchange -> {
+                forwardedAuthorization = exchange.getRequestHeaders().getFirst("Authorization");
+                byte[] body = "{\"quoteDownstream\":true}".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(201, body.length);
+                exchange.getResponseBody().write(body);
+                exchange.close();
+            });
             DOWNSTREAM.start();
         } catch (Exception ex) { throw new ExceptionInInitializerError(ex); }
     }
@@ -58,6 +66,7 @@ class ApiGatewayApplicationTests {
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("auth.jwt.secret", () -> Base64.getEncoder().encodeToString(KEY));
+        registry.add("QUOTE_SERVICE_URL", () -> "http://127.0.0.1:" + DOWNSTREAM.getAddress().getPort());
         registry.add("PRICING_SERVICE_URL", () -> "http://127.0.0.1:" + DOWNSTREAM.getAddress().getPort());
         registry.add("AUTH_SERVICE_URL", () -> "http://127.0.0.1:" + DOWNSTREAM.getAddress().getPort());
     }
@@ -197,5 +206,16 @@ class ApiGatewayApplicationTests {
                 "Access-Control-Request-Method", method, "Access-Control-Request-Headers", "authorization,content-type");
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("Access-Control-Allow-Methods").orElseThrow()).contains(method);
+    }
+    @Test void quoteCreationRequiresJwt() throws Exception {
+        assertUnauthorized(request("POST", "/api/v1/quotes"));
+    }
+    @ParameterizedTest @ValueSource(strings = {"/api/v1/quotes", "/api/v1/quotes/probe"})
+    void quoteRouteForwardsCustomerJwtUnchanged(String path) throws Exception {
+        String bearer = "Bearer " + token(claims("insurance-auth-service", Instant.now().getEpochSecond() + 300));
+        var response = request("POST", path, "Authorization", bearer);
+        assertThat(response.statusCode()).isEqualTo(201);
+        assertThat(response.body()).contains("quoteDownstream");
+        assertThat(forwardedAuthorization).isEqualTo(bearer);
     }
 }

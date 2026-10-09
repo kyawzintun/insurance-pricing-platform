@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 7 complete; Phase 8 not started.
+Status: Phases 0 through 7 complete; Phase 8 implemented, Gateway live check pending.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -38,7 +38,11 @@ Completed. ADMIN rule list/get/create/update/enable/disable through Gateway, ind
 
 ## Phase 8 — Quote Service MVP
 
-Not started. Detailed implementation awaits its approved specification.
+Implemented CUSTOMER-only quote creation through Gateway, active vehicle-reference validation, direct synchronous Pricing REST, and atomic driver/vehicle/pricing snapshots with 30-day expiration. No schema changes or messaging. Automated validation passes; live validation is tracked in the [validation report](phase-8-validation.md). See [specification](specs/phase-8-quote-service-mvp.md).
+
+## Phase 9 — Quote Retrieval and Ownership
+
+Not started. Retrieval/history and ownership access checks remain for the next approved specification.
 
 ## Later Phases
 

@@ -1,11 +1,16 @@
-# Explicit opt-in for applications running on the developer host.
+# Default host-running learning configuration.
 server:
   address: ${SERVER_ADDRESS:127.0.0.1}
   port: ${QUOTE_SERVICE_PORT:8082}
 spring:
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/quote_db
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:15432}/quote_db
     username: ${POSTGRES_USER:insurance_dev}
     password: ${POSTGRES_PASSWORD:local_dev_only}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:${KAFKA_EXTERNAL_PORT:9092}}
+
+auth:
+  jwt:
+    # PUBLIC DEVELOPMENT-ONLY key shared with Auth/Gateway/Pricing. Never use outside local learning.
+    secret: ${AUTH_JWT_SECRET:VnczjVEg+Q2DUmsGnX7ZtEAeji5U42s55cOsNvTc3aY=}

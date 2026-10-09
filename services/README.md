@@ -1,6 +1,6 @@
-# Backend Service Skeletons
+# Backend Services
 
-Phase 2 supplied six independently runnable applications. Phase 3 adds service-owned Flyway migrations and educational seeds; Phase 4 now adds registration/login and the User entity in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal Pricing calculation; Phase 7 adds ADMIN pricing-rule APIs with independent JWT validation. Other business APIs and Kafka message handlers remain deferred.
+Phase 2 supplied six independently runnable applications. Phase 3 adds service-owned Flyway migrations and educational seeds; Phase 4 now adds registration/login and the User entity in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal Pricing calculation; Phase 7 adds ADMIN pricing-rule APIs with independent JWT validation. Phase 8 adds CUSTOMER quote creation with synchronous Pricing integration and atomic snapshots. Retrieval and Kafka message handlers remain deferred.
 
 ## Build Baseline
 
@@ -44,22 +44,24 @@ Auth defaults to the local profile, PostgreSQL port 15432, and a public developm
 
 Pricing also supports `./mvnw -pl services/pricing-service spring-boot:run` with the local database on 15432. See [Pricing setup](pricing-service/README.md).
 
-For Quote, Notification, and Audit, export `.env` in each terminal and use the module-specific Maven command:
+Quote also supports `./mvnw -pl services/quote-service spring-boot:run` with the local database on 15432. See [Quote setup](quote-service/README.md).
+
+For Notification and Audit, export `.env` in each terminal and use the module-specific Maven command:
 
 ```bash
 set -a
 [ ! -f .env ] || . ./.env
 set +a
-./mvnw -pl services/quote-service spring-boot:run -Dspring-boot.run.profiles=local
+./mvnw -pl services/notification-service spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-Replace `services/quote-service` with the desired module. Do not add `-am` to a run command: it would attempt to run the aggregator. Stop infrastructure separately with `docker compose down`.
+Replace `services/notification-service` with the desired module. Do not add `-am` to a run command: it would attempt to run the aggregator. Stop infrastructure separately with `docker compose down`.
 
-Auth, Gateway, and Pricing default to `local`; other services require explicit profile selection. It binds to `127.0.0.1` by default, uses the module's port, and provides development database credentials. Non-local deployments must supply their own datasource/configuration. No production profile is defined.
+Auth, Gateway, Quote, and Pricing default to `local`; other services require explicit profile selection. It binds to `127.0.0.1` by default, uses the module's port, and provides development database credentials. Non-local deployments must supply their own datasource/configuration. No production profile is defined.
 
 ## Environment Overrides
 
-- Database: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`. Defaults are `localhost`, `5432` (Auth/Pricing: `15432`), `insurance_dev`, `local_dev_only`. The database name stays service-specific.
+- Database: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`. Defaults are `localhost`, `5432` (Auth/Quote/Pricing: `15432`), `insurance_dev`, `local_dev_only`. The database name stays service-specific.
 - Kafka: `KAFKA_BOOTSTRAP_SERVERS` takes precedence. Otherwise the local profile uses `localhost:${KAFKA_EXTERNAL_PORT}`, defaulting to `localhost:9092`. This preserves Phase 1 port overrides without duplicating them.
 - Ports: `API_GATEWAY_PORT`, `AUTH_SERVICE_PORT`, `QUOTE_SERVICE_PORT`, `PRICING_SERVICE_PORT`, `NOTIFICATION_SERVICE_PORT`, `AUDIT_SERVICE_PORT`. Standard Spring `SERVER_PORT` also overrides the port for one process.
 - Bind address: `SERVER_ADDRESS`, default `127.0.0.1`. Future container deployment would need a suitable bind address plus internal database/Kafka addresses; no service containers are added in Phase 2.
@@ -76,15 +78,15 @@ Local YAML includes public learning defaults (including the shared Auth/Gateway 
 | Auth, Quote, Pricing | Validation |
 | Quote, Pricing, Notification, Audit | Spring Boot Kafka starter (Spring Kafka integration) |
 
-Notification includes Web MVC and the same small Security baseline for consistent HTTP health behavior. Only `health` and `info` are exposed. Quote, Notification, and Audit use a temporary `Phase2SecurityConfiguration`: health/info are public, all other requests are denied, and form login/HTTP Basic are disabled. Default user auto-configuration is excluded to avoid a generated password. There is no authentication implementation. Replace this baseline when approved security features are introduced. Gateway now routes Auth requests and validates JWTs; see [Gateway setup](api-gateway/README.md).
+Notification includes Web MVC and the same small Security baseline for consistent HTTP health behavior. Only `health` and `info` are exposed. Notification and Audit use a temporary `Phase2SecurityConfiguration`: health/info are public, all other requests are denied, and form login/HTTP Basic are disabled. Default user auto-configuration is excluded to avoid a generated password. These two skeletons have no authentication implementation. Quote independently validates JWTs and requires CUSTOMER for creation. Gateway now routes Auth requests and validates JWTs; see [Gateway setup](api-gateway/README.md).
 
-Hibernate uses `ddl-auto: none` and SQL initialization is disabled. Auth has its Phase 4 User entity/repository and Pricing has its Phase 6 PricingRule entity/read-only repository; other services have no entities/repositories. Flyway now owns the Phase 3 tables and seeds, applying service-owned migrations on startup. Its history records each applied migration; normal restarts validate checksums and do not repeat seeds.
+Hibernate uses `ddl-auto: none` and SQL initialization is disabled. Auth has its Phase 4 User entity/repository and Pricing has its PricingRule entity/repository for calculation and administration; Quote maps the existing catalog and snapshot tables. Notification/Audit have no entities/repositories. Flyway now owns the Phase 3 tables and seeds, applying service-owned migrations on startup. Its history records each applied migration; normal restarts validate checksums and do not repeat seeds.
 
 Kafka configuration contains only bootstrap addresses. No listeners, producers, topic beans, retry settings, or DLQ processing are implemented. Broker connectivity is not exercised by application messaging in Phase 2.
 
 ## Tests and Health
 
-Each module's `@SpringBootTest` starts a real HTTP server on a random port and checks `/actuator/health`. The database-service test profile excludes datasource, Hibernate, and Flyway auto-configuration; Auth mocks UserRepository for its HTTP authentication tests; Pricing mocks PricingRuleRepository for HTTP calculation tests; it intentionally tests context/HTTP startup rather than database integration. No H2, running local PostgreSQL, or Docker is required for `clean verify`. Testcontainers dependencies are prepared but no containers are started by tests.
+Each module's `@SpringBootTest` starts a real HTTP server on a random port and checks `/actuator/health`. The database-service test profile excludes datasource, Hibernate, and Flyway auto-configuration; Auth mocks UserRepository for its HTTP authentication tests; Pricing mocks PricingRuleRepository for HTTP calculation tests; it intentionally tests context/HTTP startup rather than database integration. No H2, running local PostgreSQL, or Docker is required for `clean verify`. Normal tests start no containers. Quote and Pricing opt-in `postgres-it` profiles use disposable PostgreSQL containers; Quote normal tests use mocked repositories and an HTTP Pricing stub.
 
 With the six local applications running on their default ports:
 
@@ -120,7 +122,7 @@ After confirming that the backup succeeded or that the data is disposable:
 ```bash
 docker compose exec -T postgres sh -c 'dropdb -U "$POSTGRES_USER" quote_db && createdb -U "$POSTGRES_USER" quote_db'
 # With .env exported as described above:
-./mvnw -pl services/quote-service spring-boot:run -Dspring-boot.run.profiles=local
+./mvnw -pl services/notification-service spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
 Flyway recreates Quote's schema and seeds from its migrations. Do not recreate tables manually or delete only the history table. If connections remain, `dropdb` fails rather than forcibly disconnecting other clients. Replace the database and matching service only when intentionally rebuilding another service's database. No reset was required during Phase 3 validation.
@@ -140,3 +142,7 @@ Pricing now allows only its internal calculation POST plus GET health/info, keep
 ## Phase 7 — Pricing Administration
 
 Gateway now routes `/api/v1/admin/pricing/**` to Pricing. Both services validate Auth-issued tokens and require ADMIN for that prefix. Pricing's local JWT key/issuer match Auth/Gateway; supply the same configuration outside local. Pricing calculation remains read-only, while the separate admin service writes only pricing_rules using optimistic versions. Normal Maven tests need no infrastructure; `./mvnw -pl services/pricing-service -am -Ppostgres-it verify` additionally runs isolated PostgreSQL persistence/concurrency tests with Docker. See [admin guide](pricing-service/README.md) and [validation](../docs/phase-7-validation.md).
+
+## Phase 8 — Quote Creation
+
+Gateway forwards the original Bearer token to `QUOTE_SERVICE_URL` (default localhost:8082). Quote validates it independently, requires CUSTOMER, and stores only its JWT subject as customer_id. Quote calls `PRICING_SERVICE_URL` directly (default localhost:8083) without a write transaction, then persists all quote snapshots in a separate transaction. No partial quote is saved on Pricing failure, and no events are emitted. See [Quote guide](quote-service/README.md) and [validation](../docs/phase-8-validation.md).

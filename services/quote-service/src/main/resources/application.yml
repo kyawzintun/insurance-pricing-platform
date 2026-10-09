@@ -1,8 +1,17 @@
 spring:
+  profiles:
+    default: local
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+      accept-float-as-int: false
+    datatype:
+      enum:
+        fail-on-numbers-for-enums: true
   application:
     name: quote-service
   autoconfigure:
-    # Temporary Phase 2: no generated user or password; no authentication yet.
+    # JWT authentication; no generated user or password.
     exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
   jpa:
     hibernate:
@@ -19,3 +28,13 @@ management:
   endpoint:
     health:
       show-details: never
+
+auth:
+  jwt:
+    secret: ${AUTH_JWT_SECRET:}
+    issuer: ${AUTH_JWT_ISSUER:insurance-auth-service}
+pricing:
+  service:
+    url: ${PRICING_SERVICE_URL:http://localhost:8083}
+    connect-timeout: ${PRICING_CONNECT_TIMEOUT:2s}
+    read-timeout: ${PRICING_READ_TIMEOUT:5s}
