@@ -96,4 +96,8 @@ CORS now permits PUT/PATCH in addition to GET/POST/OPTIONS for the existing conf
 
 Start Pricing and Quote in separate terminals using `./mvnw -pl services/pricing-service spring-boot:run` and `./mvnw -pl services/quote-service spring-boot:run`. POST `/api/v1/quotes` requires a valid JWT at Gateway; Quote verifies that token again and requires CUSTOMER. ADMIN-only tokens receive 403 from Quote. No customer identity headers are synthesized. The Quote route preserves the path and Authorization header and uses configurable `QUOTE_SERVICE_URL`.
 
-Only creation is implemented; matching a route prefix does not add retrieval/history endpoints. See [Quote request/response examples](../quote-service/README.md) and [Phase 8 validation](../../docs/phase-8-validation.md).
+Phase 9 adds GET detail and paginated GET list through this same route; Quote independently applies CUSTOMER ownership or ADMIN access. See [Quote request/response examples](../quote-service/README.md) and [Phase 8 validation](../../docs/phase-8-validation.md).
+
+## Phase 9 — Quote retrieval
+
+The existing quote route forwards GET `/api/v1/quotes` (including page/size parameters) and GET `/api/v1/quotes/{id}` with the original Bearer token. No new route or Gateway ownership logic is needed. Quote independently authorizes CUSTOMER/ADMIN and applies customer-scoped queries. See [Quote retrieval guide](../quote-service/README.md#phase-9--retrieval-and-ownership) and [validation](../../docs/phase-9-validation.md).

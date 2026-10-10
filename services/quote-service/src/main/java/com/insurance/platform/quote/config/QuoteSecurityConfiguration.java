@@ -28,6 +28,7 @@ public class QuoteSecurityConfiguration {
                 .requestCache(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers(HttpMethod.POST, "/api/v1/quotes").hasRole("CUSTOMER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/quotes", "/api/v1/quotes/*").hasAnyRole("CUSTOMER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
                         .anyRequest().denyAll())
                 .httpBasic(AbstractHttpConfigurer::disable)

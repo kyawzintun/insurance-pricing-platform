@@ -174,10 +174,6 @@ class QuoteServiceApplicationTests {
         downstreamResponse=PRICE.replaceAll(field+":(?:\"[^\"]*\"|[0-9.]+)",replacement);
         error(post(INPUT),502,"PRICING_SERVICE_ERROR");
     }
-    @Test void retrievalEndpointsAreNotExposed() throws Exception {
-        error(request("GET","/api/v1/quotes",null,QuoteJwtSupport.token("CUSTOMER")),403,"FORBIDDEN");
-        error(request("GET","/api/v1/quotes/"+UUID.randomUUID(),null,QuoteJwtSupport.token("CUSTOMER")),403,"FORBIDDEN");
-    }
     @Test void snapshotAdjustmentsAreStoredInSequenceOrder() throws Exception {
         downstreamResponse=PRICE.replace("11200.00","14000.00").replace("\"amountBefore\":8000.00","\"amountBefore\":10000.00")
                 .replace("\"sequenceNumber\":1", "\"sequenceNumber\":2")

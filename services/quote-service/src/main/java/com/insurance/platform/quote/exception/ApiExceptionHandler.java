@@ -29,6 +29,6 @@ public class ApiExceptionHandler {
     }
     @ExceptionHandler(Exception.class)
     ResponseEntity<ApiError> unexpected(Exception ex) {
-        return ResponseEntity.internalServerError().body(new ApiError("INTERNAL_ERROR", "Unable to create quote"));
+        return ResponseEntity.internalServerError().body(new ApiError("INTERNAL_ERROR", "Unable to process quote"));
     }
 }

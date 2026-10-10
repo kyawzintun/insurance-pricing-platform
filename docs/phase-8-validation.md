@@ -1,5 +1,7 @@
 # Phase 8 — Quote Service MVP Validation
 
+Follow-up on 2026-10-10: the pending creation-through-new-Gateway check passed during [Phase 9 live validation](phase-9-validation.md), using temporary Gateway port 18080 and Quote port 18082. The original Phase 8 report below is retained as historical evidence.
+
 Status: Implementation and automated/direct-service validation complete on 2026-10-08. **Live quote creation through the updated Gateway on port 8080 is pending** the user's choice to restart the existing Gateway or use temporary ports. Phase 9 has not started.
 
 ## Maven and automated tests

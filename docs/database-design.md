@@ -69,3 +69,9 @@ Quote maps vehicle_brands and vehicle_models for lookup, plus quotes, quote_driv
 customer_id and pricing_rule_id remain plain UUIDs with no cross-service FK. Vehicle IDs/names are historical copies. A UUID-based 43-character quote reference satisfies the existing unique constraint. Created/priced/updated timestamps share one UTC microsecond-precision instant; expires_at is 30 days later. Failed pricing writes nothing; a persistence error rolls back all quote rows.
 
 Existing columns preserve monetary amounts and adjustment details, but cannot store basePricingRuleId, basePricingRuleVersion, or adjustment pricingRuleVersion. These wire fields are intentionally omitted from Quote snapshots/DTOs; no convenience migration was added. All Phase 3 migration files and outbox tables remain unchanged. See [Phase 8 validation](phase-8-validation.md) for disposable PostgreSQL mapping and rollback tests.
+
+## Phase 9 — Read-Only Quote Retrieval
+
+Customer detail queries filter id plus customer_id; customer list queries scope both the ID page/count and bulk snapshot fetch to customer_id. ADMIN uses unrestricted equivalents. Detail fetches a full entity graph; list pages scalar IDs by created_at DESC, id DESC, then fetches snapshots without pagination. Mapping runs inside read-only transactions. Existing customer/created_at index and schema are unchanged.
+
+Disposable PostgreSQL checks show one detail SELECT and at most three SELECTs per tested list page, with correct counts despite multiple adjustments and unchanged row fingerprints after reads. Stored status is never transitioned, and incomplete optional snapshots return null. See [Phase 9 validation](phase-9-validation.md).

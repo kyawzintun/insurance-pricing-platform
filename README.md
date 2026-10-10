@@ -6,9 +6,9 @@ The project focuses on a simple car-insurance pricing platform. It is not intend
 
 ## Current Project Status
 
-**Phase 8 — Quote Service MVP: Implementation complete; Gateway live check pending**
+**Phase 9 — Quote Retrieval and Ownership: Complete**
 
-Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 has not started. Implementation will proceed phase by phase.
+Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 adds secure quote retrieval and pagination. Phase 10 has not started. Implementation will proceed phase by phase.
 
 ## Main Users
 
@@ -17,9 +17,8 @@ Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has pass
 
 ## Planned Features
 
-Customer registration/login, Gateway JWT validation, internal pricing, ADMIN pricing-rule management, and CUSTOMER quote creation with stored pricing breakdowns and a 30-day expiresAt are implemented (Phases 4–8). The following features remain planned:
+Customer registration/login, Gateway JWT validation, internal pricing, ADMIN pricing-rule management, CUSTOMER quote creation with stored pricing breakdowns and a 30-day expiresAt, and secure CUSTOMER/ADMIN retrieval are implemented (Phases 4–9). The following features remain planned:
 
-- Quote ownership security
 - Kafka-based notifications
 - Kafka-based audit logging
 - Automatic quote expiration processing (the 30-day timestamp is stored now)
@@ -130,7 +129,7 @@ Validation results and the machine-specific port overrides are recorded in [Phas
 | --- | ---: | --- | --- |
 | API Gateway | 8080 | None | Auth/admin Pricing/Quote routing and JWT authorization |
 | Auth Service | 8081 | auth_db | Registration and login |
-| Quote Service | 8082 | quote_db | CUSTOMER quote creation and pricing snapshots |
+| Quote Service | 8082 | quote_db | Creation, snapshots, CUSTOMER ownership and ADMIN retrieval |
 | Pricing Service | 8083 | pricing_db | Internal calculation and ADMIN rule management |
 | Notification Service | 8084 | notification_db | Skeleton |
 | Audit Service | 8085 | audit_db | Skeleton |
@@ -143,7 +142,7 @@ docker compose up -d
 ./mvnw -pl services/auth-service spring-boot:run
 ```
 
-Auth defaults to the local profile, PostgreSQL port 15432, and a public development-only signing key. No launcher or environment setup is needed for the current local database. Use the module-specific Maven commands in the backend guide for other services. All six expose `/actuator/health`; only health/info are exposed through Actuator. Ports and infrastructure connections support environment overrides. Auth now exposes registration/login backed by its User entity. Gateway now routes Auth requests; Pricing exposes its internal calculation endpoint and protected admin rule APIs. Quote exposes CUSTOMER-only creation; retrieval and application Kafka messaging remain unimplemented. Database migrations and seeds were implemented in Phase 3.
+Auth defaults to the local profile, PostgreSQL port 15432, and a public development-only signing key. No launcher or environment setup is needed for the current local database. Use the module-specific Maven commands in the backend guide for other services. All six expose `/actuator/health`; only health/info are exposed through Actuator. Ports and infrastructure connections support environment overrides. Auth now exposes registration/login backed by its User entity. Gateway now routes Auth requests; Pricing exposes its internal calculation endpoint and protected admin rule APIs. Quote exposes CUSTOMER-only creation and secure CUSTOMER/ADMIN retrieval; application Kafka messaging remains unimplemented. Database migrations and seeds were implemented in Phase 3.
 
 See [backend startup and dependency guidance](services/README.md) for per-service packages, environment variables, temporary security behavior, test boundaries, and Maven commands.
 
@@ -163,7 +162,7 @@ Flyway owns all service schemas. Migrations live under `services/<service>/src/m
 
 Starting the five database services with the local profile applies 15 migrations, including four brands, twelve models, and seven learning-only pricing rules. Normal restarts validate existing migrations without duplicating seeds. No user accounts are seeded. Outbox and processed-event tables do not implement messaging behavior.
 
-See [database design](docs/database-design.md), [validation results](docs/phase-3-validation.md), and [intentional local database rebuild instructions](services/README.md#intentional-local-database-rebuild). No database reset is needed for ordinary development. Phase 4 authentication is documented below; Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 has not started.
+See [database design](docs/database-design.md), [validation results](docs/phase-3-validation.md), and [intentional local database rebuild instructions](services/README.md#intentional-local-database-rebuild). No database reset is needed for ordinary development. Phase 4 authentication is documented below; Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 adds secure quote retrieval and pagination. Phase 10 has not started.
 
 ## Phase 4 — Authentication Basics
 
@@ -215,4 +214,12 @@ Start Quote in its own terminal with `./mvnw -pl services/quote-service spring-b
 
 Quote validates input and active brand/model references, calls Pricing directly over synchronous REST, and atomically stores a PRICED quote with driver, vehicle-name, and pricing snapshots. Expiration is 30 days after creation. Pricing failure returns a safe 502/503 without a partial quote. Quote → Pricing currently has no service credentials; service authentication remains deferred to Phase 25.
 
-Existing schemas and seeds are unchanged. No retrieval/history, editing, repricing, expiration job, Kafka, or outbox writes were added. See [Quote startup, curl, response, and code guide](services/quote-service/README.md), [specification](docs/specs/phase-8-quote-service-mvp.md), and [validation](docs/phase-8-validation.md). Phase 9 has not started.
+Existing schemas and seeds are unchanged. Phase 8 added no retrieval/history, editing, repricing, expiration job, Kafka, or outbox writes. Phase 9 retrieval is described below. See [Quote startup, curl, response, and code guide](services/quote-service/README.md), [specification](docs/specs/phase-8-quote-service-mvp.md), and [validation](docs/phase-8-validation.md). Phase 9 adds secure quote retrieval and pagination. Phase 10 has not started.
+
+## Phase 9 — Quote Retrieval and Ownership
+
+`GET /api/v1/quotes/{id}` returns a stored snapshot. CUSTOMER can read only their own quotes; cross-customer and missing IDs return identical 404s. ADMIN can read any quote. `GET /api/v1/quotes?page=0&size=20` lists the customer's own quotes or all quotes for ADMIN, with maximum size 100 and fixed createdAt DESC / ID DESC order. Client customerId/status/sort filters are rejected. Quote validates JWTs and enforces ownership independently of Gateway.
+
+Retrieval uses read-only database queries, with no Pricing call, current catalog lookup, recalculation, status transition, or messaging. A two-step ID-page/snapshot fetch preserves pagination without N+1 queries. All 267 normal tests and seven Quote PostgreSQL integration tests pass; live Gateway ownership checks and temporary-data cleanup passed. Newly built Gateway creation was also validated on temporary ports.
+
+See [Quote API guide](services/quote-service/README.md#phase-9--retrieval-and-ownership), [specification](docs/specs/phase-9-quote-retrieval-and-ownership.md), and [validation](docs/phase-9-validation.md). Phase 10 — Angular Foundation has not started.

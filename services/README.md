@@ -1,6 +1,6 @@
 # Backend Services
 
-Phase 2 supplied six independently runnable applications. Phase 3 adds service-owned Flyway migrations and educational seeds; Phase 4 now adds registration/login and the User entity in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal Pricing calculation; Phase 7 adds ADMIN pricing-rule APIs with independent JWT validation. Phase 8 adds CUSTOMER quote creation with synchronous Pricing integration and atomic snapshots. Retrieval and Kafka message handlers remain deferred.
+Phase 2 supplied six independently runnable applications. Phase 3 adds service-owned Flyway migrations and educational seeds; Phase 4 now adds registration/login and the User entity in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal Pricing calculation; Phase 7 adds ADMIN pricing-rule APIs with independent JWT validation. Phase 8 adds CUSTOMER quote creation with synchronous Pricing integration and atomic snapshots. Phase 9 adds CUSTOMER-owned and ADMIN quote retrieval; Kafka message handlers remain deferred.
 
 ## Build Baseline
 
@@ -146,3 +146,7 @@ Gateway now routes `/api/v1/admin/pricing/**` to Pricing. Both services validate
 ## Phase 8 — Quote Creation
 
 Gateway forwards the original Bearer token to `QUOTE_SERVICE_URL` (default localhost:8082). Quote validates it independently, requires CUSTOMER, and stores only its JWT subject as customer_id. Quote calls `PRICING_SERVICE_URL` directly (default localhost:8083) without a write transaction, then persists all quote snapshots in a separate transaction. No partial quote is saved on Pricing failure, and no events are emitted. See [Quote guide](quote-service/README.md) and [validation](../docs/phase-8-validation.md).
+
+## Phase 9 — Quote Retrieval
+
+The existing Quote/Gateway startup commands now support GET detail and paginated list. CUSTOMER sees only JWT-sub-owned quotes; ADMIN sees all. Read-only snapshot queries do not need Pricing running; creation still does. No extra service or environment setting is needed. See [Quote guide](quote-service/README.md#phase-9--retrieval-and-ownership) and [validation](../docs/phase-9-validation.md).

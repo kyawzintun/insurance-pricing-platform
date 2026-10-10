@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 7 complete; Phase 8 implemented, Gateway live check pending.
+Status: Phases 0 through 9 complete; Phase 10 not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -38,11 +38,15 @@ Completed. ADMIN rule list/get/create/update/enable/disable through Gateway, ind
 
 ## Phase 8 — Quote Service MVP
 
-Implemented CUSTOMER-only quote creation through Gateway, active vehicle-reference validation, direct synchronous Pricing REST, and atomic driver/vehicle/pricing snapshots with 30-day expiration. No schema changes or messaging. Automated validation passes; live validation is tracked in the [validation report](phase-8-validation.md). See [specification](specs/phase-8-quote-service-mvp.md).
+Implemented CUSTOMER-only quote creation through Gateway, active vehicle-reference validation, direct synchronous Pricing REST, and atomic driver/vehicle/pricing snapshots with 30-day expiration. No schema changes or messaging. Automated/direct-service validation passed in Phase 8; the pending new-Gateway creation check passed during [Phase 9 validation](phase-9-validation.md) on temporary ports. See the historical [Phase 8 report](phase-8-validation.md). See [specification](specs/phase-8-quote-service-mvp.md).
 
 ## Phase 9 — Quote Retrieval and Ownership
 
-Not started. Retrieval/history and ownership access checks remain for the next approved specification.
+Completed. CUSTOMER ownership-scoped detail/list, ADMIN access, stable bounded pagination, historical snapshot mapping, and read-only bulk loading. Normal tests, disposable PostgreSQL query-count tests, and live Gateway ownership validation passed. See [specification](specs/phase-9-quote-retrieval-and-ownership.md) and [validation](phase-9-validation.md).
+
+## Phase 10 — Angular Foundation
+
+Not started. Awaiting its approved specification.
 
 ## Later Phases
 

@@ -1,4 +1,4 @@
-# Quote Service — Phase 8 MVP
+# Quote Service — Creation, Retrieval, and Ownership
 
 Creates completed car-insurance quotes using quote_db vehicle reference data and a synchronous call to Pricing Service. It stores historical driver, vehicle, and pricing snapshots atomically. Pricing values are educational, not actuarial.
 
@@ -79,7 +79,7 @@ Success is **201 Created**. Example using unchanged seeds on 2026-10-08 (IDs/tim
 }
 ```
 
-There is no GET-by-ID/history endpoint or Location link implying an implemented retrieval API. No editing, draft, reprice, or expiration job exists yet. Repeating POST creates a new quote; idempotency/retry behavior is not implemented in this phase.
+Phase 9 adds GET-by-ID and paginated history below; creation still does not emit a Location header. No editing, draft, reprice, or expiration job exists yet. Repeating POST creates a new quote; idempotency/retry behavior is not implemented in this phase.
 
 ## Validation and catalog references
 
@@ -122,7 +122,7 @@ Bodies contain only code/message. Downstream bodies/URLs, SQL, stack traces, and
 
 ## Code reading and tests
 
-Read CreateQuoteRequest → QuoteController → QuoteService → PricingClient → QuotePersistenceService → entities/repositories → QuoteResponse. QuoteService orchestrates without @Transactional; the separate persistence bean creates the transaction through Spring's proxy. Repositories expose only catalog lookup and aggregate save, no Phase 9 queries. Entities are never serialized directly.
+Read CreateQuoteRequest → QuoteController → QuoteService → PricingClient → QuotePersistenceService → entities/repositories → QuoteResponse. QuoteService orchestrates without @Transactional; the separate persistence bean creates the transaction through Spring's proxy. Phase 8 uses catalog lookup and aggregate save; Phase 9 adds the scoped retrieval queries documented below. Entities are never serialized directly.
 
 ```bash
 ./mvnw -pl services/quote-service -am test
@@ -133,4 +133,50 @@ Read CreateQuoteRequest → QuoteController → QuoteService → PricingClient �
 
 Normal tests use mocked repositories and a real HTTP Pricing stub; they need no Docker, PostgreSQL, Kafka, or H2. The optional profile applies existing Flyway migrations in PostgreSQL and checks atomic persistence, precision, uniqueness, rollback, and transaction boundaries. See [Phase 8 specification](../../docs/specs/phase-8-quote-service-mvp.md) and [validation](../../docs/phase-8-validation.md).
 
-Phase 9 — Quote Retrieval and Ownership has not started. No Kafka/outbox events, UI, service discovery, cache, refresh tokens, or service-to-service OAuth2 were added.
+Phase 9 adds retrieval and ownership below. No Kafka/outbox events, UI, service discovery, cache, refresh tokens, or service-to-service OAuth2 were added.
+
+## Phase 9 — Retrieval and Ownership
+
+With Auth, Gateway, and Quote running, use the same Bearer token pattern as creation:
+
+```bash
+# Own quote for CUSTOMER; any quote for ADMIN. Replace <QUOTE_ID>.
+curl -i 'http://localhost:8080/api/v1/quotes/<QUOTE_ID>' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
+
+# CUSTOMER sees only their own quotes; ADMIN sees all quotes.
+curl -i 'http://localhost:8080/api/v1/quotes?page=0&size=20' \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>'
+```
+
+GET detail returns HTTP 200 with the same stored QuoteResponse shape illustrated above. GET list returns HTTP 200 with:
+
+```json
+{"content":[],"page":0,"size":20,"totalElements":0,"totalPages":0}
+```
+
+For a nonempty page, content contains QuoteResponse objects. Page is zero-based, defaults to 0; size defaults to 20 and must be 1–100. Order is always **createdAt descending, then ID descending**. Beyond-last pages return empty content with the existing total count. The shape matches Pricing Administration pagination. Offset pagination is not a fixed snapshot across concurrent creation requests.
+
+Quote validates JWT independently and requires CUSTOMER or ADMIN for GET. CUSTOMER queries filter by JWT sub in the database; ADMIN queries allow all owners. A token carrying both roles receives ADMIN retrieval access. Creation still requires CUSTOMER. No trusted identity headers or ownership logic at Gateway.
+
+Another customer's quote and a nonexistent quote both return exactly:
+
+```json
+{"code":"QUOTE_NOT_FOUND","message":"Quote not found"}
+```
+
+Both use HTTP 404, avoiding an owner/existence disclosure. Invalid UUID paths return safe 400 INVALID_QUOTE_REQUEST. No/invalid token is 401; a valid token without either required authority is 403.
+
+Only page and size are accepted for list queries. Unknown filters (including customerId/status/sort), repeated parameters, invalid/blank integers, negative pages, invalid sizes, and offsets beyond Integer.MAX_VALUE are rejected with 400 INVALID_PAGE_REQUEST. There are no optional ADMIN filters yet.
+
+### Stored snapshots and database reads
+
+Retrieval reads only persisted quote snapshots; it never calls Pricing or current catalog repositories. Vehicle names, premium, adjustments, and timestamps remain as stored even when current catalog/pricing rules change. Pricing Service can be unavailable while retrieval continues working.
+
+QuoteRetrievalService uses @Transactional(readOnly = true) and maps DTOs inside that transaction. Detail uses an entity graph to load the full snapshot in one query. List first pages scalar quote IDs with an ownership-filtered count, then loads their snapshots in one unpaged entity-graph query. It restores ID-page order in Java. This avoids paginating a collection join and limits a nonempty page to at most three SELECTs. No global eager-loading change, H2, new index, or migration was added.
+
+Existing status is returned unchanged. PRICED does not become EXPIRED simply because expiresAt is in the past. FAILED/EXPIRED rows are readable; absent snapshots are null. No status transition or database write occurs during retrieval, and no outbox/Kafka event is emitted.
+
+For learning, read QuoteController.get/list → QuoteRetrievalService → QuoteRepository → QuoteResponse.from. Then read QuoteRetrievalTests and the extended QuotePostgresIT for HTTP ownership and real database/query-count evidence.
+
+See [Phase 9 specification](../../docs/specs/phase-9-quote-retrieval-and-ownership.md) and [validation](../../docs/phase-9-validation.md). Phase 10 — Angular Foundation has not started.

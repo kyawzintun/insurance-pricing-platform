@@ -24,8 +24,12 @@ public class QuoteService {
 
     public QuoteService(VehicleBrandRepository brands, VehicleModelRepository models, PricingClient pricing,
                         QuotePersistenceService persistence, Clock clock, Validator validator) {
-        this.brands = brands; this.models = models; this.pricing = pricing;
-        this.persistence = persistence; this.clock = clock; this.validator = validator;
+        this.brands = brands;
+        this.models = models;
+        this.pricing = pricing;
+        this.persistence = persistence;
+        this.clock = clock;
+        this.validator = validator;
     }
 
     public QuoteResponse create(UUID customerId, CreateQuoteRequest request) {

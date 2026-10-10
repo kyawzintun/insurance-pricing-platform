@@ -29,6 +29,7 @@ class ApiGatewayApplicationTests {
     private static volatile String forwardedAuthorization;
     private static volatile String forwardedCorrelation;
     private static volatile String forwardedBody;
+    private static volatile String forwardedQuoteUri;
     static {
         new SecureRandom().nextBytes(KEY);
         try {
@@ -52,10 +53,11 @@ class ApiGatewayApplicationTests {
                 exchange.close();
             });
             DOWNSTREAM.createContext("/api/v1/quotes", exchange -> {
+                forwardedQuoteUri = exchange.getRequestURI().toString();
                 forwardedAuthorization = exchange.getRequestHeaders().getFirst("Authorization");
                 byte[] body = "{\"quoteDownstream\":true}".getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
-                exchange.sendResponseHeaders(201, body.length);
+                exchange.sendResponseHeaders(exchange.getRequestMethod().equals("GET") ? 200 : 201, body.length);
                 exchange.getResponseBody().write(body);
                 exchange.close();
             });
@@ -217,5 +219,21 @@ class ApiGatewayApplicationTests {
         assertThat(response.statusCode()).isEqualTo(201);
         assertThat(response.body()).contains("quoteDownstream");
         assertThat(forwardedAuthorization).isEqualTo(bearer);
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"/api/v1/quotes", "/api/v1/quotes/00000000-0000-0000-0000-000000000001"})
+    void quoteRetrievalRequiresJwt(String path) throws Exception {
+        assertUnauthorized(request("GET", path));
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"CUSTOMER", "ADMIN"})
+    void quoteRetrievalForwardsRolesPathsAndPagination(String role) throws Exception {
+        String bearer = "Bearer " + token(claims("insurance-auth-service", Instant.now().getEpochSecond() + 300).replace("CUSTOMER", role));
+        for (String path : java.util.List.of("/api/v1/quotes?page=1&size=2", "/api/v1/quotes/00000000-0000-0000-0000-000000000001")) {
+            var response = request("GET", path, "Authorization", bearer);
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(forwardedQuoteUri).isEqualTo(path);
+            assertThat(forwardedAuthorization).isEqualTo(bearer);
+        }
     }
 }

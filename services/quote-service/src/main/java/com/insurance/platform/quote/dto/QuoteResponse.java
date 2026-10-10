@@ -18,10 +18,10 @@ public record QuoteResponse(UUID id, String quoteReference, QuoteStatus status, 
     public static QuoteResponse from(Quote quote) {
         var d = quote.getDriver(); var v = quote.getVehicle(); var p = quote.getPricing();
         return new QuoteResponse(quote.getId(), quote.getQuoteReference(), quote.getStatus(), quote.getCoverageType(),
-                new Driver(d.getDateOfBirth(), d.getDrivingExperienceYears(), d.getPreviousClaimsCount()),
-                new VehicleSnapshot(v.getBrandId(), v.getBrandName(), v.getModelId(), v.getModelName(),
+                d == null ? null : new Driver(d.getDateOfBirth(), d.getDrivingExperienceYears(), d.getPreviousClaimsCount()),
+                v == null ? null : new VehicleSnapshot(v.getBrandId(), v.getBrandName(), v.getModelId(), v.getModelName(),
                         v.getManufacturingYear(), v.getVehicleValue(), v.getEngineSizeCc()),
-                new Pricing(p.getBasePremium(), p.getFinalPremium(), p.getCurrency(), p.getCalculatedAt(),
+                p == null ? null : new Pricing(p.getBasePremium(), p.getFinalPremium(), p.getCurrency(), p.getCalculatedAt(),
                         p.getAdjustments().stream().map(a -> new Adjustment(a.getPricingRuleId(), a.getRuleType(),
                                 a.getDescription(), a.getInputValue(), a.getFactor(), a.getAmountBefore(),
                                 a.getAmountAfter(), a.getSequenceNumber())).toList()),
