@@ -6,9 +6,9 @@ The project focuses on a simple car-insurance pricing platform. It is not intend
 
 ## Current Project Status
 
-**Phase 9 — Quote Retrieval and Ownership: Complete**
+**Phase 10 — Angular Foundation: Complete**
 
-Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 adds secure quote retrieval and pagination. Phase 10 has not started. Implementation will proceed phase by phase.
+Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 adds secure quote retrieval and pagination. Phase 10 adds Angular registration/login and a protected dashboard foundation. Implementation will proceed phase by phase.
 
 ## Main Users
 
@@ -35,12 +35,12 @@ Customer registration/login, Gateway JWT validation, internal pricing, ADMIN pri
 - **Kafka** for asynchronous domain events
 - **PostgreSQL** for all backend services
 
-REST will be used for synchronous communication when an immediate response is needed. Each microservice will own its own logical database, with no cross-service database access. Transactional Outbox will be introduced in a later phase. PostgreSQL and Kafka are configured for local development. Auth Service implements registration and login. Gateway routes Auth, Pricing administration, and Quote requests. Pricing calculates premiums and manages rules; Quote creates priced snapshots. Notification, Audit, and the frontend remain unimplemented.
+REST will be used for synchronous communication when an immediate response is needed. Each microservice will own its own logical database, with no cross-service database access. Transactional Outbox will be introduced in a later phase. PostgreSQL and Kafka are configured for local development. Auth Service implements registration and login. Gateway routes Auth, Pricing administration, and Quote requests. Pricing calculates premiums and manages rules; Quote creates priced snapshots. Notification and Audit remain skeletons. The Angular frontend implements authentication and a dashboard placeholder.
 
 ## Repository Structure
 
 ```text
-frontend/                    Planned Angular + NgRx application
+frontend/                    Angular + NgRx authentication foundation
 services/                    Gateway and five backend services
   api-gateway/
   auth-service/
@@ -162,7 +162,7 @@ Flyway owns all service schemas. Migrations live under `services/<service>/src/m
 
 Starting the five database services with the local profile applies 15 migrations, including four brands, twelve models, and seven learning-only pricing rules. Normal restarts validate existing migrations without duplicating seeds. No user accounts are seeded. Outbox and processed-event tables do not implement messaging behavior.
 
-See [database design](docs/database-design.md), [validation results](docs/phase-3-validation.md), and [intentional local database rebuild instructions](services/README.md#intentional-local-database-rebuild). No database reset is needed for ordinary development. Phase 4 authentication is documented below; Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 adds secure quote retrieval and pagination. Phase 10 has not started.
+See [database design](docs/database-design.md), [validation results](docs/phase-3-validation.md), and [intentional local database rebuild instructions](services/README.md#intentional-local-database-rebuild). No database reset is needed for ordinary development. Phase 4 authentication is documented below; Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 adds secure quote retrieval and pagination. Phase 10 adds Angular registration/login and a protected dashboard foundation.
 
 ## Phase 4 — Authentication Basics
 
@@ -214,7 +214,7 @@ Start Quote in its own terminal with `./mvnw -pl services/quote-service spring-b
 
 Quote validates input and active brand/model references, calls Pricing directly over synchronous REST, and atomically stores a PRICED quote with driver, vehicle-name, and pricing snapshots. Expiration is 30 days after creation. Pricing failure returns a safe 502/503 without a partial quote. Quote → Pricing currently has no service credentials; service authentication remains deferred to Phase 25.
 
-Existing schemas and seeds are unchanged. Phase 8 added no retrieval/history, editing, repricing, expiration job, Kafka, or outbox writes. Phase 9 retrieval is described below. See [Quote startup, curl, response, and code guide](services/quote-service/README.md), [specification](docs/specs/phase-8-quote-service-mvp.md), and [validation](docs/phase-8-validation.md). Phase 9 adds secure quote retrieval and pagination. Phase 10 has not started.
+Existing schemas and seeds are unchanged. Phase 8 added no retrieval/history, editing, repricing, expiration job, Kafka, or outbox writes. Phase 9 retrieval is described below. See [Quote startup, curl, response, and code guide](services/quote-service/README.md), [specification](docs/specs/phase-8-quote-service-mvp.md), and [validation](docs/phase-8-validation.md). Phase 9 adds secure quote retrieval and pagination. Phase 10 adds Angular registration/login and a protected dashboard foundation.
 
 ## Phase 9 — Quote Retrieval and Ownership
 
@@ -222,4 +222,18 @@ Existing schemas and seeds are unchanged. Phase 8 added no retrieval/history, ed
 
 Retrieval uses read-only database queries, with no Pricing call, current catalog lookup, recalculation, status transition, or messaging. A two-step ID-page/snapshot fetch preserves pagination without N+1 queries. All 267 normal tests and seven Quote PostgreSQL integration tests pass; live Gateway ownership checks and temporary-data cleanup passed. Newly built Gateway creation was also validated on temporary ports.
 
-See [Quote API guide](services/quote-service/README.md#phase-9--retrieval-and-ownership), [specification](docs/specs/phase-9-quote-retrieval-and-ownership.md), and [validation](docs/phase-9-validation.md). Phase 10 — Angular Foundation has not started.
+See [Quote API guide](services/quote-service/README.md#phase-9--retrieval-and-ownership), [specification](docs/specs/phase-9-quote-retrieval-and-ownership.md), and [validation](docs/phase-9-validation.md). Phase 10 is documented below.
+
+## Phase 10 — Angular Foundation
+
+Angular 22.2.2 and NgRx 22.0.1 provide registration, login, protected dashboard, role-aware navigation, and local logout. Reactive Forms own fields/validation, Signals own local loading/errors/password visibility, and NgRx owns the shared memory-only session. Angular calls Gateway only. Browser refresh intentionally logs out; refresh tokens and quote UI are deferred.
+
+With infrastructure, Auth (8081), and Gateway (8080) running, start the frontend:
+
+```bash
+cd frontend
+npm ci
+npm start
+```
+
+Open http://localhost:4200. Configure the public Gateway URL in `frontend/src/environments/environment.ts`. Run `npm test` and `npm run build` from `frontend/`. See the [frontend setup and code guide](frontend/README.md), [specification](docs/specs/phase-10-angular-foundation.md), and [validation](docs/phase-10-validation.md). Phase 11 — Angular Quote Flow has not started.

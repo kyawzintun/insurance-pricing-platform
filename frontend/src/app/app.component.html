@@ -1,0 +1,16 @@
+<a class="skip-link" href="#main-content">Skip to content</a>
+<header class="site-header">
+  <a class="brand" routerLink="/">Insurance Pricing Platform<span>LEARNING PROJECT</span></a>
+  <nav aria-label="Main navigation">
+    @if (authenticated()) {
+      <a routerLink="/dashboard">Dashboard</a
+      ><button type="button" class="outline" (click)="logout()">Logout</button>
+    } @else {
+      <a routerLink="/login">Sign in</a><a class="outline" routerLink="/register">Create account</a>
+    }
+  </nav>
+</header>
+<main id="main-content" tabindex="-1"><router-outlet /></main>
+<footer class="site-footer">
+  Insurance Pricing Platform · A learning project, not an insurance product.
+</footer>

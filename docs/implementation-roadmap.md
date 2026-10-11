@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 9 complete; Phase 10 not started.
+Status: Phases 0 through 10 complete; Phase 11 not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -46,7 +46,11 @@ Completed. CUSTOMER ownership-scoped detail/list, ADMIN access, stable bounded p
 
 ## Phase 10 — Angular Foundation
 
-Not started. Awaiting its approved specification.
+Completed. Standalone Angular registration/login, protected dashboard, local Signals, Reactive Forms, shared NgRx authentication, Gateway-only HTTP, Bearer interceptor, and local logout. Memory-only sessions intentionally end on reload. See [specification](specs/phase-10-angular-foundation.md) and [validation](phase-10-validation.md).
+
+## Phase 11 — Angular Quote Flow
+
+Not started. Quote UI remains deferred.
 
 ## Later Phases
 
