@@ -6,7 +6,7 @@ The project focuses on a simple car-insurance pricing platform. It is not intend
 
 ## Current Project Status
 
-**Phase 10 — Angular Foundation: Complete**
+**Phase 11 — Angular Quote Flow: Complete**
 
 Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 adds secure quote retrieval and pagination. Phase 10 adds Angular registration/login and a protected dashboard foundation. Implementation will proceed phase by phase.
 
@@ -35,12 +35,12 @@ Customer registration/login, Gateway JWT validation, internal pricing, ADMIN pri
 - **Kafka** for asynchronous domain events
 - **PostgreSQL** for all backend services
 
-REST will be used for synchronous communication when an immediate response is needed. Each microservice will own its own logical database, with no cross-service database access. Transactional Outbox will be introduced in a later phase. PostgreSQL and Kafka are configured for local development. Auth Service implements registration and login. Gateway routes Auth, Pricing administration, and Quote requests. Pricing calculates premiums and manages rules; Quote creates priced snapshots. Notification and Audit remain skeletons. The Angular frontend implements authentication and a dashboard placeholder.
+REST will be used for synchronous communication when an immediate response is needed. Each microservice will own its own logical database, with no cross-service database access. Transactional Outbox will be introduced in a later phase. PostgreSQL and Kafka are configured for local development. Auth Service implements registration and login. Gateway routes Auth, Pricing administration, and Quote requests. Pricing calculates premiums and manages rules; Quote creates priced snapshots. Notification and Audit remain skeletons. The Angular frontend implements authentication and CUSTOMER quote creation/history/detail.
 
 ## Repository Structure
 
 ```text
-frontend/                    Angular + NgRx authentication foundation
+frontend/                    Angular + NgRx authentication and quote workflow
 services/                    Gateway and five backend services
   api-gateway/
   auth-service/
@@ -236,4 +236,12 @@ npm ci
 npm start
 ```
 
-Open http://localhost:4200. Configure the public Gateway URL in `frontend/src/environments/environment.ts`. Run `npm test` and `npm run build` from `frontend/`. See the [frontend setup and code guide](frontend/README.md), [specification](docs/specs/phase-10-angular-foundation.md), and [validation](docs/phase-10-validation.md). Phase 11 — Angular Quote Flow has not started.
+Open http://localhost:4200. Configure the public Gateway URL in `frontend/src/environments/environment.ts`. Run `npm test` and `npm run build` from `frontend/`. See the [frontend setup and code guide](frontend/README.md), [specification](docs/specs/phase-10-angular-foundation.md), and [validation](docs/phase-10-validation.md). Phase 11 is documented below.
+
+## Phase 11 — Angular Quote Flow
+
+CUSTOMER navigation now includes New Quote and My Quotes. `/quotes/new` uses database-backed brand/model selection and validated Reactive Forms. Creation through Gateway opens `/quotes/:id`, which displays the stored driver/vehicle/pricing snapshot. `/quotes` lists owned quotes with basic backend pagination. No frontend premium calculation or customerId override exists.
+
+Quote Service adds read-only, authenticated GET `/api/v1/vehicles/brands` and `/api/v1/vehicles/brands/{brandId}/models`; Gateway routes them to Quote. Only active rows are exposed as id/name DTOs. No migrations, Auth/Pricing behavior changes, outbox writes or Kafka events were added. Restart Gateway and Quote to load these additions; Auth and Pricing must also run for creation.
+
+See the [frontend guide](frontend/README.md#phase-11--customer-quote-workflow), [specification](docs/specs/phase-11-angular-quote-flow.md), and [validation](docs/phase-11-validation.md). Phase 12 — Basic QuotePriced Kafka Event has not started.

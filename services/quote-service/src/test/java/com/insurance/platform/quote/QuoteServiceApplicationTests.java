@@ -182,4 +182,38 @@ class QuoteServiceApplicationTests {
         var captor=ArgumentCaptor.forClass(Quote.class);verify(quotes).saveAndFlush(captor.capture());
         assertThat(captor.getValue().getPricing().getAdjustments()).extracting(PricingAdjustment::getSequenceNumber).containsExactly(1,2);
     }
+
+    @Test void vehicleCatalogRequiresAuthentication() throws Exception {
+        error(request("GET", "/api/v1/vehicles/brands", null, null), 401, "UNAUTHORIZED");
+        error(request("GET", "/api/v1/vehicles/brands/"+BRAND+"/models", null, null), 401, "UNAUTHORIZED");
+        verifyNoInteractions(brands, models);
+    }
+    @Test void vehicleCatalogReturnsDtosForAuthenticatedCustomerWithoutQuoteWrites() throws Exception {
+        when(brands.findByActiveTrueOrderByNameAscIdAsc()).thenReturn(List.of(new VehicleBrand(BRAND,"Test brand",true,NOW)));
+        when(models.findByBrandIdAndActiveTrueOrderByNameAscIdAsc(BRAND)).thenReturn(List.of(new VehicleModel(MODEL,BRAND,"Test model",true,NOW)));
+        var token=QuoteJwtSupport.token("CUSTOMER");
+        var brandResponse=request("GET","/api/v1/vehicles/brands",null,token);
+        assertThat(brandResponse.statusCode()).isEqualTo(200);
+        assertThat(brandResponse.body()).contains("Test brand",BRAND.toString()).doesNotContain("active","createdAt");
+        var modelResponse=request("GET","/api/v1/vehicles/brands/"+BRAND+"/models",null,token);
+        assertThat(modelResponse.statusCode()).isEqualTo(200);
+        assertThat(modelResponse.body()).contains("Test model",MODEL.toString()).doesNotContain("brandId","createdAt");
+        verifyNoInteractions(quotes);
+        assertThat(downstreamBody).isNull();
+    }
+    @Test void missingAndInactiveCatalogBrandsAreSafe404s() throws Exception {
+        when(brands.findById(BRAND)).thenReturn(Optional.empty());
+        var missing=request("GET","/api/v1/vehicles/brands/"+BRAND+"/models",null,QuoteJwtSupport.token("CUSTOMER"));
+        when(brands.findById(BRAND)).thenReturn(Optional.of(new VehicleBrand(BRAND,"Hidden",false,NOW)));
+        var inactive=request("GET","/api/v1/vehicles/brands/"+BRAND+"/models",null,QuoteJwtSupport.token("CUSTOMER"));
+        error(missing,404,"VEHICLE_BRAND_NOT_FOUND");
+        assertThat(inactive.statusCode()).isEqualTo(404);
+        assertThat(inactive.body()).isEqualTo(missing.body());
+        verifyNoInteractions(models);
+    }
+    @Test void malformedCatalogIdAndWritesAreRejected() throws Exception {
+        error(request("GET","/api/v1/vehicles/brands/not-uuid/models",null,QuoteJwtSupport.token("CUSTOMER")),400,"INVALID_VEHICLE_SELECTION");
+        error(request("POST","/api/v1/vehicles/brands","{}",QuoteJwtSupport.token("CUSTOMER")),403,"FORBIDDEN");
+        verifyNoInteractions(brands,models);
+    }
 }

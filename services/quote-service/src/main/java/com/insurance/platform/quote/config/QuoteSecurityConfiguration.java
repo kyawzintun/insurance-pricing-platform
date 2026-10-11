@@ -27,6 +27,7 @@ public class QuoteSecurityConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .requestCache(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(requests -> requests
+                        .requestMatchers(HttpMethod.GET, "/api/v1/vehicles/brands", "/api/v1/vehicles/brands/*/models").hasAnyRole("CUSTOMER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/v1/quotes").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/quotes", "/api/v1/quotes/*").hasAnyRole("CUSTOMER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()

@@ -1,0 +1,58 @@
+<section class="quote-page">
+  <p class="eyebrow">YOUR STORED QUOTES</p>
+  <h1>My Quotes</h1>
+  <a routerLink="/quotes/new">Create a new quote</a>
+  @if (status() === 'pending') {
+    <p role="status">Loading quotes…</p>
+  }
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+    <button class="outline" (click)="load(history().page)">Try again</button>
+  }
+  @if (status() === 'success') {
+    @if (!history().content.length) {
+      <p class="card">No quotes on this page yet.</p>
+    }
+    @for (quote of history().content; track quote.id) {
+      <article class="card quote-summary">
+        <h2>
+          <a [routerLink]="['/quotes', quote.id]">{{ quote.quoteReference }}</a>
+        </h2>
+        <p>
+          {{ quote.vehicle?.brandName }} {{ quote.vehicle?.modelName }} ·
+          {{ quote.coverageType === 'COMPREHENSIVE' ? 'Comprehensive' : 'Third party' }}
+        </p>
+        @if (quote.pricing; as pricing) {
+          <p class="premium">
+            {{ pricing.finalPremium | currency: pricing.currency : 'code' : '1.2-2' }}
+          </p>
+        }
+        <p>Status: {{ quote.status }}</p>
+        <p>
+          Created: {{ quote.createdAt | date: 'medium' }}<br />Expires:
+          {{ quote.expiresAt ? (quote.expiresAt | date: 'medium') : 'Not available' }}
+        </p>
+      </article>
+    }
+    <nav class="pagination" aria-label="Quote pagination">
+      <button class="outline" [disabled]="history().page === 0" (click)="load(history().page - 1)">
+        Previous
+      </button>
+      <span
+        >{{
+          history().totalPages
+            ? 'Page ' + (history().page + 1) + ' of ' + history().totalPages
+            : 'No pages'
+        }}
+        · {{ history().totalElements }} quotes</span
+      >
+      <button
+        class="outline"
+        [disabled]="history().page + 1 >= history().totalPages"
+        (click)="load(history().page + 1)"
+      >
+        Next
+      </button>
+    </nav>
+  }
+</section>

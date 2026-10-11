@@ -7,6 +7,8 @@ import { routes } from '@app/app.routes';
 import { authFeature } from '@app/store/auth/auth.reducer';
 import { AuthEffects } from '@app/store/auth/auth.effects';
 import { authInterceptor } from '@app/core/interceptors/auth.interceptor';
+import { quoteFeature } from '@app/store/quotes/quote.reducer';
+import { QuoteEffects } from '@app/store/quotes/quote.effects';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -15,6 +17,7 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withInterceptors([authInterceptor])),
     provideStore(),
     provideState(authFeature),
-    provideEffects(AuthEffects),
+    provideState(quoteFeature),
+    provideEffects(AuthEffects, QuoteEffects),
   ],
 };

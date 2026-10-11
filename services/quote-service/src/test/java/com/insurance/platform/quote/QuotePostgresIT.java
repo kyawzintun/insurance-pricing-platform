@@ -216,4 +216,23 @@ class QuotePostgresIT {
         assertThat(retrieval.list(owner, false, 0, 20).content()).hasSize(2);
         assertThat(contents()).isEqualTo(before);
     }
+
+    @Autowired com.insurance.platform.quote.service.VehicleReferenceService catalog;
+    @Test void catalogFiltersActiveRowsByBrandAndDoesNotWrite() {
+        var active=UUID.randomUUID(); var inactive=UUID.randomUUID();
+        var activeModel=UUID.randomUUID(); var hiddenModel=UUID.randomUUID(); var otherModel=UUID.randomUUID();
+        jdbc.update("insert into vehicle_brands (id,name,active,created_at) values (?, 'Test Active', true, now()), (?, 'Test Inactive', false, now())",active,inactive);
+        jdbc.update("insert into vehicle_models (id,brand_id,name,active,created_at) values (?,?,'Visible',true,now()), (?,?,'Hidden',false,now()), (?,?,'Other',true,now())",activeModel,active,hiddenModel,active,otherModel,inactive);
+        try {
+            var before=contents();
+            assertThat(catalog.brands()).extracting(com.insurance.platform.quote.dto.VehicleReferenceResponse::id).contains(active).doesNotContain(inactive);
+            assertThat(catalog.models(active)).extracting(com.insurance.platform.quote.dto.VehicleReferenceResponse::id).containsExactly(activeModel);
+            assertThatThrownBy(() -> catalog.models(inactive)).isInstanceOf(QuoteException.class);
+            assertThatThrownBy(() -> catalog.models(UUID.randomUUID())).isInstanceOf(QuoteException.class);
+            assertThat(contents()).isEqualTo(before);
+        } finally {
+            jdbc.update("delete from vehicle_models where brand_id in (?,?)",active,inactive);
+            jdbc.update("delete from vehicle_brands where id in (?,?)",active,inactive);
+        }
+    }
 }

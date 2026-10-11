@@ -1,0 +1,199 @@
+<section class="quote-page">
+  <p class="eyebrow">CUSTOMER QUOTES</p>
+  <h1>New Quote</h1>
+  <p class="muted">
+    Enter your driver and vehicle details to receive an educational car-insurance quote.
+  </p>
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+  }
+  @if (catalogError()) {
+    <p class="error" role="alert">
+      {{ catalogError() }}
+      <button type="button" class="text-button" (click)="loadBrands()" [disabled]="loadingBrands()">
+        Reload brands
+      </button>
+    </p>
+  }
+  <form [formGroup]="form" (ngSubmit)="submit()">
+    <fieldset class="card" [disabled]="status() === 'pending'">
+      <legend>Driver information</legend>
+      <div class="quote-fields">
+        <div>
+          <label for="dateOfBirth">Date of birth</label
+          ><input
+            id="dateOfBirth"
+            type="date"
+            formControlName="dateOfBirth"
+            aria-describedby="dateOfBirth-error"
+            [attr.aria-invalid]="invalid('dateOfBirth')"
+          />
+          @if (invalid('dateOfBirth')) {
+            <span class="field-error" id="dateOfBirth-error">Enter a valid date before today.</span>
+          }
+        </div>
+        <div>
+          <label for="drivingExperienceYears">Driving experience (years)</label
+          ><input
+            id="drivingExperienceYears"
+            type="number"
+            formControlName="drivingExperienceYears"
+            min="0"
+            step="1"
+            aria-describedby="drivingExperienceYears-error"
+            [attr.aria-invalid]="invalid('drivingExperienceYears')"
+          />
+          @if (invalid('drivingExperienceYears')) {
+            <span class="field-error" id="drivingExperienceYears-error"
+              >Enter a whole number of years, zero or more.</span
+            >
+          }
+        </div>
+        <div>
+          <label for="previousClaimsCount">Previous claims</label
+          ><input
+            id="previousClaimsCount"
+            type="number"
+            formControlName="previousClaimsCount"
+            min="0"
+            step="1"
+            aria-describedby="previousClaimsCount-error"
+            [attr.aria-invalid]="invalid('previousClaimsCount')"
+          />
+          @if (invalid('previousClaimsCount')) {
+            <span class="field-error" id="previousClaimsCount-error"
+              >Enter a whole number, zero or more.</span
+            >
+          }
+        </div>
+      </div>
+    </fieldset>
+    <fieldset class="card" [disabled]="status() === 'pending'">
+      <legend>Vehicle information</legend>
+      @if (loadingBrands()) {
+        <p role="status">Loading brands…</p>
+      }
+      <div class="quote-fields">
+        <div>
+          <label for="brand">Vehicle brand</label
+          ><select
+            id="brand"
+            formControlName="vehicleBrandId"
+            aria-describedby="brand-error"
+            [attr.aria-invalid]="invalid('vehicleBrandId')"
+          >
+            <option value="">Select a brand</option>
+            @for (brand of brands(); track brand.id) {
+              <option [value]="brand.id">{{ brand.name }}</option>
+            }
+          </select>
+          @if (invalid('vehicleBrandId')) {
+            <span class="field-error" id="brand-error">Select a brand.</span>
+          }
+          @if (!loadingBrands() && !brands().length) {
+            <p class="muted">No vehicle brands are currently available.</p>
+          }
+        </div>
+        <div>
+          <label for="model">Vehicle model</label
+          ><select
+            id="model"
+            formControlName="vehicleModelId"
+            aria-describedby="model-error"
+            [attr.aria-invalid]="invalid('vehicleModelId')"
+          >
+            <option value="">Select a model</option>
+            @for (model of models(); track model.id) {
+              <option [value]="model.id">{{ model.name }}</option>
+            }
+          </select>
+          @if (invalid('vehicleModelId')) {
+            <span class="field-error" id="model-error"
+              >Select a model belonging to this brand.</span
+            >
+          }
+          @if (loadingModels()) {
+            <p role="status">Loading models…</p>
+          }
+          @if (form.controls.vehicleBrandId.value && !loadingModels() && !models().length) {
+            <p class="muted">No active models available for this brand.</p>
+          }
+        </div>
+        <div>
+          <label for="vehicleManufacturingYear">Manufacturing year</label
+          ><input
+            id="vehicleManufacturingYear"
+            type="number"
+            formControlName="vehicleManufacturingYear"
+            min="1886"
+            [max]="currentYear"
+            step="1"
+            aria-describedby="vehicleManufacturingYear-error"
+            [attr.aria-invalid]="invalid('vehicleManufacturingYear')"
+          />
+          @if (invalid('vehicleManufacturingYear')) {
+            <span class="field-error" id="vehicleManufacturingYear-error"
+              >Enter a year from 1886 through the current year.</span
+            >
+          }
+        </div>
+        <div>
+          <label for="vehicleValue">Vehicle value (THB)</label
+          ><input
+            id="vehicleValue"
+            type="number"
+            formControlName="vehicleValue"
+            min="0.01"
+            step="0.01"
+            aria-describedby="vehicleValue-error"
+            [attr.aria-invalid]="invalid('vehicleValue')"
+          />
+          @if (invalid('vehicleValue')) {
+            <span class="field-error" id="vehicleValue-error"
+              >Enter a positive value with at most two decimal places.</span
+            >
+          }
+        </div>
+        <div>
+          <label for="engineSizeCc">Engine size (cc)</label
+          ><input
+            id="engineSizeCc"
+            type="number"
+            formControlName="engineSizeCc"
+            min="1"
+            step="1"
+            aria-describedby="engineSizeCc-error"
+            [attr.aria-invalid]="invalid('engineSizeCc')"
+          />
+          @if (invalid('engineSizeCc')) {
+            <span class="field-error" id="engineSizeCc-error">Enter a positive whole number.</span>
+          }
+        </div>
+      </div>
+    </fieldset>
+    <fieldset class="card" [disabled]="status() === 'pending'">
+      <legend>Coverage</legend>
+      <label for="coverage">Coverage type</label
+      ><select
+        id="coverage"
+        formControlName="coverageType"
+        aria-describedby="coverage-error"
+        [attr.aria-invalid]="invalid('coverageType')"
+      >
+        <option value="">Select coverage</option>
+        <option value="COMPREHENSIVE">Comprehensive</option>
+        <option value="THIRD_PARTY">Third party</option>
+      </select>
+      @if (invalid('coverageType')) {
+        <span class="field-error" id="coverage-error">Select coverage.</span>
+      }
+    </fieldset>
+    <button
+      class="primary"
+      type="submit"
+      [disabled]="status() === 'pending' || loadingBrands() || loadingModels()"
+    >
+      {{ status() === 'pending' ? 'Calculating quote…' : 'Get Quote' }}
+    </button>
+  </form>
+</section>

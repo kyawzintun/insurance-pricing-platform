@@ -61,6 +61,15 @@ class ApiGatewayApplicationTests {
                 exchange.getResponseBody().write(body);
                 exchange.close();
             });
+            DOWNSTREAM.createContext("/api/v1/vehicles/brands", exchange -> {
+                forwardedQuoteUri = exchange.getRequestURI().toString();
+                forwardedAuthorization = exchange.getRequestHeaders().getFirst("Authorization");
+                byte[] body = "[]".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+                exchange.close();
+            });
             DOWNSTREAM.start();
         } catch (Exception ex) { throw new ExceptionInInitializerError(ex); }
     }
@@ -235,5 +244,16 @@ class ApiGatewayApplicationTests {
             assertThat(forwardedQuoteUri).isEqualTo(path);
             assertThat(forwardedAuthorization).isEqualTo(bearer);
         }
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"/api/v1/vehicles/brands", "/api/v1/vehicles/brands/00000000-0000-0000-0000-000000000001/models"})
+    void vehicleCatalogIsAuthenticatedAndRoutesToQuoteWithToken(String path) throws Exception {
+        assertUnauthorized(request("GET",path));
+        String bearer="Bearer "+token(claims("insurance-auth-service",Instant.now().getEpochSecond()+300));
+        var response=request("GET",path,"Authorization",bearer);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("[]");
+        assertThat(forwardedQuoteUri).isEqualTo(path);
+        assertThat(forwardedAuthorization).isEqualTo(bearer);
     }
 }

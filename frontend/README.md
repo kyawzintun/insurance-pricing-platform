@@ -1,6 +1,6 @@
 # Insurance Pricing Platform — Angular Frontend
 
-Phase 10 — Angular Foundation is complete. Registration, login, a protected placeholder dashboard, and local logout are implemented. Quote UI belongs to Phase 11.
+Phase 11 — Angular Quote Flow is complete. Registration/login, local logout, CUSTOMER quote creation, paginated history and stored quote details are implemented.
 
 ## Tooling and commands
 
@@ -88,4 +88,40 @@ For example, `import { AuthActions } from '@app/store/auth/auth.actions';` works
 7. `app.component.*` and `features/dashboard/`: navigation and role-aware placeholder.
 8. Adjacent `*.spec.ts` files: executable examples of expected behavior.
 
-Quote creation/history, pricing administration, audit UI, persistent login, SSR, PWA, and messaging UI are deferred. See the [Phase 10 specification](../docs/specs/phase-10-angular-foundation.md) and [validation report](../docs/phase-10-validation.md).
+Pricing administration, audit UI, persistent login, SSR, PWA, and messaging UI are deferred. See the [Phase 10 specification](../docs/specs/phase-10-angular-foundation.md) and [validation report](../docs/phase-10-validation.md).
+
+## Phase 11 — Customer quote workflow
+
+Start Auth, Gateway, Quote and Pricing in separate terminals using the backend guide, plus the shared infrastructure. Then `npm start` from this directory. Restart Gateway and Quote after pulling Phase 11 changes so the new catalog routes are available. Existing default ports remain unchanged.
+
+```bash
+# Each command in its own terminal, from the repository root:
+./mvnw -pl services/quote-service spring-boot:run
+./mvnw -pl services/pricing-service spring-boot:run
+```
+
+| Route | CUSTOMER behavior |
+| --- | --- |
+| `/quotes/new` | Driver, vehicle and coverage form; success opens quote detail |
+| `/quotes` | Owned quotes, newest first, Previous/Next pagination |
+| `/quotes/:id` | Stored driver, vehicle and pricing snapshot; safe missing-quote message |
+
+The CUSTOMER guard requires an active session and CUSTOMER role. ADMIN-only accounts see no New Quote/My Quotes links and return to dashboard if they enter those routes; no admin quote-management UI is provided. Backend authorization/ownership remains authoritative.
+
+Vehicle selections load active brands and models from Gateway GET `/api/v1/vehicles/brands` and `/api/v1/vehicles/brands/{brandId}/models`. Quote Service owns these reference tables. Angular contains no seed catalog. Changing brand clears the model and cancels older model requests.
+
+Reactive Forms own all nine inputs: dateOfBirth, drivingExperienceYears, previousClaimsCount, vehicleBrandId, vehicleModelId, vehicleManufacturingYear, vehicleValue, engineSizeCc and coverageType. Required fields, past birth date, nonnegative integer experience/claims, year 1886 through current UTC year, positive two-decimal vehicle value, positive integer engine size and coverage are validated locally. Backend remains authoritative.
+
+`QuoteApiService` uses the same public Gateway URL and auth interceptor as authentication. No component attaches JWT manually, sends customerId/status/premium, calls Pricing, or calculates premiums. Create dispatches an action; its effect posts the inputs and navigates to `/quotes/{id}` after success. Detail then retrieves the persisted snapshot. Never automatically retry a failed creation request: without idempotency, an ambiguous network failure may have already persisted a quote; check My Quotes before retrying.
+
+### Quote state ownership
+
+- **Reactive Forms:** input values and validation only.
+- **Local Signals:** brands/models, catalog loading/error, and expanded pricing breakdown.
+- **NgRx:** last created quote, selected detail, history and pagination. Effects own create/list/detail requests. Request status and safe errors are stored once with these shared workflows and read using `selectSignal`; no duplicate component loading/error flags exist for them. Form controls stay out of Store.
+
+Quote actions use explicit `createAction` declarations. `exhaustMap` prevents concurrent create submissions; list/detail `switchMap` discards superseded requests. Logout, login failure, and new login reset quote state and cancel pending quote effects, preventing an old session from repopulating another account's data. A cancelled POST cannot undo a server-side transaction that already completed.
+
+History defaults to page 0, size 20; only page and size are sent. Previous/Next use backend totals and disable at boundaries. Detail renders historical names and pricing adjustments directly from the response. It does not reload current vehicle names or pricing rules. Money uses currency formatting to two decimals; factors use four decimals; timestamps display locally without altering UTC data. Birth dates remain calendar dates with no timezone shift.
+
+400/404/502/503 responses display safe messages. Protected 401 handling stays in the existing auth interceptor. No refresh tokens, edits, deletes, repricing, automatic expiration, admin UI, or Kafka events are implemented. Optional live pricing-rule mutation was unnecessary because PostgreSQL snapshot regression and frontend snapshot rendering tests cover that boundary. See [Phase 11 specification](../docs/specs/phase-11-angular-quote-flow.md) and [validation](../docs/phase-11-validation.md).

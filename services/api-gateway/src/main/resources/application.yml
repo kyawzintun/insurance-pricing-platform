@@ -21,7 +21,7 @@ spring:
             - id: quote-service
               uri: ${QUOTE_SERVICE_URL:http://localhost:8082}
               predicates:
-                - Path=/api/v1/quotes,/api/v1/quotes/**
+                - Path=/api/v1/quotes,/api/v1/quotes/**,/api/v1/vehicles/brands,/api/v1/vehicles/brands/*/models
 management:
   endpoints:
     web:

@@ -7,4 +7,5 @@ import org.springframework.data.repository.Repository;
 
 public interface VehicleBrandRepository extends Repository<VehicleBrand, UUID> {
     Optional<VehicleBrand> findById(UUID id);
+    java.util.List<VehicleBrand> findByActiveTrueOrderByNameAscIdAsc();
 }

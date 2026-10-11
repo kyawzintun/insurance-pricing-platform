@@ -180,3 +180,9 @@ Existing status is returned unchanged. PRICED does not become EXPIRED simply bec
 For learning, read QuoteController.get/list → QuoteRetrievalService → QuoteRepository → QuoteResponse.from. Then read QuoteRetrievalTests and the extended QuotePostgresIT for HTTP ownership and real database/query-count evidence.
 
 See [Phase 9 specification](../../docs/specs/phase-9-quote-retrieval-and-ownership.md) and [validation](../../docs/phase-9-validation.md). Phase 10 — Angular Foundation has not started.
+
+## Phase 11 — Active vehicle references
+
+Authenticated CUSTOMER/ADMIN can GET `/api/v1/vehicles/brands` and `/api/v1/vehicles/brands/{brandId}/models` through Gateway. Responses are arrays of `{ "id": "UUID", "name": "..." }` DTOs, sorted by name then ID. Only active brands/models are listed; model queries are scoped to their active parent brand. Missing/inactive brands return the same safe 404 `VEHICLE_BRAND_NOT_FOUND`; malformed UUIDs return 400. No write endpoints or migrations are added.
+
+`VehicleReferenceController` calls `VehicleReferenceService`, whose read-only transactions query existing repositories/tables. The service remains independently JWT-protected. Existing quote ownership and creation behavior is unchanged. PostgreSQL integration tests verify inactive filtering, brand scoping and unchanged database contents.

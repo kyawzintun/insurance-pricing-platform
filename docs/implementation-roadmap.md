@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 10 complete; Phase 11 not started.
+Status: Phases 0 through 11 complete; Phase 12 not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -50,7 +50,11 @@ Completed. Standalone Angular registration/login, protected dashboard, local Sig
 
 ## Phase 11 — Angular Quote Flow
 
-Not started. Quote UI remains deferred.
+Completed. CUSTOMER quote form, authenticated active vehicle catalog, creation/detail snapshots and paginated history through Gateway; quote NgRx workflows with local catalog/breakdown Signals. No messaging. See [specification](specs/phase-11-angular-quote-flow.md) and [validation](phase-11-validation.md).
+
+## Phase 12 — Basic QuotePriced Kafka Event
+
+Not started.
 
 ## Later Phases
 

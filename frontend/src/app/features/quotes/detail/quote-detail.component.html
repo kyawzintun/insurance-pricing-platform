@@ -1,0 +1,98 @@
+<section class="quote-page">
+  <a routerLink="/quotes">Back to My Quotes</a>
+  <h1>Quote detail</h1>
+  @if (status() === 'pending') {
+    <p role="status">Loading quote…</p>
+  }
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+  }
+  @if (quote(); as quote) {
+    <div class="card">
+      <p class="eyebrow">{{ quote.status }}</p>
+      <h2 class="quote-reference">{{ quote.quoteReference }}</h2>
+      @if (quote.pricing; as pricing) {
+        <p class="premium">
+          {{ pricing.finalPremium | currency: pricing.currency : 'code' : '1.2-2' }}
+        </p>
+      }
+      <p>
+        Coverage: {{ quote.coverageType === 'COMPREHENSIVE' ? 'Comprehensive' : 'Third party' }}
+      </p>
+      <p>
+        Created: {{ quote.createdAt | date: 'medium' }}<br />Expires:
+        {{ quote.expiresAt ? (quote.expiresAt | date: 'medium') : 'Not available' }}
+      </p>
+    </div>
+    <div class="quote-fields">
+      @if (quote.driver; as driver) {
+        <section class="card">
+          <h2>Driver information</h2>
+          <dl>
+            <dt>Date of birth</dt>
+            <dd>{{ driver.dateOfBirth + 'T00:00:00Z' | date: 'mediumDate' : 'UTC' }}</dd>
+            <dt>Driving experience</dt>
+            <dd>{{ driver.drivingExperienceYears }} years</dd>
+            <dt>Previous claims</dt>
+            <dd>{{ driver.previousClaimsCount }}</dd>
+          </dl>
+        </section>
+      }
+      @if (quote.vehicle; as vehicle) {
+        <section class="card">
+          <h2>Vehicle information</h2>
+          <dl>
+            <dt>Brand / model</dt>
+            <dd>{{ vehicle.brandName }} {{ vehicle.modelName }}</dd>
+            <dt>Manufacturing year</dt>
+            <dd>{{ vehicle.manufacturingYear }}</dd>
+            <dt>Vehicle value</dt>
+            <dd>{{ vehicle.vehicleValue | currency: 'THB' : 'code' : '1.2-2' }}</dd>
+            <dt>Engine size</dt>
+            <dd>{{ vehicle.engineSizeCc }} cc</dd>
+          </dl>
+        </section>
+      }
+    </div>
+    @if (quote.pricing; as pricing) {
+      <section class="card">
+        <h2>Pricing breakdown</h2>
+        <p class="muted">The stored calculation from when this quote was priced.</p>
+        <p>
+          Base premium:
+          <strong>{{ pricing.basePremium | currency: pricing.currency : 'code' : '1.2-2' }}</strong>
+        </p>
+        <button
+          class="outline"
+          [attr.aria-expanded]="showBreakdown()"
+          aria-controls="adjustments"
+          (click)="showBreakdown.set(!showBreakdown())"
+        >
+          {{ showBreakdown() ? 'Hide adjustments' : 'Show adjustments' }}
+        </button>
+        <div id="adjustments" [hidden]="!showBreakdown()">
+          @for (adjustment of pricing.adjustments; track adjustment.sequenceNumber) {
+            <article class="adjustment">
+              <h3>{{ adjustment.description || adjustment.ruleType }}</h3>
+              <p>{{ adjustment.ruleType }} · Input: {{ adjustment.inputValue }}</p>
+              <p>Factor: {{ adjustment.factor | number: '1.4-4' }}</p>
+              <p>
+                {{ adjustment.amountBefore | currency: pricing.currency : 'code' : '1.2-2' }} →
+                {{ adjustment.amountAfter | currency: pricing.currency : 'code' : '1.2-2' }}
+              </p>
+            </article>
+          } @empty {
+            <p>No adjustments applied.</p>
+          }
+        </div>
+        <p>
+          Final premium:
+          <strong>{{
+            pricing.finalPremium | currency: pricing.currency : 'code' : '1.2-2'
+          }}</strong>
+        </p>
+        <p class="muted">Calculated: {{ pricing.calculatedAt | date: 'medium' }}</p>
+      </section>
+    }
+  }
+</section>

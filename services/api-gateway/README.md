@@ -101,3 +101,7 @@ Phase 9 adds GET detail and paginated GET list through this same route; Quote in
 ## Phase 9 — Quote retrieval
 
 The existing quote route forwards GET `/api/v1/quotes` (including page/size parameters) and GET `/api/v1/quotes/{id}` with the original Bearer token. No new route or Gateway ownership logic is needed. Quote independently authorizes CUSTOMER/ADMIN and applies customer-scoped queries. See [Quote retrieval guide](../quote-service/README.md#phase-9--retrieval-and-ownership) and [validation](../../docs/phase-9-validation.md).
+
+## Phase 11 — Vehicle reference routing
+
+Gateway additionally forwards `/api/v1/vehicles/brands` and `/api/v1/vehicles/brands/*/models` to `QUOTE_SERVICE_URL`, preserving the Bearer token. These are authenticated routes. Quote independently restricts them to CUSTOMER/ADMIN GET requests and active reference data. No new downstream service or CORS policy is required.
