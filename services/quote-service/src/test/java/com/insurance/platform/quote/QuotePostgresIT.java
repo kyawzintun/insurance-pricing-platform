@@ -44,6 +44,9 @@ class QuotePostgresIT {
     @Autowired JdbcTemplate jdbc;
     @MockitoBean PricingClient pricing;
     @MockitoBean Clock clock;
+    @MockitoBean org.springframework.kafka.core.KafkaTemplate<String, com.insurance.platform.quote.event.EventEnvelope<com.insurance.platform.quote.event.QuotePricedEventData>> kafka;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
+    @org.springframework.boot.test.web.server.LocalServerPort int port;
     @BeforeEach void setup() {
         // This class uses only a disposable Testcontainers database.
         jdbc.update("delete from pricing_adjustments");
@@ -52,6 +55,7 @@ class QuotePostgresIT {
         jdbc.update("delete from quote_vehicles");
         jdbc.update("delete from quotes");
         when(clock.instant()).thenReturn(NOW);
+        when(kafka.send(anyString(), anyString(), any())).thenReturn(new java.util.concurrent.CompletableFuture<>());
         when(pricing.calculate(any())).thenAnswer(call -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
             return price();
@@ -108,12 +112,14 @@ class QuotePostgresIT {
         assertThatThrownBy(() -> persistence.create(UUID.randomUUID(),request(),invalidVehicle,price()))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThat(counts()).isEqualTo(before);
+        verifyNoInteractions(kafka);
     }
     @Test void pricingFailureLeavesNoRows() {
         var before=counts();
         when(pricing.calculate(any())).thenThrow(QuoteException.pricingUnavailable());
         assertThatThrownBy(() -> service.create(UUID.randomUUID(),request())).isInstanceOf(QuoteException.class);
         assertThat(counts()).isEqualTo(before);
+        verifyNoInteractions(kafka);
     }
     @Test void sequentialQuotesHaveUniqueReferencesAndIndependentSnapshots() {
         var first=service.create(UUID.randomUUID(),request());
@@ -234,5 +240,68 @@ class QuotePostgresIT {
             jdbc.update("delete from vehicle_models where brand_id in (?,?)",active,inactive);
             jdbc.update("delete from vehicle_brands where id in (?,?)",active,inactive);
         }
+    }
+
+    @Test void publicationWaitsForRealDatabaseCommitAndRollbackSuppressesIt() {
+        var owner = UUID.randomUUID();
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        var result = tx.execute(status -> {
+            var quote = persistInTransaction(owner);
+            assertThat(jdbc.queryForObject("select count(*) from quotes where id=?", Long.class, quote.id())).isEqualTo(1);
+            verifyNoInteractions(kafka); // saveAndFlush happened, but commit has not.
+            return quote;
+        });
+        verify(kafka, times(1)).send(eq("insurance.quote.events"), eq(result.id().toString()), any());
+        clearInvocations(kafka);
+        tx.executeWithoutResult(status -> {
+            persistInTransaction(owner);
+            verifyNoInteractions(kafka);
+            status.setRollbackOnly();
+        });
+        verifyNoInteractions(kafka);
+        assertThat(jdbc.queryForObject("select count(*) from quotes where customer_id=?", Long.class, owner)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select count(*) from outbox_events", Long.class)).isZero();
+    }
+    @Test void actualCommitFailurePublishesNothing() {
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        var before = counts();
+        var reachedCommit = new java.util.concurrent.atomic.AtomicBoolean();
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> {
+            persistInTransaction(UUID.randomUUID());
+            verifyNoInteractions(kafka);
+            // Deferred PostgreSQL FK fails at commit, after the quote and Spring event were created.
+            jdbc.execute("CREATE TABLE phase12_commit_failure (quote_id uuid REFERENCES quotes(id) DEFERRABLE INITIALLY DEFERRED)");
+            jdbc.update("INSERT INTO phase12_commit_failure VALUES (?)", UUID.randomUUID());
+            reachedCommit.set(true);
+        })).hasRootCauseInstanceOf(org.postgresql.util.PSQLException.class);
+        assertThat(reachedCommit).isTrue();
+        verifyNoInteractions(kafka);
+        assertThat(counts()).isEqualTo(before);
+    }
+    @Test void brokerFailureAfterCommitStillReturns201AndKeepsPricedQuote() throws Exception {
+        when(kafka.send(anyString(), anyString(), any())).thenReturn(java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("test broker unavailable")));
+        try (var client = java.net.http.HttpClient.newHttpClient()) {
+            var request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://localhost:"+port+"/api/v1/quotes"))
+                    .header("Authorization", "Bearer "+QuoteJwtSupport.token("CUSTOMER"))
+                    .header("Content-Type", "application/json").header("X-Correlation-ID", "phase12-http-failure")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(INPUT)).build();
+            var response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).isEqualTo(201);
+            var body = tools.jackson.databind.json.JsonMapper.builder().build().readTree(response.body());
+            var id = UUID.fromString(body.get("id").asText());
+            assertThat(jdbc.queryForObject("select status from quotes where id=?", String.class, id)).isEqualTo("PRICED");
+            assertThat(jdbc.queryForObject("select count(*) from pricing_breakdowns where quote_id=?", Long.class, id)).isEqualTo(1);
+            verify(kafka).send(eq("insurance.quote.events"), eq(id.toString()), argThat(e -> e.correlationId().equals("phase12-http-failure")));
+        }
+    }
+    @Test void synchronousKafkaEnqueueFailureCannotRollBackQuote() {
+        when(kafka.send(anyString(), anyString(), any())).thenThrow(new IllegalStateException("test enqueue failure"));
+        var quote = service.create(UUID.randomUUID(), request());
+        assertThat(jdbc.queryForObject("select status from quotes where id=?", String.class, quote.id())).isEqualTo("PRICED");
+        verify(kafka).send(eq("insurance.quote.events"), eq(quote.id().toString()), any());
+    }
+    private com.insurance.platform.quote.dto.QuoteResponse persistInTransaction(UUID owner) {
+        return persistence.create(owner, request(), new VehicleSnapshot(BRAND, "Toyota", MODEL, "Camry", 2021,
+                request().vehicleValue(), 1500), price());
     }
 }

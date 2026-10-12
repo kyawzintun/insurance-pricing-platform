@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 11 complete; Phase 12 not started.
+Status: Phases 0 through 12 complete; Phase 13 not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -53,6 +53,10 @@ Completed. Standalone Angular registration/login, protected dashboard, local Sig
 Completed. CUSTOMER quote form, authenticated active vehicle catalog, creation/detail snapshots and paginated history through Gateway; quote NgRx workflows with local catalog/breakdown Signals. No messaging. See [specification](specs/phase-11-angular-quote-flow.md) and [validation](phase-11-validation.md).
 
 ## Phase 12 — Basic QuotePriced Kafka Event
+
+Completed. Quote Service directly publishes a version 1 QuotePriced envelope after DB commit, keyed by quote ID on the existing quote topic. Producer failures do not roll back a committed quote. No outbox/consumers/retry-DLQ behavior; the dual-write gap remains until Phase 16. See [contract](quote-priced-event.md) and [validation](phase-12-validation.md).
+
+## Phase 13 — Notification Consumer
 
 Not started.
 

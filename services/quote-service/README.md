@@ -186,3 +186,29 @@ See [Phase 9 specification](../../docs/specs/phase-9-quote-retrieval-and-ownersh
 Authenticated CUSTOMER/ADMIN can GET `/api/v1/vehicles/brands` and `/api/v1/vehicles/brands/{brandId}/models` through Gateway. Responses are arrays of `{ "id": "UUID", "name": "..." }` DTOs, sorted by name then ID. Only active brands/models are listed; model queries are scoped to their active parent brand. Missing/inactive brands return the same safe 404 `VEHICLE_BRAND_NOT_FOUND`; malformed UUIDs return 400. No write endpoints or migrations are added.
 
 `VehicleReferenceController` calls `VehicleReferenceService`, whose read-only transactions query existing repositories/tables. The service remains independently JWT-protected. Existing quote ownership and creation behavior is unchanged. PostgreSQL integration tests verify inactive filtering, brand scoping and unchanged database contents.
+
+## Phase 12 — QuotePriced producer
+
+Successful quote creation now registers a version 1 QuotePriced event inside persistence and sends its DTO envelope only after the database commits. Kafka topic defaults to `insurance.quote.events` (`QUOTE_EVENTS_TOPIC` override); the key is the quote UUID string. `KafkaTemplate` and Jackson JSON serialization reuse the existing Boot Kafka starter and bootstrap configuration. No entities or authentication credentials are serialized.
+
+For a local broker published on 29092 (the current development machine's Compose override), start Quote with:
+
+```bash
+KAFKA_EXTERNAL_PORT=29092 ./mvnw -pl services/quote-service spring-boot:run
+```
+
+Without an override the existing local Kafka default remains 9092. `KAFKA_BOOTSTRAP_SERVERS` overrides the full address. Docker Compose reads `.env`; Maven/Spring Boot does not automatically source that file. Ensure Quote targets this project's broker, especially when another project uses 9092.
+
+Producer configuration sets String keys, Jackson JSON values without Java type headers and `max.block.ms=1000`; default Kafka client retry/idempotence behavior is retained. The send future is not awaited. If Kafka fails after commit, the quote stays PRICED and the HTTP response remains 201; metadata-only failure logs record the issue. No application retry or replay exists. **This direct after-commit approach has a dual-write failure window until Phase 16 Transactional Outbox.** No outbox rows, consumer services or DLQ processing are added.
+
+Read code in this order: `QuotePersistenceService`, `QuotePricedEventFactory`, the envelope/data records in `event/`, `QuoteEventPublisher`, then `QuoteKafkaConfiguration`. `QuoteCorrelationId` captures the bounded request ID before the asynchronous callback. See [event contract and example JSON](../../docs/quote-priced-event.md).
+
+Validation commands from the root:
+
+```bash
+./mvnw -B clean verify
+./mvnw -B -pl services/quote-service -Ppostgres-it verify
+./mvnw -B -pl services/quote-service -Pkafka-it verify
+```
+
+The normal suite needs no Docker or Kafka. Run the opt-in profiles separately: postgres-it uses a disposable PostgreSQL database and mocked Kafka; kafka-it uses disposable PostgreSQL and Kafka with the existing three-partition topic shape. Its inspection client manually assigns partitions without committing consumer offsets or creating a consumer group. See [Phase 12 validation](../../docs/phase-12-validation.md).

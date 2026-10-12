@@ -6,7 +6,7 @@ The project focuses on a simple car-insurance pricing platform. It is not intend
 
 ## Current Project Status
 
-**Phase 11 — Angular Quote Flow: Complete**
+**Phase 12 — Basic QuotePriced Kafka Event: Complete**
 
 Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 adds secure quote retrieval and pagination. Phase 10 adds Angular registration/login and a protected dashboard foundation. Implementation will proceed phase by phase.
 
@@ -142,7 +142,7 @@ docker compose up -d
 ./mvnw -pl services/auth-service spring-boot:run
 ```
 
-Auth defaults to the local profile, PostgreSQL port 15432, and a public development-only signing key. No launcher or environment setup is needed for the current local database. Use the module-specific Maven commands in the backend guide for other services. All six expose `/actuator/health`; only health/info are exposed through Actuator. Ports and infrastructure connections support environment overrides. Auth now exposes registration/login backed by its User entity. Gateway now routes Auth requests; Pricing exposes its internal calculation endpoint and protected admin rule APIs. Quote exposes CUSTOMER-only creation and secure CUSTOMER/ADMIN retrieval; application Kafka messaging remains unimplemented. Database migrations and seeds were implemented in Phase 3.
+Auth defaults to the local profile, PostgreSQL port 15432, and a public development-only signing key. No launcher or environment setup is needed for the current local database. Use the module-specific Maven commands in the backend guide for other services. All six expose `/actuator/health`; only health/info are exposed through Actuator. Ports and infrastructure connections support environment overrides. Auth now exposes registration/login backed by its User entity. Gateway now routes Auth requests; Pricing exposes its internal calculation endpoint and protected admin rule APIs. Quote exposes CUSTOMER-only creation and secure CUSTOMER/ADMIN retrieval, and now publishes QuotePriced after commit; Kafka consumers remain unimplemented. Database migrations and seeds were implemented in Phase 3.
 
 See [backend startup and dependency guidance](services/README.md) for per-service packages, environment variables, temporary security behavior, test boundaries, and Maven commands.
 
@@ -244,4 +244,10 @@ CUSTOMER navigation now includes New Quote and My Quotes. `/quotes/new` uses dat
 
 Quote Service adds read-only, authenticated GET `/api/v1/vehicles/brands` and `/api/v1/vehicles/brands/{brandId}/models`; Gateway routes them to Quote. Only active rows are exposed as id/name DTOs. No migrations, Auth/Pricing behavior changes, outbox writes or Kafka events were added. Restart Gateway and Quote to load these additions; Auth and Pricing must also run for creation.
 
-See the [frontend guide](frontend/README.md#phase-11--customer-quote-workflow), [specification](docs/specs/phase-11-angular-quote-flow.md), and [validation](docs/phase-11-validation.md). Phase 12 — Basic QuotePriced Kafka Event has not started.
+See the [frontend guide](frontend/README.md#phase-11--customer-quote-workflow), [specification](docs/specs/phase-11-angular-quote-flow.md), and [validation](docs/phase-11-validation.md). Phase 12 is documented below.
+
+## Phase 12 — Basic QuotePriced Kafka Event
+
+After quote persistence commits, Quote Service sends a version 1 JSON QuotePriced envelope to `insurance.quote.events`, keyed by quote ID. Safe request correlation is preserved. Kafka failure is logged without rolling back the quote or changing its successful 201 response. No consumers, custom retry/DLQ behavior or outbox writes are implemented. This direct database/Kafka dual-write gap will be addressed in Phase 16.
+
+Quote uses the existing Kafka bootstrap settings. If this project's broker is mapped to 29092, run `KAFKA_EXTERNAL_PORT=29092 ./mvnw -pl services/quote-service spring-boot:run`. See [Quote startup/configuration](services/quote-service/README.md#phase-12--quotepriced-producer), [event contract](docs/quote-priced-event.md), [specification](docs/specs/phase-12-quote-priced-event.md), and [validation](docs/phase-12-validation.md). Phase 13 — Notification Consumer has not started.

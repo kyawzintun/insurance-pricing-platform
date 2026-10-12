@@ -13,6 +13,14 @@ spring:
   autoconfigure:
     # JWT authentication; no generated user or password.
     exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+      properties:
+        "spring.json.add.type.headers": false
+        # Bound synchronous metadata/buffer waiting; broker acknowledgements stay asynchronous.
+        "max.block.ms": 1000
   jpa:
     hibernate:
       ddl-auto: none
@@ -38,3 +46,7 @@ pricing:
     url: ${PRICING_SERVICE_URL:http://localhost:8083}
     connect-timeout: ${PRICING_CONNECT_TIMEOUT:2s}
     read-timeout: ${PRICING_READ_TIMEOUT:5s}
+
+quote:
+  events:
+    topic: ${QUOTE_EVENTS_TOPIC:insurance.quote.events}

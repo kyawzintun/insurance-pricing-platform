@@ -57,6 +57,7 @@ class QuoteServiceApplicationTests {
     }
     @AfterAll static void stop() { PRICING.stop(0); EXECUTOR.shutdownNow(); }
     @LocalServerPort int port;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean com.insurance.platform.quote.event.QuotePricedEventFactory eventFactory;
     @MockitoBean VehicleBrandRepository brands;
     @MockitoBean VehicleModelRepository models;
     @MockitoBean QuoteRepository quotes;
@@ -81,6 +82,7 @@ class QuoteServiceApplicationTests {
         assertThat(response.statusCode()).isEqualTo(status);
         assertThat(response.body()).contains("\"code\":\""+code+"\"").doesNotContain("Exception","localhost","SQL","private downstream");
         verifyNoInteractions(quotes);
+        verifyNoInteractions(eventFactory);
     }
     @Test void healthIsPublic() throws Exception {
         assertThat(request("GET","/actuator/health",null,null).statusCode()).isEqualTo(200);
@@ -105,6 +107,7 @@ class QuoteServiceApplicationTests {
     @Test void completeQuoteUsesJwtIdentityAndDatabaseVehicleNames() throws Exception {
         var response=post(INPUT);
         assertThat(response.statusCode()).isEqualTo(201);
+        verify(eventFactory, times(1)).create(eq(CUSTOMER), any());
         assertThat(response.body()).contains("\"status\":\"PRICED\"","Toyota from database","Camry from database","\"finalPremium\":11200.00","2026-11-07T10:00:00Z");
         assertThat(response.body()).doesNotContain("customerId","pricingRuleVersion","basePricingRuleId");
         var captor=ArgumentCaptor.forClass(Quote.class); verify(quotes).saveAndFlush(captor.capture());
@@ -200,6 +203,7 @@ class QuoteServiceApplicationTests {
         assertThat(modelResponse.body()).contains("Test model",MODEL.toString()).doesNotContain("brandId","createdAt");
         verifyNoInteractions(quotes);
         assertThat(downstreamBody).isNull();
+        verifyNoInteractions(eventFactory);
     }
     @Test void missingAndInactiveCatalogBrandsAreSafe404s() throws Exception {
         when(brands.findById(BRAND)).thenReturn(Optional.empty());

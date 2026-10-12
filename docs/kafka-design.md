@@ -30,3 +30,9 @@ Quote, Pricing, Notification, and Audit include Spring Kafka through the Boot Ka
 ## Phase 3 — Messaging Storage Only
 
 Auth, Quote, and Pricing now own `outbox_events` tables. Notification and Audit own `processed_events` tables. These are schema foundations only: no publishers, consumers, processing, retries, or DLQ behavior exist. Live validation preserved Kafka topics, partition offsets, and consumer groups.
+
+## Phase 12 — First application producer
+
+Quote Service now publishes version 1 `QuotePriced` on the existing `insurance.quote.events` topic, keyed by quote UUID. The common envelope and compact payload are defined in [QuotePriced event contract](quote-priced-event.md). JSON type headers are disabled. Injected UTC Clock and bounded propagated/generated correlation IDs supply metadata.
+
+A Spring transactional listener sends after PostgreSQL commit. The send acknowledgement is asynchronous; producer failure is logged safely without changing successful quote persistence/HTTP 201. This direct dual write can lose an event after a successful database commit. Phase 16 Transactional Outbox is deferred; existing outbox tables are not written. No application consumer, consumer group, DLQ processing, custom retry policy or other domain event is introduced. Existing topic configuration is preserved.

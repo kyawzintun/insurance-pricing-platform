@@ -10,6 +10,8 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
+import com.insurance.platform.quote.event.QuotePricedEventFactory;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Separate Spring bean so the transaction starts only after successful pricing. */
@@ -17,7 +19,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class QuotePersistenceService {
     private final QuoteRepository repository;
     private final Clock clock;
-    public QuotePersistenceService(QuoteRepository repository, Clock clock) { this.repository = repository; this.clock = clock; }
+    private final ApplicationEventPublisher events;
+    private final QuotePricedEventFactory eventFactory;
+
+    public QuotePersistenceService(QuoteRepository repository, Clock clock, ApplicationEventPublisher events,
+                                   QuotePricedEventFactory eventFactory) {
+        this.repository = repository;
+        this.clock = clock;
+        this.events = events;
+        this.eventFactory = eventFactory;
+    }
 
     @Transactional
     public QuoteResponse create(UUID customerId, CreateQuoteRequest request, VehicleSnapshot vehicle, PricingResult pricing) {
@@ -38,6 +49,9 @@ public class QuotePersistenceService {
                     adjustment.amountBefore(), adjustment.amountAfter(), adjustment.sequenceNumber()));
         }
         quote.attachSnapshots(driver, storedVehicle, breakdown);
-        return QuoteResponse.from(repository.saveAndFlush(quote));
+        var response = QuoteResponse.from(repository.saveAndFlush(quote));
+        // This registers a transaction-bound event; flushing is not committing.
+        events.publishEvent(eventFactory.create(customerId, response));
+        return response;
     }
 }

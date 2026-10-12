@@ -28,6 +28,7 @@ class QuoteRetrievalTests {
         registry.add("auth.jwt.secret", QuoteJwtSupport::secret);
     }
     @LocalServerPort int port;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean com.insurance.platform.quote.event.QuotePricedEventFactory eventFactory;
     @MockitoBean QuoteRepository quotes;
     @MockitoBean VehicleBrandRepository brands;
     @MockitoBean VehicleModelRepository models;
@@ -44,6 +45,7 @@ class QuoteRetrievalTests {
     @AfterEach void noExternalReadsOrWrites() {
         verifyNoInteractions(pricing, brands, models);
         verify(quotes, never()).saveAndFlush(any());
+        verifyNoInteractions(eventFactory);
     }
     private static Quote snapshot(UUID id, UUID owner) {
         var quote = new Quote(id, "Q-historical-" + id, owner, QuoteStatus.PRICED, CoverageType.COMPREHENSIVE,
