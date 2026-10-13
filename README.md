@@ -6,7 +6,7 @@ The project focuses on a simple car-insurance pricing platform. It is not intend
 
 ## Current Project Status
 
-**Phase 12 — Basic QuotePriced Kafka Event: Complete**
+**Phase 13 — Notification Consumer: Complete**
 
 Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 adds secure quote retrieval and pagination. Phase 10 adds Angular registration/login and a protected dashboard foundation. Implementation will proceed phase by phase.
 
@@ -35,7 +35,7 @@ Customer registration/login, Gateway JWT validation, internal pricing, ADMIN pri
 - **Kafka** for asynchronous domain events
 - **PostgreSQL** for all backend services
 
-REST will be used for synchronous communication when an immediate response is needed. Each microservice will own its own logical database, with no cross-service database access. Transactional Outbox will be introduced in a later phase. PostgreSQL and Kafka are configured for local development. Auth Service implements registration and login. Gateway routes Auth, Pricing administration, and Quote requests. Pricing calculates premiums and manages rules; Quote creates priced snapshots. Notification and Audit remain skeletons. The Angular frontend implements authentication and CUSTOMER quote creation/history/detail.
+REST will be used for synchronous communication when an immediate response is needed. Each microservice will own its own logical database, with no cross-service database access. Transactional Outbox will be introduced in a later phase. PostgreSQL and Kafka are configured for local development. Auth Service implements registration and login. Gateway routes Auth, Pricing administration, and Quote requests. Pricing calculates premiums and manages rules; Quote creates priced snapshots. Notification consumes QuotePriced events and stores simulated notifications; Audit remains a skeleton. The Angular frontend implements authentication and CUSTOMER quote creation/history/detail.
 
 ## Repository Structure
 
@@ -100,10 +100,10 @@ Named volumes are intentionally preserved. Starting again reuses the databases a
 
 | Component | Host applications | Containers on the Compose network |
 | --- | --- | --- |
-| PostgreSQL | `localhost:5432` | `postgres:5432` |
-| Kafka bootstrap servers | `localhost:9092` | `kafka:19092` |
+| PostgreSQL | `localhost:15432` | `postgres:5432` |
+| Kafka bootstrap servers | `localhost:29092` | `kafka:19092` |
 
-Host ports can be changed with `POSTGRES_PORT` and `KAFKA_EXTERNAL_PORT`. On the machine used for Phase 1 validation, an ignored `.env` sets PostgreSQL to `localhost:15432` and Kafka to `localhost:29092` because another project occupies the defaults. This local file is not included in a fresh clone. Kafka's advertised host listener follows `KAFKA_EXTERNAL_PORT`. Published ports bind to IPv4 loopback only; container clients use the internal addresses on the Compose network.
+Host defaults are PostgreSQL `15432` and Kafka `29092`, consistently used by Compose and the services' local YAML. All applications default to the `local` profile. API Gateway does not connect to PostgreSQL/Kafka, and Auth does not use Kafka. Database-owning services retain separate logical databases. Environment variables can override these defaults; Compose reads `.env`, while Maven-started applications require exported overrides. Kafka's advertised host listener follows `KAFKA_EXTERNAL_PORT`. Container ports remain unchanged (`postgres:5432`, `kafka:19092`); published ports bind to IPv4 loopback only.
 
 PostgreSQL defaults to username `insurance_dev` and password `local_dev_only`, overridden by `POSTGRES_USER` and `POSTGRES_PASSWORD`. The five service databases are:
 
@@ -131,7 +131,7 @@ Validation results and the machine-specific port overrides are recorded in [Phas
 | Auth Service | 8081 | auth_db | Registration and login |
 | Quote Service | 8082 | quote_db | Creation, snapshots, CUSTOMER ownership and ADMIN retrieval |
 | Pricing Service | 8083 | pricing_db | Internal calculation and ADMIN rule management |
-| Notification Service | 8084 | notification_db | Skeleton |
+| Notification Service | 8084 | notification_db | QuotePriced consumer |
 | Audit Service | 8085 | audit_db | Skeleton |
 
 Use JDK 25. The root parent/aggregator pins Spring Boot 4.1.1 and Spring Cloud 2025.1.3 (Gateway 5.0.3). Maven Wrapper 3.3.4 supplies Maven 3.9.16; no separately installed Maven is required.
@@ -250,4 +250,10 @@ See the [frontend guide](frontend/README.md#phase-11--customer-quote-workflow), 
 
 After quote persistence commits, Quote Service sends a version 1 JSON QuotePriced envelope to `insurance.quote.events`, keyed by quote ID. Safe request correlation is preserved. Kafka failure is logged without rolling back the quote or changing its successful 201 response. No consumers, custom retry/DLQ behavior or outbox writes are implemented. This direct database/Kafka dual-write gap will be addressed in Phase 16.
 
-Quote uses the existing Kafka bootstrap settings. If this project's broker is mapped to 29092, run `KAFKA_EXTERNAL_PORT=29092 ./mvnw -pl services/quote-service spring-boot:run`. See [Quote startup/configuration](services/quote-service/README.md#phase-12--quotepriced-producer), [event contract](docs/quote-priced-event.md), [specification](docs/specs/phase-12-quote-priced-event.md), and [validation](docs/phase-12-validation.md). Phase 13 — Notification Consumer has not started.
+Quote defaults to Kafka on port 29092; run `./mvnw -pl services/quote-service spring-boot:run` without a port override. See [Quote startup/configuration](services/quote-service/README.md#phase-12--quotepriced-producer), [event contract](docs/quote-priced-event.md), [specification](docs/specs/phase-12-quote-priced-event.md), and [validation](docs/phase-12-validation.md). Phase 13 is documented below.
+
+## Phase 13 — Notification Consumer
+
+Notification now consumes QuotePriced v1 from `insurance.quote.events` using its own `notification-service` group and writes a simulated notification after validation. Kafka offsets advance only after the local DB transaction commits. The group defaults to earliest for historical learning events. Invalid events or persistence failures stop consumption; unknown types are intentionally skipped. Existing event ID uniqueness does not provide full idempotency. No processed_events, retries/DLQ, external messaging provider, Audit consumer or Outbox logic is added.
+
+See [Notification startup and learning guide](services/notification-service/README.md), [specification](docs/specs/phase-13-notification-consumer.md) and [validation](docs/phase-13-validation.md). Phase 14 — Audit Consumer has not started.

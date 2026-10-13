@@ -8,7 +8,7 @@ spring:
     username: ${POSTGRES_USER:insurance_dev}
     password: ${POSTGRES_PASSWORD:local_dev_only}
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:${KAFKA_EXTERNAL_PORT:9092}}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:${KAFKA_EXTERNAL_PORT:29092}}
 
 auth:
   jwt:

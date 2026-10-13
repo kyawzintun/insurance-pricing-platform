@@ -56,3 +56,7 @@ Failure logs contain event type/ID, quote ID, topic, correlation ID and failure 
 ## References and validation
 
 The implementation follows Spring's [transaction-bound event semantics](https://docs.spring.io/spring-framework/reference/data-access/transaction/event.html) and [JSON serialization configuration](https://docs.spring.io/spring-kafka/reference/kafka/serdes.html). See [Phase 12 specification](specs/phase-12-quote-priced-event.md) and [validation](phase-12-validation.md). Notification/Audit consumers, retry/DLQ processing and all other domain event types are deferred.
+
+## Phase 13 consumer
+
+Notification Service consumes this unchanged envelope using fixed consumer-owned DTOs. It stores the event customer/quote/event identifiers and formats the premium into a simulated notification. See [consumer behavior, offset semantics and limits](../services/notification-service/README.md).

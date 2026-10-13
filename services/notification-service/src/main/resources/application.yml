@@ -1,9 +1,24 @@
 spring:
+  profiles:
+    default: local
   application:
     name: notification-service
   autoconfigure:
     # Temporary Phase 2: no generated user or password; no authentication yet.
     exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  kafka:
+    consumer:
+      group-id: ${NOTIFICATION_CONSUMER_GROUP:notification-service}
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        "allow.auto.create.topics": false
+    listener:
+      ack-mode: record
+      concurrency: 1
+      log-container-config: false
   jpa:
     hibernate:
       ddl-auto: none
@@ -19,3 +34,7 @@ management:
   endpoint:
     health:
       show-details: never
+
+notification:
+  events:
+    topic: ${QUOTE_EVENTS_TOPIC:insurance.quote.events}

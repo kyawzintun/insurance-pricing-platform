@@ -13,7 +13,7 @@ With the existing PostgreSQL/Kafka infrastructure running, start each applicatio
 ./mvnw -pl services/api-gateway spring-boot:run
 ```
 
-These are separate foreground commands; Ctrl+C stops each application. Quote defaults to local, loopback port **8082**, and PostgreSQL **localhost:15432/quote_db**, matching this project's current learning setup. No launcher script is needed. Database host/port/user/password and service port remain overridable. Maven does not automatically load `.env`; a fresh Compose setup on 5432 requires changing/exporting POSTGRES_PORT appropriately.
+These are separate foreground commands; Ctrl+C stops each application. Quote defaults to local, loopback port **8082**, and PostgreSQL **localhost:15432/quote_db**, matching this project's current learning setup. No launcher script is needed. Database host/port/user/password and service port remain overridable. Maven does not automatically load `.env`; Compose defaults now match the local application ports; custom ports require matching application overrides.
 
 | Configuration | Default |
 | --- | --- |
@@ -191,13 +191,13 @@ Authenticated CUSTOMER/ADMIN can GET `/api/v1/vehicles/brands` and `/api/v1/vehi
 
 Successful quote creation now registers a version 1 QuotePriced event inside persistence and sends its DTO envelope only after the database commits. Kafka topic defaults to `insurance.quote.events` (`QUOTE_EVENTS_TOPIC` override); the key is the quote UUID string. `KafkaTemplate` and Jackson JSON serialization reuse the existing Boot Kafka starter and bootstrap configuration. No entities or authentication credentials are serialized.
 
-For a local broker published on 29092 (the current development machine's Compose override), start Quote with:
+Quote defaults to the local Kafka broker on 29092. Start it with:
 
 ```bash
-KAFKA_EXTERNAL_PORT=29092 ./mvnw -pl services/quote-service spring-boot:run
+./mvnw -pl services/quote-service spring-boot:run
 ```
 
-Without an override the existing local Kafka default remains 9092. `KAFKA_BOOTSTRAP_SERVERS` overrides the full address. Docker Compose reads `.env`; Maven/Spring Boot does not automatically source that file. Ensure Quote targets this project's broker, especially when another project uses 9092.
+The local Kafka default is 29092; `KAFKA_EXTERNAL_PORT` overrides that port. `KAFKA_BOOTSTRAP_SERVERS` overrides the full address. Docker Compose reads `.env`; Maven/Spring Boot does not automatically source that file. Ensure Quote targets this project's broker, especially when another project uses 9092.
 
 Producer configuration sets String keys, Jackson JSON values without Java type headers and `max.block.ms=1000`; default Kafka client retry/idempotence behavior is retained. The send future is not awaited. If Kafka fails after commit, the quote stays PRICED and the HTTP response remains 201; metadata-only failure logs record the issue. No application retry or replay exists. **This direct after-commit approach has a dual-write failure window until Phase 16 Transactional Outbox.** No outbox rows, consumer services or DLQ processing are added.
 

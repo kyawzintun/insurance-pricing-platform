@@ -15,6 +15,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class NotificationServiceApplicationTests {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.insurance.platform.notification.repository.NotificationRepository repository;
+
     @LocalServerPort
     int port;
 

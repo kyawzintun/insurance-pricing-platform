@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 12 complete; Phase 13 not started.
+Status: Phases 0 through 13 complete; Phase 14 not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -57,6 +57,10 @@ Completed. CUSTOMER quote form, authenticated active vehicle catalog, creation/d
 Completed. Quote Service directly publishes a version 1 QuotePriced envelope after DB commit, keyed by quote ID on the existing quote topic. Producer failures do not roll back a committed quote. No outbox/consumers/retry-DLQ behavior; the dual-write gap remains until Phase 16. See [contract](quote-priced-event.md) and [validation](phase-12-validation.md).
 
 ## Phase 13 — Notification Consumer
+
+Completed. Dedicated group consumes QuotePriced v1, validates its existing envelope, and persists simulated notifications before RECORD offset commits. Failures stop the consumer; event ID uniqueness remains visible without idempotency. See [specification](specs/phase-13-notification-consumer.md) and [validation](phase-13-validation.md).
+
+## Phase 14 — Audit Consumer
 
 Not started.
 
