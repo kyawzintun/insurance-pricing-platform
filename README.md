@@ -6,7 +6,7 @@ The project focuses on a simple car-insurance pricing platform. It is not intend
 
 ## Current Project Status
 
-**Phase 13 — Notification Consumer: Complete**
+**Phase 14 — Audit Consumer: Complete**
 
 Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 adds secure quote retrieval and pagination. Phase 10 adds Angular registration/login and a protected dashboard foundation. Implementation will proceed phase by phase.
 
@@ -35,7 +35,7 @@ Customer registration/login, Gateway JWT validation, internal pricing, ADMIN pri
 - **Kafka** for asynchronous domain events
 - **PostgreSQL** for all backend services
 
-REST will be used for synchronous communication when an immediate response is needed. Each microservice will own its own logical database, with no cross-service database access. Transactional Outbox will be introduced in a later phase. PostgreSQL and Kafka are configured for local development. Auth Service implements registration and login. Gateway routes Auth, Pricing administration, and Quote requests. Pricing calculates premiums and manages rules; Quote creates priced snapshots. Notification consumes QuotePriced events and stores simulated notifications; Audit remains a skeleton. The Angular frontend implements authentication and CUSTOMER quote creation/history/detail.
+REST will be used for synchronous communication when an immediate response is needed. Each microservice will own its own logical database, with no cross-service database access. Transactional Outbox will be introduced in a later phase. PostgreSQL and Kafka are configured for local development. Auth Service implements registration and login. Gateway routes Auth, Pricing administration, and Quote requests. Pricing calculates premiums and manages rules; Quote creates priced snapshots. Notification consumes QuotePriced events and stores simulated notifications; Audit independently consumes the same events into audit records. The Angular frontend implements authentication and CUSTOMER quote creation/history/detail.
 
 ## Repository Structure
 
@@ -132,7 +132,7 @@ Validation results and the machine-specific port overrides are recorded in [Phas
 | Quote Service | 8082 | quote_db | Creation, snapshots, CUSTOMER ownership and ADMIN retrieval |
 | Pricing Service | 8083 | pricing_db | Internal calculation and ADMIN rule management |
 | Notification Service | 8084 | notification_db | QuotePriced consumer |
-| Audit Service | 8085 | audit_db | Skeleton |
+| Audit Service | 8085 | audit_db | QuotePriced audit consumer |
 
 Use JDK 25. The root parent/aggregator pins Spring Boot 4.1.1 and Spring Cloud 2025.1.3 (Gateway 5.0.3). Maven Wrapper 3.3.4 supplies Maven 3.9.16; no separately installed Maven is required.
 
@@ -256,4 +256,10 @@ Quote defaults to Kafka on port 29092; run `./mvnw -pl services/quote-service sp
 
 Notification now consumes QuotePriced v1 from `insurance.quote.events` using its own `notification-service` group and writes a simulated notification after validation. Kafka offsets advance only after the local DB transaction commits. The group defaults to earliest for historical learning events. Invalid events or persistence failures stop consumption; unknown types are intentionally skipped. Existing event ID uniqueness does not provide full idempotency. No processed_events, retries/DLQ, external messaging provider, Audit consumer or Outbox logic is added.
 
-See [Notification startup and learning guide](services/notification-service/README.md), [specification](docs/specs/phase-13-notification-consumer.md) and [validation](docs/phase-13-validation.md). Phase 14 — Audit Consumer has not started.
+See [Notification startup and learning guide](services/notification-service/README.md), [specification](docs/specs/phase-13-notification-consumer.md) and [validation](docs/phase-13-validation.md). Phase 14 is documented below.
+
+## Phase 14 — Audit Consumer
+
+Audit independently consumes QuotePriced v1 from insurance.quote.events in its own audit-service group and stores compact audit records. Notification behavior is unchanged; the two groups independently track offsets. Audit uses earliest for historical records, RECORD acknowledgment after DB commit, and stop-on-failure behavior. A minimal Audit V3 migration widens correlation_id to match the existing 128-character event contract. No idempotency, retry/DLQ, Outbox or Audit REST/UI is implemented.
+
+Run `./mvnw -pl services/audit-service spring-boot:run` with the same local infrastructure. See [Audit guide](services/audit-service/README.md), [specification](docs/specs/phase-14-audit-consumer.md) and [validation](docs/phase-14-validation.md). Phase 15 — Idempotent Consumers has not started.

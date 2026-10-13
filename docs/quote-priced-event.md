@@ -60,3 +60,7 @@ The implementation follows Spring's [transaction-bound event semantics](https://
 ## Phase 13 consumer
 
 Notification Service consumes this unchanged envelope using fixed consumer-owned DTOs. It stores the event customer/quote/event identifiers and formats the premium into a simulated notification. See [consumer behavior, offset semantics and limits](../services/notification-service/README.md).
+
+## Phase 14 consumer
+
+Audit independently consumes this same envelope in its audit-service group. The wire contract is unchanged; an Audit-owned migration widens its correlation column to preserve the contract's existing 128-character limit. See [Audit mapping and group semantics](../services/audit-service/README.md).

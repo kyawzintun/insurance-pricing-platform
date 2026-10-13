@@ -15,6 +15,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class AuditServiceApplicationTests {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.insurance.platform.audit.repository.AuditRecordRepository repository;
+
     @LocalServerPort
     int port;
 

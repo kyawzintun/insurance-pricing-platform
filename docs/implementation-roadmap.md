@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 13 complete; Phase 14 not started.
+Status: Phases 0 through 14 complete; Phase 15 not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -61,6 +61,10 @@ Completed. Quote Service directly publishes a version 1 QuotePriced envelope aft
 Completed. Dedicated group consumes QuotePriced v1, validates its existing envelope, and persists simulated notifications before RECORD offset commits. Failures stop the consumer; event ID uniqueness remains visible without idempotency. See [specification](specs/phase-13-notification-consumer.md) and [validation](phase-13-validation.md).
 
 ## Phase 14 — Audit Consumer
+
+Completed. Independent audit-service group consumes the unchanged QuotePriced v1 contract, writes compact JSONB audit records and commits progress after DB persistence. No idempotency/retry/DLQ. See [specification](specs/phase-14-audit-consumer.md) and [validation](phase-14-validation.md).
+
+## Phase 15 — Idempotent Consumers
 
 Not started.
 

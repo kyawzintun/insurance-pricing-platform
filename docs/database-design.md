@@ -75,3 +75,7 @@ Existing columns preserve monetary amounts and adjustment details, but cannot st
 Customer detail queries filter id plus customer_id; customer list queries scope both the ID page/count and bulk snapshot fetch to customer_id. ADMIN uses unrestricted equivalents. Detail fetches a full entity graph; list pages scalar IDs by created_at DESC, id DESC, then fetches snapshots without pagination. Mapping runs inside read-only transactions. Existing customer/created_at index and schema are unchanged.
 
 Disposable PostgreSQL checks show one detail SELECT and at most three SELECTs per tested list page, with correct counts despite multiple adjustments and unchanged row fingerprints after reads. Stored status is never transitioned, and incomplete optional snapshots return null. See [Phase 9 validation](phase-9-validation.md).
+
+## Phase 14 — Audit correlation compatibility
+
+Audit's existing correlation_id VARCHAR(100) could not preserve the Phase 12 contract's maximum 128 characters. Service-owned V3 widens only this column to VARCHAR(128); V1/V2 remain unchanged. Audit writes audit_records with a compact seven-field metadata JSONB object; processed_events remains unused and event_id uniqueness remains enforced. See [Audit mapping](../services/audit-service/README.md).
