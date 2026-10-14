@@ -6,7 +6,7 @@ The project focuses on a simple car-insurance pricing platform. It is not intend
 
 ## Current Project Status
 
-**Phase 14 — Audit Consumer: Complete**
+**Phase 15 — Idempotent Consumers: Complete**
 
 Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 adds secure quote retrieval and pagination. Phase 10 adds Angular registration/login and a protected dashboard foundation. Implementation will proceed phase by phase.
 
@@ -262,4 +262,10 @@ See [Notification startup and learning guide](services/notification-service/READ
 
 Audit independently consumes QuotePriced v1 from insurance.quote.events in its own audit-service group and stores compact audit records. Notification behavior is unchanged; the two groups independently track offsets. Audit uses earliest for historical records, RECORD acknowledgment after DB commit, and stop-on-failure behavior. A minimal Audit V3 migration widens correlation_id to match the existing 128-character event contract. No idempotency, retry/DLQ, Outbox or Audit REST/UI is implemented.
 
-Run `./mvnw -pl services/audit-service spring-boot:run` with the same local infrastructure. See [Audit guide](services/audit-service/README.md), [specification](docs/specs/phase-14-audit-consumer.md) and [validation](docs/phase-14-validation.md). Phase 15 — Idempotent Consumers has not started.
+Run `./mvnw -pl services/audit-service spring-boot:run` with the same local infrastructure. See [Audit guide](services/audit-service/README.md), [specification](docs/specs/phase-14-audit-consumer.md) and [validation](docs/phase-14-validation.md). Phase 15 is documented below.
+
+## Phase 15 — Idempotent Consumers
+
+Notification and Audit now atomically register eventId plus their stable consumer name in their own processed_events table before business persistence. A duplicate is successful processing with no second business row; original timestamps remain unchanged. PostgreSQL uniqueness handles concurrent duplicates, and legacy rows gain markers lazily when replayed. No schema, producer contract, group/topic or startup-command changes.
+
+See [Notification guide](services/notification-service/README.md#phase-15--idempotent-processing), [Audit guide](services/audit-service/README.md#phase-15--idempotent-processing), [specification](docs/specs/phase-15-idempotent-consumers.md) and [validation](docs/phase-15-validation.md). Phase 16 — Transactional Outbox has not started.

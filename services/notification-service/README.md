@@ -1,6 +1,6 @@
-# Notification Service — Phase 13
+# Notification Service — through Phase 15
 
-The first application Kafka consumer. A valid QuotePriced v1 event creates a simulated notification in `notification_db.notifications`; there is no email/SMS integration or notification REST API.
+The first application Kafka consumer. A new valid QuotePriced v1 event creates a simulated notification in `notification_db.notifications`; there is no email/SMS integration or notification REST API.
 
 ```text
 Quote Service → insurance.quote.events → notification-service group
@@ -38,11 +38,12 @@ Only QuotePriced version 1 is supported. Validation checks event/aggregate/custo
 
 | Input/result | Policy |
 | --- | --- |
-| Valid QuotePriced v1 | Persist notification, then return successfully |
+| New valid QuotePriced v1 | Persist marker and notification atomically, then return successfully |
+| Duplicate eventId | Return DUPLICATE successfully without another business insert |
 | Nonempty unsupported event type | Log intentional skip; return and advance offset |
 | Malformed JSON or invalid supported-event data | Log safe reason and stop listener container; leave failed offset uncommitted |
 | Unsupported QuotePriced version | Stop; never silently interpret it as v1 |
-| Database failure, including duplicate event ID | Stop; leave failed offset uncommitted |
+| Genuine database failure | Stop; leave failed offset uncommitted |
 
 Malformed input is identified by topic/partition/offset. Validated event failures additionally log event ID, event type, quote ID and correlation ID. Payloads, exception messages and nested causes are not logged by the listener. The stopping handler emits its framework stack trace only at DEBUG. A stopped listener requires operator investigation and an explicit restart after remediation; repeated restarts encounter the same poison record. Do not casually skip/reset offsets. The existing HTTP health endpoint is not proof that consumption is progressing: inspect logs and group lag as well.
 
@@ -62,9 +63,9 @@ Mapping:
 | `message` | `Your quote <reference> is ready. Premium: <amount> <currency>.` |
 | `created_at` / `processed_at` | Same injected Clock instant, UTC, PostgreSQL microsecond precision |
 
-Only `notifications` is written. Existing Flyway migrations and `processed_events` are untouched. No new schema is required.
+Only `notifications` and `processed_events` are written. Existing Flyway migrations and constraints remain unchanged; no new schema is required.
 
-**This is not idempotent processing.** If the DB commits but the Kafka offset does not, redelivery attempts another insert. Existing UNIQUE(event_id) rejects it and stops consumption. It prevents a duplicate row but does not recognize the event as successfully processed or advance its offset. Phase 15 will add processed_events idempotency; Phase 17 will add retry/DLQ handling. Quote's producer reliability gap remains until Phase 16 Outbox.
+**Phase 15 makes duplicate delivery idempotent** using the existing processed_events table. See the transaction and historical compatibility details below. Retry/DLQ remains deferred to Phase 17 and Quote producer reliability remains deferred to Phase 16 Outbox.
 
 ## Tests and learning order
 
@@ -79,7 +80,7 @@ Only `notifications` is written. Existing Flyway migrations and `processed_event
 
 Read `event/QuotePricedEnvelope` and `QuotePricedData`, then `QuoteEventDecoder` → `QuoteEventListener` → `service/NotificationService` → `entity/Notification` and `repository/NotificationRepository` → `config/NotificationKafkaConfiguration` → `application.yml`.
 
-Normal tests cover mapping, validation, unsupported type/version, safe errors, key mismatch, and existing HTTP startup. PostgreSQL tests cover exact persisted fields, unique event IDs, rollback and an empty processed_events table. Kafka integration tests consume historical JSON, verify DB persistence plus group offsets, demonstrate intentional unknown-type skipping, duplicate-key failure without offset advancement, replay after test-only conflict removal, and malformed-JSON stopping. Test-only maintenance affects disposable containers; it is not an application deduplication feature.
+Normal tests cover mapping, validation, safe errors, idempotency branches and existing HTTP startup. PostgreSQL and Kafka integration tests now verify atomic processed markers, duplicate success, historical compatibility, concurrency and true same-offset redelivery. The command profiles remain unchanged.
 
 For live inspection:
 
@@ -91,3 +92,41 @@ docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
 The committed offset is the **next** record to read. For partitions containing processed records, successful catch-up has committed offset equal to log-end offset and lag zero. An empty partition may show no committed offset (`-`) and a log-end offset of zero. Consumer reads change group offsets, not topic end offsets. Keep Kafka history and offsets during ordinary cleanup.
 
 See [Phase 13 specification](../../docs/specs/phase-13-notification-consumer.md) and [validation](../../docs/phase-13-validation.md). Framework references: [Spring Kafka error handling](https://docs.spring.io/spring-kafka/reference/kafka/annotation-error-handling.html) and [listener container acknowledgment modes](https://docs.spring.io/spring-kafka/reference/kafka/receiving-messages/message-listener-container.html).
+
+## Phase 15 — Idempotent processing
+
+Kafka delivery is at least once: a database commit can succeed before the consumer commits its Kafka offset. A crash in that gap redelivers the same record. Duplicate delivery is now successful processing, not a unique-key failure.
+
+```text
+Kafka event (validated)
+    ↓
+BEGIN local PostgreSQL transaction
+    ↓
+INSERT processed_events ON CONFLICT (event_id, consumer_name) DO NOTHING
+    |
+    +-- conflict → DUPLICATE → commit/return → Kafka offset may advance
+    |
+    +-- inserted
+           ↓
+       existing business row? → yes: legacy DUPLICATE, keep new marker
+           |
+           no
+           ↓
+       insert business row
+           ↓
+       COMMIT marker + business row together
+           ↓
+       PROCESSED → Kafka offset may advance
+```
+
+`ProcessedEventRepository.tryMarkProcessed()` executes a parameterized native insert using the transaction-bound JPA EntityManager. Its MANDATORY propagation rejects calls without an existing transaction. The separate service's `@Transactional create()` owns the transaction; the marker never commits independently from the business operation. Failure rolls back both. RECORD mode still commits progress only after the service proxy returns successfully.
+
+Deduplication identity is `(eventId, consumerName)`. The stable logical consumer name is **notification-service**, independent of instance IDs, hostnames and configurable Kafka group IDs. Changing the Kafka group does not change this logical identity. Notification and Audit use separate local databases and names, so each legitimately processes the same event once.
+
+PostgreSQL's existing composite primary key chooses the winner. Concurrent duplicate attempts wait for the first transaction: after its commit the loser gets a no-op and skips business work; after its rollback another attempt may insert the marker and process normally. No SELECT-first race, in-memory lock, distributed lock or shared database is used. Business UNIQUE(event_id) constraints remain defense-in-depth.
+
+For a normal new event, `processed_at` is the same injected UTC/microsecond processing instant used for the business row's creation time. Duplicate conflict handling does not update the marker or business row. For a pre-Phase-15 business row lacking a marker, the service first wins the atomic marker claim, then checks `existsByEventId`. It returns DUPLICATE and commits the new marker without rewriting the historical row. That marker's time is the first tracked replay time, not a reconstructed historical processing time. There is no startup scan or automatic bulk backfill, and no attempt to catch a unique violation inside an already-aborted PostgreSQL transaction.
+
+The listener logs `result=PROCESSED` or `result=DUPLICATE` at INFO with safe event/type/consumer/quote/correlation/partition/offset metadata. Unsupported event types are still intentionally skipped without markers. Malformed supported events, unsupported versions and genuine database failures still stop the consumer; they are never converted into duplicate success. No retry/DLQ, Outbox, Kafka transaction or new event type is introduced.
+
+Tests prove first/duplicate/different-event behavior, unchanged timestamps, marker and business rollback, stable names, lazy historical compatibility, concurrent commit and rollback outcomes. The Kafka test injects a test-only failure in the listener **after the service transaction commits but before the listener returns**, then restarts the same group. Both listener invocations receive partition 0 offset 0: true same-record redelivery, without offset resets or republishing. A separate second Kafka record carrying the same eventId also succeeds. Invalid JSON still stops without advancing past it. See [Phase 15 specification](../../docs/specs/phase-15-idempotent-consumers.md) and [validation](../../docs/phase-15-validation.md).

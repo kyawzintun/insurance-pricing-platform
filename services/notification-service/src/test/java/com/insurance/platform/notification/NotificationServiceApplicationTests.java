@@ -18,6 +18,9 @@ class NotificationServiceApplicationTests {
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     com.insurance.platform.notification.repository.NotificationRepository repository;
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.insurance.platform.notification.repository.ProcessedEventRepository processedEvents;
+
     @LocalServerPort
     int port;
 

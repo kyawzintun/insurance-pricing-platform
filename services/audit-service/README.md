@@ -1,4 +1,4 @@
-# Audit Service — Phase 14
+# Audit Service — through Phase 15
 
 Consumes the existing QuotePriced v1 envelope and persists one audit record. Audit uses its own `audit-service` Kafka consumer group, independent of Notification's `notification-service` group. Each group receives the same record and tracks its own progress.
 
@@ -83,16 +83,17 @@ Phase 3 defined `correlation_id VARCHAR(100)`, but Gateway and the Phase 12 cont
 
 | Condition | Behavior |
 | --- | --- |
-| Valid QuotePriced v1 | Commit one audit row, then advance Kafka progress |
+| New valid QuotePriced v1 | Commit marker and audit row together, then advance Kafka progress |
+| Duplicate eventId | Return DUPLICATE successfully without another business insert |
 | Unsupported nonempty event type | Intentionally log/skip and advance its offset |
 | Unsupported QuotePriced version, malformed JSON or invalid data | Log safe reason; stop listener, leave failed offset uncommitted |
-| Database failure, including duplicate event ID | Log metadata; stop listener without treating it as success |
+| Genuine database failure | Log metadata; stop listener without treating it as success |
 
 Spring's `CommonContainerStoppingErrorHandler` replaces default retry/recovery behavior. No application retry/backoff, DLQ producer/consumer, retry topic or recoverer is configured. Normal Kafka client networking and rebalances still apply. A poison record requires investigation and an explicit restart after remediation; simply restarting repeats the failure. Never casually reset offsets to hide it. A stopped Audit consumer does not stop Notification's independent group. The HTTP health endpoint alone does not prove Kafka progress: check logs and group lag.
 
 The listener logs fixed reason codes, topic/partition/offset and validated event/quote/correlation metadata. It does not log payloads or nested exception messages; the stopping handler's framework trace is DEBUG-only.
 
-This phase is **not idempotent**. If the row commits and the consumer crashes before its offset commits, redelivery tries another insert. Existing UNIQUE(event_id) rejects the duplicate and stops processing. Preventing duplicate rows is not the same as treating an already-processed event as successful. `processed_events` stays unused; Phase 15 will address this for both consumers. No Outbox or external provider is added.
+**Phase 15 makes duplicate delivery idempotent** using the existing local processed_events table. Both consumers now treat committed duplicates as successful processing. See the atomicity, concurrency and historical-row compatibility details below.
 
 ## Tests and learning order
 
@@ -107,7 +108,7 @@ This phase is **not idempotent**. If the row commits and the consumer crashes be
 
 Read event DTOs → `QuoteEventDecoder` → `QuoteAuditListener` → `AuditService` → `AuditMetadata` / `AuditRecord` / `AuditRecordRepository` → `AuditKafkaConfiguration` and YAML. Then read the normal mapping/validation tests, PostgreSQL tests and Kafka test.
 
-PostgreSQL tests verify exact mapping, JSONB, timestamps, 128-character correlation compatibility, uniqueness and rollback. Kafka tests verify historical consumption, successful offset advancement, unsupported-type skipping, duplicate failure without offset advancement, explicit restart after disposable-test-only conflict removal, and malformed input stopping. No test adds application deduplication logic.
+PostgreSQL tests verify mapping, JSONB, correlation compatibility, atomic markers, duplicate success, rollback, historical rows and concurrency. Kafka tests verify real same-offset redelivery after a simulated post-DB-commit failure, a separate duplicate record, preserved timestamps, unsupported-type skipping and malformed-input stopping.
 
 Inspect the two independent groups:
 
@@ -121,4 +122,42 @@ docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
 
 Committed offsets identify the next record to read. Each group should independently catch up to topic end offsets; empty partitions may display no committed offset (`-`). Consumer reads do not change topic end offsets. Kafka records and group offsets remain durable during ordinary SQL cleanup.
 
-See [Phase 14 specification](../../docs/specs/phase-14-audit-consumer.md) and [validation evidence](../../docs/phase-14-validation.md). Phase 15 is not implemented.
+See [Phase 14 specification](../../docs/specs/phase-14-audit-consumer.md) and [validation evidence](../../docs/phase-14-validation.md). Phase 15 is documented below.
+
+## Phase 15 — Idempotent processing
+
+Kafka delivery is at least once: a database commit can succeed before the consumer commits its Kafka offset. A crash in that gap redelivers the same record. Duplicate delivery is now successful processing, not a unique-key failure.
+
+```text
+Kafka event (validated)
+    ↓
+BEGIN local PostgreSQL transaction
+    ↓
+INSERT processed_events ON CONFLICT (event_id, consumer_name) DO NOTHING
+    |
+    +-- conflict → DUPLICATE → commit/return → Kafka offset may advance
+    |
+    +-- inserted
+           ↓
+       existing business row? → yes: legacy DUPLICATE, keep new marker
+           |
+           no
+           ↓
+       insert business row
+           ↓
+       COMMIT marker + business row together
+           ↓
+       PROCESSED → Kafka offset may advance
+```
+
+`ProcessedEventRepository.tryMarkProcessed()` executes a parameterized native insert using the transaction-bound JPA EntityManager. Its MANDATORY propagation rejects calls without an existing transaction. The separate service's `@Transactional create()` owns the transaction; the marker never commits independently from the business operation. Failure rolls back both. RECORD mode still commits progress only after the service proxy returns successfully.
+
+Deduplication identity is `(eventId, consumerName)`. The stable logical consumer name is **audit-service**, independent of instance IDs, hostnames and configurable Kafka group IDs. Changing the Kafka group does not change this logical identity. Notification and Audit use separate local databases and names, so each legitimately processes the same event once.
+
+PostgreSQL's existing composite primary key chooses the winner. Concurrent duplicate attempts wait for the first transaction: after its commit the loser gets a no-op and skips business work; after its rollback another attempt may insert the marker and process normally. No SELECT-first race, in-memory lock, distributed lock or shared database is used. Business UNIQUE(event_id) constraints remain defense-in-depth.
+
+For a normal new event, `processed_at` is the same injected UTC/microsecond processing instant used for the business row's creation time. Duplicate conflict handling does not update the marker or business row. For a pre-Phase-15 business row lacking a marker, the service first wins the atomic marker claim, then checks `existsByEventId`. It returns DUPLICATE and commits the new marker without rewriting the historical row. That marker's time is the first tracked replay time, not a reconstructed historical processing time. There is no startup scan or automatic bulk backfill, and no attempt to catch a unique violation inside an already-aborted PostgreSQL transaction.
+
+The listener logs `result=PROCESSED` or `result=DUPLICATE` at INFO with safe event/type/consumer/quote/correlation/partition/offset metadata. Unsupported event types are still intentionally skipped without markers. Malformed supported events, unsupported versions and genuine database failures still stop the consumer; they are never converted into duplicate success. No retry/DLQ, Outbox, Kafka transaction or new event type is introduced.
+
+Tests prove first/duplicate/different-event behavior, unchanged timestamps, marker and business rollback, stable names, lazy historical compatibility, concurrent commit and rollback outcomes. The Kafka test injects a test-only failure in the listener **after the service transaction commits but before the listener returns**, then restarts the same group. Both listener invocations receive partition 0 offset 0: true same-record redelivery, without offset resets or republishing. A separate second Kafka record carrying the same eventId also succeeds. Invalid JSON still stops without advancing past it. See [Phase 15 specification](../../docs/specs/phase-15-idempotent-consumers.md) and [validation](../../docs/phase-15-validation.md).

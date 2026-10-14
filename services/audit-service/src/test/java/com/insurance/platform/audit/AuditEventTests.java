@@ -22,7 +22,11 @@ class AuditEventTests {
     @Test void mapsContractAndPersistsExpectedFieldsUsingClock() {
         var event = decoder.decode(json()).orElseThrow();
         var repository = mock(AuditRecordRepository.class);
-        new AuditService(repository, Clock.fixed(NOW, ZoneOffset.UTC)).create(event);
+        var markers = mock(com.insurance.platform.audit.repository.ProcessedEventRepository.class);
+        when(markers.tryMarkProcessed(EVENT, AuditService.CONSUMER_NAME, NOW)).thenReturn(true);
+        new AuditService(repository, Clock.fixed(NOW, ZoneOffset.UTC), markers).create(event);
+        verify(markers).tryMarkProcessed(EVENT, AuditService.CONSUMER_NAME, NOW);
+        verify(repository).existsByEventId(EVENT);
         var row = ArgumentCaptor.forClass(AuditRecord.class);
         verify(repository).saveAndFlush(row.capture());
         var n = row.getValue();

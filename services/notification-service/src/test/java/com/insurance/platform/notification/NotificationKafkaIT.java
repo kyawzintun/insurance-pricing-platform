@@ -3,6 +3,9 @@ package com.insurance.platform.notification;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import com.insurance.platform.notification.event.QuoteEventListener;
 import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.clients.producer.*;
 import org.apache.kafka.common.TopicPartition;
@@ -41,7 +44,8 @@ class NotificationKafkaIT {
     @Autowired JdbcTemplate jdbc;
     @Autowired KafkaListenerEndpointRegistry registry;
     @MockitoBean Clock clock;
-    @Test void consumesHistoryCommitsAfterDatabaseAndStopsWithoutSkippingInvalidRecord() throws Exception {
+    @MockitoSpyBean QuoteEventListener listener;
+    @Test void committedDatabaseSurvivesCrashAndSameOffsetRedeliveryIsSuccessful() throws Exception {
         when(clock.instant()).thenReturn(NOW);
         var partition = new TopicPartition(TOPIC, 0);
         var container = registry.getListenerContainer("quote-notifications");
@@ -51,13 +55,31 @@ class NotificationKafkaIT {
             admin.createTopics(List.of(new NewTopic(TOPIC, 3, (short) 1))).all().get(20, TimeUnit.SECONDS);
             // Produce before starting the group: proves earliest historical consumption.
             producer.send(new ProducerRecord<>(TOPIC, 0, QUOTE.toString(), json())).get(20, TimeUnit.SECONDS);
+            var crashOnce = new AtomicBoolean(true);
+            doAnswer(invocation -> {
+                invocation.callRealMethod(); // Service transaction has already committed here.
+                if (crashOnce.getAndSet(false)) throw new IllegalStateException("test crash after DB commit before offset commit");
+                return null;
+            }).when(listener).receive(any());
             container.start();
-            await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-                assertThat(jdbc.queryForObject("SELECT count(*) FROM notifications", Long.class)).isEqualTo(1);
-                var offsets = admin.listConsumerGroupOffsets(GROUP).partitionsToOffsetAndMetadata().get(5, TimeUnit.SECONDS);
-                assertThat(offsets.get(partition)).isNotNull();
-                assertThat(offsets.get(partition).offset()).isEqualTo(1);
+            awaitStopped(admin, container);
+            assertCounts(1, 1);
+            var beforeRestart = admin.listConsumerGroupOffsets(GROUP).partitionsToOffsetAndMetadata().get().get(partition);
+            assertThat(beforeRestart == null || beforeRestart.offset() == 0).isTrue();
+            var originalMarker = jdbc.queryForMap("SELECT * FROM processed_events");
+            assertThat(originalMarker.get("consumer_name")).isEqualTo("notification-service"); // Not the test group ID.
+            when(clock.instant()).thenReturn(NOW.plusSeconds(60));
+            container.start(); // Same group, same record/offset; no offset reset and no second publication.
+            awaitOffset(admin, partition, 1);
+            var captures = org.mockito.ArgumentCaptor.forClass(org.apache.kafka.clients.consumer.ConsumerRecord.class);
+            verify(listener, times(2)).receive(captures.capture());
+            assertThat(captures.getAllValues()).allSatisfy(record -> {
+                assertThat(record.offset()).isZero();
+                assertThat(record.partition()).isZero();
+                assertThat(record.value()).isEqualTo(json());
             });
+            assertCounts(1, 1);
+            assertThat(jdbc.queryForMap("SELECT * FROM processed_events")).isEqualTo(originalMarker);
             var row = jdbc.queryForMap("SELECT * FROM notifications");
             assertThat(row.get("event_id")).isEqualTo(EVENT);
             assertThat(row.get("quote_id")).isEqualTo(QUOTE);
@@ -67,32 +89,36 @@ class NotificationKafkaIT {
             assertThat(row.get("message")).isEqualTo("Your quote Q-TEST-123 is ready. Premium: 11200.00 THB.");
             assertThat(((java.sql.Timestamp) row.get("created_at")).toInstant()).isEqualTo(NOW);
             assertThat(((java.sql.Timestamp) row.get("processed_at")).toInstant()).isEqualTo(NOW);
-            // A valid unknown event is intentionally skipped and its offset advances.
-            producer.send(new ProducerRecord<>(TOPIC, 0, "other", "{\"eventType\":\"FutureEvent\"}")).get(20, TimeUnit.SECONDS);
-            await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> assertThat(admin.listConsumerGroupOffsets(GROUP)
-                    .partitionsToOffsetAndMetadata().get().get(partition).offset()).isEqualTo(2));
-            // Existing UNIQUE(event_id) rejects redelivery. It must stop without committing offset 2.
+            // A separate second record with the same event ID is also safe (distinct from redelivery above).
             producer.send(new ProducerRecord<>(TOPIC, 0, QUOTE.toString(), json())).get(20, TimeUnit.SECONDS);
-            await().atMost(Duration.ofSeconds(15)).until(() -> !container.isRunning());
-            await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> assertThat(admin.describeConsumerGroups(List.of(GROUP))
-                    .all().get().get(GROUP).members()).isEmpty());
-            assertThat(admin.listConsumerGroupOffsets(GROUP).partitionsToOffsetAndMetadata().get().get(partition).offset()).isEqualTo(2);
-            assertThat(jdbc.queryForObject("SELECT count(*) FROM notifications", Long.class)).isEqualTo(1);
-            // Disposable test DB only: remove the conflicting row to demonstrate replay after an explicit restart.
-            jdbc.update("DELETE FROM notifications WHERE event_id = ?", EVENT);
-            container.start();
-            await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
-                assertThat(jdbc.queryForObject("SELECT count(*) FROM notifications", Long.class)).isEqualTo(1);
-                assertThat(admin.listConsumerGroupOffsets(GROUP).partitionsToOffsetAndMetadata().get().get(partition).offset()).isEqualTo(3);
-            });
+            awaitOffset(admin, partition, 2);
+            assertCounts(1, 1);
+            assertThat(jdbc.queryForMap("SELECT * FROM processed_events")).isEqualTo(originalMarker);
+            assertThat(jdbc.queryForMap("SELECT * FROM notifications")).isEqualTo(row);
+            producer.send(new ProducerRecord<>(TOPIC, 0, "other", "{\"eventType\":\"FutureEvent\"}")).get(20, TimeUnit.SECONDS);
+            awaitOffset(admin, partition, 3);
+            assertCounts(1, 1);
             producer.send(new ProducerRecord<>(TOPIC, 0, "invalid", "{broken-json")).get(20, TimeUnit.SECONDS);
-            await().atMost(Duration.ofSeconds(15)).until(() -> !container.isRunning());
-            await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> assertThat(admin.describeConsumerGroups(List.of(GROUP))
-                    .all().get().get(GROUP).members()).isEmpty());
+            awaitStopped(admin, container);
             assertThat(admin.listConsumerGroupOffsets(GROUP).partitionsToOffsetAndMetadata().get().get(partition).offset()).isEqualTo(3);
-            assertThat(jdbc.queryForObject("SELECT count(*) FROM notifications", Long.class)).isEqualTo(1);
-            assertThat(jdbc.queryForObject("SELECT count(*) FROM processed_events", Long.class)).isZero();
+            assertCounts(1, 1);
             assertThat(admin.listOffsets(Map.of(partition, OffsetSpec.latest())).all().get().get(partition).offset()).isEqualTo(4);
         } finally { container.stop(); }
+    }
+    private void assertCounts(long business, long markers) {
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notifications", Long.class)).isEqualTo(business);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM processed_events", Long.class)).isEqualTo(markers);
+    }
+    private void awaitOffset(Admin admin, TopicPartition partition, long offset) {
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            var committed = admin.listConsumerGroupOffsets(GROUP).partitionsToOffsetAndMetadata().get(5, TimeUnit.SECONDS).get(partition);
+            assertThat(committed).isNotNull();
+            assertThat(committed.offset()).isEqualTo(offset);
+        });
+    }
+    private void awaitStopped(Admin admin, org.springframework.kafka.listener.MessageListenerContainer container) {
+        await().atMost(Duration.ofSeconds(30)).until(() -> !container.isRunning());
+        await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> assertThat(admin.describeConsumerGroups(List.of(GROUP))
+                .all().get(5, TimeUnit.SECONDS).get(GROUP).members()).isEmpty());
     }
 }

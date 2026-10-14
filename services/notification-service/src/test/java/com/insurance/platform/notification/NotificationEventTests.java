@@ -22,7 +22,11 @@ class NotificationEventTests {
     @Test void mapsContractAndPersistsExpectedFieldsUsingClock() {
         var event = decoder.decode(json()).orElseThrow();
         var repository = mock(NotificationRepository.class);
-        new NotificationService(repository, Clock.fixed(NOW, ZoneOffset.UTC)).create(event);
+        var markers = mock(com.insurance.platform.notification.repository.ProcessedEventRepository.class);
+        when(markers.tryMarkProcessed(EVENT, NotificationService.CONSUMER_NAME, NOW)).thenReturn(true);
+        new NotificationService(repository, Clock.fixed(NOW, ZoneOffset.UTC), markers).create(event);
+        verify(markers).tryMarkProcessed(EVENT, NotificationService.CONSUMER_NAME, NOW);
+        verify(repository).existsByEventId(EVENT);
         var row = ArgumentCaptor.forClass(Notification.class);
         verify(repository).saveAndFlush(row.capture());
         var n = row.getValue();

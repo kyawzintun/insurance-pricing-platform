@@ -79,3 +79,7 @@ Disposable PostgreSQL checks show one detail SELECT and at most three SELECTs pe
 ## Phase 14 — Audit correlation compatibility
 
 Audit's existing correlation_id VARCHAR(100) could not preserve the Phase 12 contract's maximum 128 characters. Service-owned V3 widens only this column to VARCHAR(128); V1/V2 remain unchanged. Audit writes audit_records with a compact seven-field metadata JSONB object; processed_events remains unused and event_id uniqueness remains enforced. See [Audit mapping](../services/audit-service/README.md).
+
+## Phase 15 — Idempotent Notification and Audit consumers
+
+Both consumers now use their own existing processed_events tables, keyed by eventId and stable logical consumer name (notification-service / audit-service). An atomic ON CONFLICT insert claims the event inside the same local JPA transaction as its business write. Conflict returns DUPLICATE successfully, without rewriting the business row or original processed_at; RECORD acknowledgment may then advance the offset. Concurrent attempts are serialized by PostgreSQL uniqueness. A replay of a pre-Phase-15 business row lazily establishes its missing marker only after the atomic claim, without bulk backfill or rewriting the row. Genuine failures preserve stop/uncommitted-offset behavior. No schema, producer contract, group/topic, retry/DLQ or Outbox changes. See [specification](specs/phase-15-idempotent-consumers.md) and [validation](phase-15-validation.md).

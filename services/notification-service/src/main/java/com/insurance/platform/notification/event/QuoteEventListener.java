@@ -2,6 +2,7 @@ package com.insurance.platform.notification.event;
 
 import com.insurance.platform.notification.exception.InvalidQuoteEventException;
 import com.insurance.platform.notification.service.NotificationService;
+import com.insurance.platform.notification.service.ProcessResult;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,15 +43,17 @@ public class QuoteEventListener {
                     event.eventId(), event.aggregateId(), record.partition(), record.offset());
         }
 
+        ProcessResult result;
         try {
-            service.create(event);
+            result = service.create(event);
         } catch (RuntimeException failure) {
             log(event, record, "PERSISTENCE_FAILURE");
             throw new InvalidQuoteEventException("PERSISTENCE_FAILURE");
         }
 
-        LOG.info("Notification committed eventId={} eventType={} quoteId={} correlationId={} partition={} offset={}",
-                event.eventId(), event.eventType(), event.aggregateId(), event.correlationId(), record.partition(), record.offset());
+        LOG.info("Event handled result={} eventId={} eventType={} consumerName={} quoteId={} correlationId={} partition={} offset={}",
+                result, event.eventId(), event.eventType(), NotificationService.CONSUMER_NAME, event.aggregateId(),
+                event.correlationId(), record.partition(), record.offset());
     }
 
     private void log(QuotePricedEnvelope event, ConsumerRecord<String, String> record, String reason) {

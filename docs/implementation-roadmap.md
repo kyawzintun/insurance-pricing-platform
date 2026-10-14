@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 14 complete; Phase 15 not started.
+Status: Phases 0 through 15 complete; Phase 16 not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -65,6 +65,10 @@ Completed. Dedicated group consumes QuotePriced v1, validates its existing envel
 Completed. Independent audit-service group consumes the unchanged QuotePriced v1 contract, writes compact JSONB audit records and commits progress after DB persistence. No idempotency/retry/DLQ. See [specification](specs/phase-14-audit-consumer.md) and [validation](phase-14-validation.md).
 
 ## Phase 15 — Idempotent Consumers
+
+Completed. Notification and Audit atomically claim local processed-event markers and persist business rows, treating duplicates as success. Includes concurrent processing, rollback, lazy legacy compatibility and true Kafka redelivery validation. See [specification](specs/phase-15-idempotent-consumers.md) and [validation](phase-15-validation.md).
+
+## Phase 16 — Transactional Outbox
 
 Not started.
 

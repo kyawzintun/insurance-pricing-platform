@@ -4,6 +4,7 @@ import com.insurance.platform.audit.dto.AuditMetadata;
 import com.insurance.platform.audit.entity.AuditRecord;
 import com.insurance.platform.audit.event.QuotePricedEnvelope;
 import com.insurance.platform.audit.repository.AuditRecordRepository;
+import com.insurance.platform.audit.repository.ProcessedEventRepository;
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -13,23 +14,36 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Service
 public class AuditService {
+    public static final String CONSUMER_NAME = "audit-service";
+    private final ProcessedEventRepository processedEvents;
     private final AuditRecordRepository repository;
     private final Clock clock;
     private final JsonMapper mapper = JsonMapper.builder().build();
 
-    public AuditService(AuditRecordRepository repository, Clock clock) {
+    public AuditService(AuditRecordRepository repository, Clock clock, ProcessedEventRepository processedEvents) {
         this.repository = repository;
         this.clock = clock;
+        this.processedEvents = processedEvents;
     }
 
     // The local transaction proxy commits before the Kafka listener returns successfully.
     @Transactional
-    public void create(QuotePricedEnvelope event) {
+    public ProcessResult create(QuotePricedEnvelope event) {
+        var now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+        if (!processedEvents.tryMarkProcessed(event.eventId(), CONSUMER_NAME, now)) {
+            return ProcessResult.DUPLICATE;
+        }
+        // Lazy compatibility for pre-Phase-15 rows. The atomic marker claim is the concurrency guard.
+        // Do not catch unique violations in an aborted PostgreSQL transaction.
+        if (repository.existsByEventId(event.eventId())) {
+            return ProcessResult.DUPLICATE;
+        }
         var d = event.data();
         var metadata = new AuditMetadata(d.quoteReference(), d.status(), d.coverageType(),
                 d.finalPremium(), d.currency(), d.pricedAt(), d.expiresAt());
         repository.saveAndFlush(new AuditRecord(UUID.randomUUID(), event.eventId(), d.customerId().toString(),
                 d.quoteId().toString(), event.correlationId(), event.occurredAt().truncatedTo(ChronoUnit.MICROS),
-                event.producer(), mapper.writeValueAsString(metadata), clock.instant().truncatedTo(ChronoUnit.MICROS)));
+                event.producer(), mapper.writeValueAsString(metadata), now));
+        return ProcessResult.PROCESSED;
     }
 }

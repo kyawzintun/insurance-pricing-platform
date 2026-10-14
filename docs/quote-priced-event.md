@@ -64,3 +64,7 @@ Notification Service consumes this unchanged envelope using fixed consumer-owned
 ## Phase 14 consumer
 
 Audit independently consumes this same envelope in its audit-service group. The wire contract is unchanged; an Audit-owned migration widens its correlation column to preserve the contract's existing 128-character limit. See [Audit mapping and group semantics](../services/audit-service/README.md).
+
+## Phase 15 duplicate handling
+
+The contract, topic, key and version are unchanged. Notification and Audit deduplicate locally by the existing envelope eventId plus their stable logical consumer name. Both can process the same event independently; a repeated delivery within either consumer succeeds without another business row. See [idempotency specification](specs/phase-15-idempotent-consumers.md).

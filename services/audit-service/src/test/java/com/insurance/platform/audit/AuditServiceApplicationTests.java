@@ -18,6 +18,9 @@ class AuditServiceApplicationTests {
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     com.insurance.platform.audit.repository.AuditRecordRepository repository;
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.insurance.platform.audit.repository.ProcessedEventRepository processedEvents;
+
     @LocalServerPort
     int port;
 
