@@ -25,7 +25,7 @@ Flyway is the schema source of truth. Each service loads its own `src/main/resou
 | Database | Application tables | Migrations |
 | --- | --- | --- |
 | `auth_db` | `users`, `refresh_tokens`, `outbox_events` | V1 users; V2 refresh tokens; V3 outbox |
-| `quote_db` | `vehicle_brands`, `vehicle_models`, `quotes`, `quote_drivers`, `quote_vehicles`, `pricing_breakdowns`, `pricing_adjustments`, `outbox_events` | V1 catalog; V2 quotes/driver/vehicle; V3 pricing snapshots; V4 outbox; V5 catalog seed |
+| `quote_db` | `vehicle_brands`, `vehicle_models`, `quotes`, `quote_drivers`, `quote_vehicles`, `pricing_breakdowns`, `pricing_adjustments`, `outbox_events` | V1 catalog; V2 quotes/driver/vehicle; V3 pricing snapshots; V4 outbox; V5 catalog seed; V6 outbox correlation width |
 | `pricing_db` | `pricing_rules`, `outbox_events` | V1 rules; V2 outbox; V3 pricing seed |
 | `notification_db` | `notifications`, `processed_events` | V1 notifications; V2 processed events |
 | `audit_db` | `audit_records`, `processed_events` | V1 audit records; V2 processed events |
@@ -83,3 +83,9 @@ Audit's existing correlation_id VARCHAR(100) could not preserve the Phase 12 con
 ## Phase 15 — Idempotent Notification and Audit consumers
 
 Both consumers now use their own existing processed_events tables, keyed by eventId and stable logical consumer name (notification-service / audit-service). An atomic ON CONFLICT insert claims the event inside the same local JPA transaction as its business write. Conflict returns DUPLICATE successfully, without rewriting the business row or original processed_at; RECORD acknowledgment may then advance the offset. Concurrent attempts are serialized by PostgreSQL uniqueness. A replay of a pre-Phase-15 business row lazily establishes its missing marker only after the atomic claim, without bulk backfill or rewriting the row. Genuine failures preserve stop/uncommitted-offset behavior. No schema, producer contract, group/topic, retry/DLQ or Outbox changes. See [specification](specs/phase-15-idempotent-consumers.md) and [validation](phase-15-validation.md).
+
+## Phase 16 — Quote Transactional Outbox
+
+Quote creation now stores the aggregate and a complete QuotePriced v1 JSONB envelope in the same transaction. The direct after-commit publisher is removed. HTTP 201 means durable quote/event intent; scheduled polling publishes later with the same event ID, correlation, occurrence time, topic and quote UUID key. An autocommit connection with a shared PostgreSQL session advisory lock excludes competing dispatchers without holding a transaction during Kafka I/O. Acknowledged sends become PUBLISHED; failed attempts remain PENDING and increment retry_count. Duplicate publication remains possible and Phase 15 consumers handle it unchanged.
+
+Quote V6 widens only outbox correlation_id to 128 to match the existing contract; no other schema or seed changes, historical backfill, Auth/Pricing outbox, or Phase 17 retry/DLQ policy. The preceding phase sections describe historical milestones; this section supersedes their producer limitations. See [design and operational limits](transactional-outbox.md), [specification](specs/phase-16-transactional-outbox.md), and [validation](phase-16-validation.md).

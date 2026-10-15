@@ -33,6 +33,7 @@ class QuotePostgresIT {
         registry.add("spring.datasource.username",DATABASE::getUsername);
         registry.add("spring.datasource.password",DATABASE::getPassword);
         registry.add("auth.jwt.secret",QuoteJwtSupport::secret);
+        registry.add("outbox.publisher.enabled", () -> "false");
         registry.add("spring.jpa.properties.hibernate.generate_statistics", () -> "true");
         registry.add("spring.jpa.properties.hibernate.query.fail_on_pagination_over_collection_fetch", () -> "true");
     }
@@ -44,7 +45,7 @@ class QuotePostgresIT {
     @Autowired JdbcTemplate jdbc;
     @MockitoBean PricingClient pricing;
     @MockitoBean Clock clock;
-    @MockitoBean org.springframework.kafka.core.KafkaTemplate<String, com.insurance.platform.quote.event.EventEnvelope<com.insurance.platform.quote.event.QuotePricedEventData>> kafka;
+    @MockitoBean org.springframework.kafka.core.KafkaTemplate<String, String> kafka;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     @org.springframework.boot.test.web.server.LocalServerPort int port;
     @BeforeEach void setup() {
@@ -54,6 +55,7 @@ class QuotePostgresIT {
         jdbc.update("delete from quote_drivers");
         jdbc.update("delete from quote_vehicles");
         jdbc.update("delete from quotes");
+        jdbc.update("delete from outbox_events");
         when(clock.instant()).thenReturn(NOW);
         when(kafka.send(anyString(), anyString(), any())).thenReturn(new java.util.concurrent.CompletableFuture<>());
         when(pricing.calculate(any())).thenAnswer(call -> {
@@ -98,8 +100,8 @@ class QuotePostgresIT {
         assertThat(adjustments.getFirst().get("pricing_rule_id")).isEqualTo(price().adjustments().getFirst().pricingRuleId());
         assertThat(adjustments.getFirst().get("sequence_number")).isEqualTo(1);
         assertThat((BigDecimal)adjustments.getFirst().get("factor")).isEqualTo(new BigDecimal("1.4000"));
-        assertThat(jdbc.queryForObject("select count(*) from outbox_events",Long.class)).isZero();
-        assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where success",Long.class)).isEqualTo(5);
+        assertThat(jdbc.queryForObject("select count(*) from outbox_events",Long.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where success",Long.class)).isEqualTo(6);
         // Existing unique quote reference and one-driver-per-quote constraints are real PostgreSQL constraints.
         assertThatThrownBy(() -> jdbc.update("insert into quotes select ?,quote_reference,customer_id,status,coverage_type,premium_amount,currency,created_at,priced_at,expires_at,updated_at from quotes where id=?",UUID.randomUUID(),response.id()))
                 .isInstanceOf(DataIntegrityViolationException.class);
@@ -242,7 +244,7 @@ class QuotePostgresIT {
         }
     }
 
-    @Test void publicationWaitsForRealDatabaseCommitAndRollbackSuppressesIt() {
+    @Test void quoteAndOutboxCommitTogetherWithoutCallingKafka() {
         var owner = UUID.randomUUID();
         var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
         var result = tx.execute(status -> {
@@ -251,7 +253,8 @@ class QuotePostgresIT {
             verifyNoInteractions(kafka); // saveAndFlush happened, but commit has not.
             return quote;
         });
-        verify(kafka, times(1)).send(eq("insurance.quote.events"), eq(result.id().toString()), any());
+        verifyNoInteractions(kafka);
+        assertThat(jdbc.queryForObject("select status from outbox_events where aggregate_id=?", String.class, result.id().toString())).isEqualTo("PENDING");
         clearInvocations(kafka);
         tx.executeWithoutResult(status -> {
             persistInTransaction(owner);
@@ -260,7 +263,7 @@ class QuotePostgresIT {
         });
         verifyNoInteractions(kafka);
         assertThat(jdbc.queryForObject("select count(*) from quotes where customer_id=?", Long.class, owner)).isEqualTo(1);
-        assertThat(jdbc.queryForObject("select count(*) from outbox_events", Long.class)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from outbox_events", Long.class)).isEqualTo(1);
     }
     @Test void actualCommitFailurePublishesNothing() {
         var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
@@ -269,7 +272,7 @@ class QuotePostgresIT {
         assertThatThrownBy(() -> tx.executeWithoutResult(status -> {
             persistInTransaction(UUID.randomUUID());
             verifyNoInteractions(kafka);
-            // Deferred PostgreSQL FK fails at commit, after the quote and Spring event were created.
+            // Deferred PostgreSQL FK fails at commit, after the quote and outbox were created.
             jdbc.execute("CREATE TABLE phase12_commit_failure (quote_id uuid REFERENCES quotes(id) DEFERRABLE INITIALLY DEFERRED)");
             jdbc.update("INSERT INTO phase12_commit_failure VALUES (?)", UUID.randomUUID());
             reachedCommit.set(true);
@@ -291,15 +294,117 @@ class QuotePostgresIT {
             var id = UUID.fromString(body.get("id").asText());
             assertThat(jdbc.queryForObject("select status from quotes where id=?", String.class, id)).isEqualTo("PRICED");
             assertThat(jdbc.queryForObject("select count(*) from pricing_breakdowns where quote_id=?", Long.class, id)).isEqualTo(1);
-            verify(kafka).send(eq("insurance.quote.events"), eq(id.toString()), argThat(e -> e.correlationId().equals("phase12-http-failure")));
+            verifyNoInteractions(kafka);
+            assertThat(jdbc.queryForObject("select correlation_id from outbox_events where aggregate_id=?", String.class, id.toString())).isEqualTo("phase12-http-failure");
         }
     }
     @Test void synchronousKafkaEnqueueFailureCannotRollBackQuote() {
         when(kafka.send(anyString(), anyString(), any())).thenThrow(new IllegalStateException("test enqueue failure"));
         var quote = service.create(UUID.randomUUID(), request());
         assertThat(jdbc.queryForObject("select status from quotes where id=?", String.class, quote.id())).isEqualTo("PRICED");
-        verify(kafka).send(eq("insurance.quote.events"), eq(quote.id().toString()), any());
+        verifyNoInteractions(kafka);
     }
+    @Autowired javax.sql.DataSource dataSource;
+
+    @Test void exactEnvelopeAnd128CharacterCorrelationArePersistedOnce() {
+        var request = new org.springframework.mock.web.MockHttpServletRequest();
+        request.addHeader("X-Correlation-ID", "c".repeat(128));
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+                new org.springframework.web.context.request.ServletRequestAttributes(request));
+        try {
+            var quote = service.create(CUSTOMER, request());
+            var row = jdbc.queryForMap("select * from outbox_events");
+            var json = tools.jackson.databind.json.JsonMapper.builder().build().readTree(row.get("payload").toString());
+            assertThat(row.get("event_id").toString()).isEqualTo(json.get("eventId").asText());
+            assertThat(row.get("aggregate_id")).isEqualTo(quote.id().toString());
+            assertThat(row.get("aggregate_type")).isEqualTo("Quote");
+            assertThat(row.get("event_type")).isEqualTo("QuotePriced");
+            assertThat(row.get("event_version")).isEqualTo(1);
+            assertThat(row.get("correlation_id")).isEqualTo("c".repeat(128));
+            assertThat(row.get("status")).isEqualTo("PENDING");
+            assertThat(row.get("retry_count")).isEqualTo(0);
+            assertThat(row.get("published_at")).isNull();
+            assertThat(((java.sql.Timestamp) row.get("created_at")).toInstant()).isEqualTo(NOW);
+            assertThat(json.get("occurredAt").asText()).isEqualTo(NOW.toString());
+            assertThat(json.get("correlationId").asText()).isEqualTo("c".repeat(128));
+            verifyNoInteractions(kafka);
+        } finally { org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes(); }
+    }
+
+    @Test void outboxInsertFailureRollsBackEveryQuoteTable() {
+        var before = counts();
+        jdbc.execute("ALTER TABLE outbox_events ADD CONSTRAINT phase16_fail CHECK (false) NOT VALID");
+        try {
+            assertThatThrownBy(() -> service.create(CUSTOMER, request())).isInstanceOf(DataIntegrityViolationException.class)
+                    .satisfies(failure -> assertThat(org.springframework.core.NestedExceptionUtils.getMostSpecificCause(failure).getMessage())
+                            .doesNotContain("Failing row contains"));
+            assertThat(counts()).isEqualTo(before);
+            verifyNoInteractions(kafka);
+        } finally { jdbc.execute("ALTER TABLE outbox_events DROP CONSTRAINT phase16_fail"); }
+    }
+
+    @Test void childFailureAfterOutboxInsertRollsBackBoth() {
+        var before = counts();
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> {
+            var quote = persistInTransaction(CUSTOMER);
+            assertThat(jdbc.queryForObject("select count(*) from outbox_events", Long.class)).isEqualTo(1);
+            jdbc.update("update quote_vehicles set brand_name=? where quote_id=?", "x".repeat(101), quote.id());
+        })).isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(counts()).isEqualTo(before);
+    }
+
+    @Test void pollingIsBoundedOrderedExclusiveAndDoesNotHoldAnOpenTransaction() throws Exception {
+        service.create(CUSTOMER, request());
+        when(clock.instant()).thenReturn(NOW.plusSeconds(1)); service.create(CUSTOMER, request());
+        when(clock.instant()).thenReturn(NOW.plusSeconds(2)); service.create(CUSTOMER, request());
+        var expected = jdbc.queryForList("select id from outbox_events order by created_at, id", UUID.class);
+        var poller = new com.insurance.platform.quote.repository.OutboxPollingRepository(dataSource);
+        try (var first = poller.claim(2).orElseThrow()) {
+            assertThat(first.events()).extracting(com.insurance.platform.quote.repository.OutboxPollingRepository.PendingEvent::id)
+                    .containsExactlyElementsOf(expected.subList(0, 2));
+            // A second connection/instance must not claim rows while the first owns the session lock.
+            try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+                assertThat(executor.submit(() -> poller.claim(2)).get(5, java.util.concurrent.TimeUnit.SECONDS)).isEmpty();
+            }
+            assertThat(jdbc.queryForObject("""
+                    select count(*) from pg_stat_activity a join pg_locks l on l.pid=a.pid
+                    where l.locktype='advisory' and l.classid=741016 and l.objid=1
+                    and a.xact_start is not null
+                    """, Long.class)).isZero();
+            var event = first.events().getFirst();
+            first.failed(event.id());
+            first.published(event.id(), NOW.plusSeconds(10));
+            var row = jdbc.queryForMap("select * from outbox_events where id=?", event.id());
+            assertThat(row.get("status")).isEqualTo("PUBLISHED");
+            assertThat(row.get("retry_count")).isEqualTo(1);
+            assertThat(((java.sql.Timestamp) row.get("published_at")).toInstant()).isEqualTo(NOW.plusSeconds(10));
+            assertThat(row.get("payload").toString()).isEqualTo(event.payload());
+            assertThat(row.get("event_id")).isEqualTo(event.eventId());
+            assertThat(((java.sql.Timestamp) row.get("created_at")).toInstant()).isEqualTo(NOW);
+        }
+        try (var next = poller.claim(50).orElseThrow()) {
+            assertThat(next.events()).extracting(com.insurance.platform.quote.repository.OutboxPollingRepository.PendingEvent::id)
+                    .containsExactlyElementsOf(expected.subList(1, 3));
+        }
+    }
+
+    @Test void acknowledgedSendWithFailedStatusUpdateIsPublishedAgainWithIdenticalPayload() {
+        service.create(CUSTOMER, request());
+        var poller = new com.insurance.platform.quote.repository.OutboxPollingRepository(dataSource);
+        var publisher = new com.insurance.platform.quote.service.QuoteOutboxPublisher(poller, kafka, clock, "insurance.quote.events", 50);
+        when(kafka.send(anyString(), anyString(), anyString())).thenReturn(java.util.concurrent.CompletableFuture.completedFuture(null));
+        jdbc.execute("ALTER TABLE outbox_events ADD CONSTRAINT phase16_pending CHECK (status='PENDING') NOT VALID");
+        try { publisher.poll(); } finally { jdbc.execute("ALTER TABLE outbox_events DROP CONSTRAINT phase16_pending"); }
+        assertThat(jdbc.queryForObject("select status from outbox_events", String.class)).isEqualTo("PENDING");
+        publisher.poll();
+        var payload = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(kafka, times(2)).send(eq("insurance.quote.events"), anyString(), payload.capture());
+        assertThat(payload.getAllValues().getFirst()).isEqualTo(payload.getAllValues().getLast());
+        assertThat(jdbc.queryForObject("select status from outbox_events", String.class)).isEqualTo("PUBLISHED");
+        publisher.poll(); verifyNoMoreInteractions(kafka);
+    }
+
     private com.insurance.platform.quote.dto.QuoteResponse persistInTransaction(UUID owner) {
         return persistence.create(owner, request(), new VehicleSnapshot(BRAND, "Toyota", MODEL, "Camry", 2021,
                 request().vehicleValue(), 1500), price());

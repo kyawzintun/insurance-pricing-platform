@@ -1,13 +1,13 @@
 # QuotePriced — Version 1
 
-Status: Implemented in Phase 12. Producer: Quote Service. No application consumer yet.
+Status: Contract introduced in Phase 12; durable outbox publishing implemented in Phase 16. Producer: Quote Service. Consumers: Notification and Audit.
 
 ## Routing and encoding
 
 - Topic: `insurance.quote.events`, configurable with `QUOTE_EVENTS_TOPIC`.
 - Key: canonical quote UUID string (`quoteId.toString()`), never customerId or eventId.
 - Local topology: existing three partitions and replication factor one; no topic/config changes.
-- Value: JSON from explicit records using Spring Kafka `JacksonJsonSerializer`; type-info headers disabled. BigDecimal premiums are JSON numbers and Instants are ISO-8601 UTC strings.
+- Value: Complete envelope serialized from explicit records into JSONB; the stored JSON text is sent using Kafka `StringSerializer`, with no type-info headers. BigDecimal premiums are JSON numbers and Instants are ISO-8601 UTC strings.
 
 With an unchanged partition count and producer partitioner, the same quote key maps consistently to the same partition. This does not impose global order across different quote keys or make the database/Kafka write atomic.
 
@@ -37,25 +37,21 @@ With an unchanged partition count and producer partitioner, the same quote key m
 }
 ```
 
-These UUIDs are illustrative. `eventId` is new for each constructed publication. `aggregateId` and `data.quoteId` identify the same persisted quote. `occurredAt` is captured using the injected Clock when the event is constructed, before commit; it is not the Kafka acknowledgement time. `pricedAt`/`expiresAt` and premium/currency come from the persisted response snapshot. `customerId` comes from authenticated quote ownership. No driver date of birth, contact details, JPA graph, password, JWT, Authorization header or signing secret is included.
+These UUIDs are illustrative. `eventId` is generated once during quote creation and reused on every publication attempt. `aggregateId` and `data.quoteId` identify the same persisted quote. `occurredAt` is captured using the injected Clock when the event is constructed, before commit; it is not the Kafka acknowledgement time. `pricedAt`/`expiresAt` and premium/currency come from the persisted response snapshot. `customerId` comes from authenticated quote ownership. No driver date of birth, contact details, JPA graph, password, JWT, Authorization header or signing secret is included.
 
 ## Correlation
 
-Capture `X-Correlation-ID` on the request thread using the same `[A-Za-z0-9._-]{1,128}` convention as Gateway. Preserve a safe propagated ID; missing/invalid direct-service headers or calls without a request receive a UUID. This is diagnostic metadata, not trusted identity. It is captured in the envelope before the asynchronous Kafka callback.
+Capture `X-Correlation-ID` on the request thread using the same `[A-Za-z0-9._-]{1,128}` convention as Gateway. Preserve a safe propagated ID; missing/invalid direct-service headers or calls without a request receive a UUID. This is diagnostic metadata, not trusted identity. It is captured in the envelope during quote creation, before outbox persistence.
 
 ## Commit and failure semantics
 
-`QuotePersistenceService` saves and flushes the complete PRICED aggregate and registers an immutable Spring `QuotePricedEvent`. Flushing is not committing. `QuoteEventPublisher` handles it with `@TransactionalEventListener(AFTER_COMMIT)`, without fallback execution. Rollback, commit failure, failed Pricing and GET requests do not publish. No Kafka send occurs before the database commit.
+`QuotePersistenceService` saves and flushes the complete PRICED aggregate plus exactly one PENDING outbox row within one transaction. Rollback or commit failure removes both. Pricing failures and GET requests create neither event intent nor publication.
 
-After commit, one `KafkaTemplate.send` attempt is made. Synchronous metadata/buffer waiting is bounded by `max.block.ms=1000`; acknowledgement completion is asynchronous. No future is awaited by the HTTP handler. Synchronous enqueue/serialization errors and asynchronous delivery errors are caught/logged safely and do not undo the committed quote. The existing successful quote response remains HTTP 201 with PRICED status. It is possible for a failure log to appear after HTTP completion. There is no recovery/replay operation in this phase.
+HTTP 201 means the quote and event intent have committed. Kafka is contacted later by a scheduled publisher, which sends the exact stored JSON with the quote UUID key and marks PUBLISHED only after acknowledgment. Failed sends remain PENDING. The same event ID, occurredAt and correlation ID survive recovery and repeat publication.
 
-Failure logs contain event type/ID, quote ID, topic, correlation ID and failure class. They exclude payload and exception text/stack traces. The default template error listener is replaced because it can print record contents. Successful acknowledgements log partition/offset along with event metadata. Kafka client default retry/idempotence behavior is retained; no custom retries, DLQ publishing, transactions or consumers are configured.
+The Phase 12 after-commit listener is removed. This closes the event-loss gap for newly committed quotes, while allowing at-least-once duplicates if an acknowledgment is lost or the PUBLISHED update fails. Phase 15 consumers prevent duplicate business effects. No historical quote backfill occurs.
 
-**Phase 12 uses direct Kafka publishing after DB commit. There is a dual-write failure window:** a crash or producer failure can leave a quote in PostgreSQL without its event. Kafka acknowledgement/idempotent producer behavior does not close this gap. Phase 16 Transactional Outbox will address it. `outbox_events` remains untouched now.
-
-## References and validation
-
-The implementation follows Spring's [transaction-bound event semantics](https://docs.spring.io/spring-framework/reference/data-access/transaction/event.html) and [JSON serialization configuration](https://docs.spring.io/spring-kafka/reference/kafka/serdes.html). See [Phase 12 specification](specs/phase-12-quote-priced-event.md) and [validation](phase-12-validation.md). Notification/Audit consumers, retry/DLQ processing and all other domain event types are deferred.
+See [transactional outbox design](transactional-outbox.md), [Phase 16 specification](specs/phase-16-transactional-outbox.md), and [validation](phase-16-validation.md). The original [Phase 12 validation](phase-12-validation.md) remains a historical record.
 
 ## Phase 13 consumer
 

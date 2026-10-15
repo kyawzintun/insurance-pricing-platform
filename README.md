@@ -6,7 +6,7 @@ The project focuses on a simple car-insurance pricing platform. It is not intend
 
 ## Current Project Status
 
-**Phase 15 — Idempotent Consumers: Complete**
+**Phase 16 — Transactional Outbox: Complete**
 
 Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 adds secure quote retrieval and pagination. Phase 10 adds Angular registration/login and a protected dashboard foundation. Implementation will proceed phase by phase.
 
@@ -142,7 +142,7 @@ docker compose up -d
 ./mvnw -pl services/auth-service spring-boot:run
 ```
 
-Auth defaults to the local profile, PostgreSQL port 15432, and a public development-only signing key. No launcher or environment setup is needed for the current local database. Use the module-specific Maven commands in the backend guide for other services. All six expose `/actuator/health`; only health/info are exposed through Actuator. Ports and infrastructure connections support environment overrides. Auth now exposes registration/login backed by its User entity. Gateway now routes Auth requests; Pricing exposes its internal calculation endpoint and protected admin rule APIs. Quote exposes CUSTOMER-only creation and secure CUSTOMER/ADMIN retrieval, and now publishes QuotePriced after commit; Kafka consumers remain unimplemented. Database migrations and seeds were implemented in Phase 3.
+Auth defaults to the local profile, PostgreSQL port 15432, and a public development-only signing key. No launcher or environment setup is needed for the current local database. Use the module-specific Maven commands in the backend guide for other services. All six expose `/actuator/health`; only health/info are exposed through Actuator. Ports and infrastructure connections support environment overrides. Auth now exposes registration/login backed by its User entity. Gateway now routes Auth requests; Pricing exposes its internal calculation endpoint and protected admin rule APIs. Quote exposes CUSTOMER-only creation and secure CUSTOMER/ADMIN retrieval, and persists QuotePriced intent atomically through its outbox; Notification and Audit consume events idempotently. Database migrations and seeds were implemented in Phase 3.
 
 See [backend startup and dependency guidance](services/README.md) for per-service packages, environment variables, temporary security behavior, test boundaries, and Maven commands.
 
@@ -268,4 +268,12 @@ Run `./mvnw -pl services/audit-service spring-boot:run` with the same local infr
 
 Notification and Audit now atomically register eventId plus their stable consumer name in their own processed_events table before business persistence. A duplicate is successful processing with no second business row; original timestamps remain unchanged. PostgreSQL uniqueness handles concurrent duplicates, and legacy rows gain markers lazily when replayed. No schema, producer contract, group/topic or startup-command changes.
 
-See [Notification guide](services/notification-service/README.md#phase-15--idempotent-processing), [Audit guide](services/audit-service/README.md#phase-15--idempotent-processing), [specification](docs/specs/phase-15-idempotent-consumers.md) and [validation](docs/phase-15-validation.md). Phase 16 — Transactional Outbox has not started.
+See [Notification guide](services/notification-service/README.md#phase-15--idempotent-processing), [Audit guide](services/audit-service/README.md#phase-15--idempotent-processing), [specification](docs/specs/phase-15-idempotent-consumers.md) and [validation](docs/phase-15-validation.md). Phase 16 is documented below.
+
+## Phase 16 — Transactional Outbox
+
+Quote Service atomically commits the quote graph and one PENDING QuotePriced envelope. A scheduled publisher sends stored JSON to the existing topic, using quote ID as key, and marks PUBLISHED only after Kafka acknowledgment. HTTP 201 means quote plus event intent are committed, even when Kafka is temporarily unavailable. Event IDs stay unchanged on later attempts; Phase 15 consumers handle duplicate delivery.
+
+Local startup commands are unchanged. Polling is enabled locally, defaults to 2000 ms / 50 rows, and can be disabled with `OUTBOX_PUBLISHER_ENABLED=false`. A PostgreSQL session advisory lock excludes competing publishers without holding an open transaction during Kafka I/O. Quote V6 widens only the outbox correlation column to preserve the existing 128-character contract.
+
+See [Quote guide](services/quote-service/README.md), [outbox design](docs/transactional-outbox.md), [specification](docs/specs/phase-16-transactional-outbox.md), and [validation](docs/phase-16-validation.md). Phase 17 — Retry and DLQ has not started. Earlier phase sections record historical milestones; the Phase 12 direct producer has been removed.

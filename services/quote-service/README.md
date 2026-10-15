@@ -93,11 +93,11 @@ Vehicle brand/model are read from quote_db. Both must be active, and the model m
 2. Read/validate catalog references and capture vehicle names.
 3. Call Pricing directly, POST `/internal/v1/pricing/calculate`, with only its seven expected input fields.
 4. Validate the returned snapshot's required fields, THB currency, lengths/decimal precision, sequence and amount-chain consistency.
-5. Enter a separate persistence transaction, save the complete quote graph, and commit before returning 201.
+5. Enter a separate persistence transaction, save the complete quote graph and PENDING outbox envelope, and commit before returning 201.
 
 The HTTP client uses [Spring RestClient with JDK HTTP request factory](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/http/client/JdkClientHttpRequestFactory.html), bounded configurable positive connection/read timeouts, and no retries/fallback. It sends neither the customer's token nor customer/catalog/quote IDs. **Quote → Pricing currently uses synchronous internal REST without service credentials. Real service-to-service authentication remains deferred to Phase 25.** Internal Pricing is not exposed through Gateway.
 
-No database write transaction is held during Pricing HTTP. No partial/FAILED quote is saved if Pricing fails. All writes to quotes, quote_drivers, quote_vehicles, pricing_breakdowns, and pricing_adjustments succeed or roll back together. Pricing calculations are not duplicated in Quote: the client checks snapshot integrity, not rule applicability or factor arithmetic.
+No database write transaction is held during Pricing HTTP. No partial/FAILED quote is saved if Pricing fails. All writes to quotes, quote_drivers, quote_vehicles, pricing_breakdowns, pricing_adjustments, and outbox_events succeed or roll back together. Pricing calculations are not duplicated in Quote: the client checks snapshot integrity, not rule applicability or factor arithmetic.
 
 ## Snapshot details
 
@@ -179,7 +179,7 @@ Existing status is returned unchanged. PRICED does not become EXPIRED simply bec
 
 For learning, read QuoteController.get/list → QuoteRetrievalService → QuoteRepository → QuoteResponse.from. Then read QuoteRetrievalTests and the extended QuotePostgresIT for HTTP ownership and real database/query-count evidence.
 
-See [Phase 9 specification](../../docs/specs/phase-9-quote-retrieval-and-ownership.md) and [validation](../../docs/phase-9-validation.md). Phase 10 — Angular Foundation has not started.
+See [Phase 9 specification](../../docs/specs/phase-9-quote-retrieval-and-ownership.md) and [validation](../../docs/phase-9-validation.md). Later phases are recorded in the root project roadmap.
 
 ## Phase 11 — Active vehicle references
 
@@ -187,23 +187,26 @@ Authenticated CUSTOMER/ADMIN can GET `/api/v1/vehicles/brands` and `/api/v1/vehi
 
 `VehicleReferenceController` calls `VehicleReferenceService`, whose read-only transactions query existing repositories/tables. The service remains independently JWT-protected. Existing quote ownership and creation behavior is unchanged. PostgreSQL integration tests verify inactive filtering, brand scoping and unchanged database contents.
 
-## Phase 12 — QuotePriced producer
+## Phase 16 — Transactional Outbox
 
-Successful quote creation now registers a version 1 QuotePriced event inside persistence and sends its DTO envelope only after the database commits. Kafka topic defaults to `insurance.quote.events` (`QUOTE_EVENTS_TOPIC` override); the key is the quote UUID string. `KafkaTemplate` and Jackson JSON serialization reuse the existing Boot Kafka starter and bootstrap configuration. No entities or authentication credentials are serialized.
+QuotePriced v1 now uses a transactional outbox. The Phase 12 direct after-commit publisher has been removed. QuotePersistenceService stores the quote graph and complete JSON event together; HTTP 201 means that transaction committed. A background publisher sends to the existing topic and only marks the outbox PUBLISHED after Kafka acknowledgment. Kafka can be unavailable while quote creation succeeds.
 
-Quote defaults to the local Kafka broker on 29092. Start it with:
+Local startup is unchanged. PostgreSQL defaults to 15432 and Kafka to 29092. `OUTBOX_PUBLISHER_ENABLED` defaults true locally (false outside local); `OUTBOX_POLL_INTERVAL` defaults to 2000 milliseconds; `OUTBOX_BATCH_SIZE` defaults to 50 (1–500). `QUOTE_EVENTS_TOPIC` and `KAFKA_BOOTSTRAP_SERVERS` remain configurable. Maven does not automatically read Compose's `.env`.
 
-```bash
-./mvnw -pl services/quote-service spring-boot:run
-```
+A PostgreSQL session advisory lock allows one active publisher across Quote instances. Each database statement uses a short autocommit transaction; Kafka acknowledgment waits do not hold a database transaction. Failed sends leave PENDING and increment retry_count. An acknowledged send followed by a failed status update can publish the same event again. Notification and Audit's Phase 15 idempotency handles that duplicate. No backoff, DLQ, cutoff, retention job, or new domain event is added.
 
-The local Kafka default is 29092; `KAFKA_EXTERNAL_PORT` overrides that port. `KAFKA_BOOTSTRAP_SERVERS` overrides the full address. Docker Compose reads `.env`; Maven/Spring Boot does not automatically source that file. Ensure Quote targets this project's broker, especially when another project uses 9092.
+For learning, read in this order:
 
-Producer configuration sets String keys, Jackson JSON values without Java type headers and `max.block.ms=1000`; default Kafka client retry/idempotence behavior is retained. The send future is not awaited. If Kafka fails after commit, the quote stays PRICED and the HTTP response remains 201; metadata-only failure logs record the issue. No application retry or replay exists. **This direct after-commit approach has a dual-write failure window until Phase 16 Transactional Outbox.** No outbox rows, consumer services or DLQ processing are added.
+1. `QuotePersistenceService.create`: one transaction stores graph plus outbox.
+2. `QuotePricedEventFactory` and `event/` records: generate event ID once and capture the original payload/time/correlation.
+3. `OutboxEvent` and `OutboxRepository`: JSONB event intent in the existing table.
+4. `OutboxSchedulingConfiguration` and `QuoteOutboxPublisher`: enabled polling, bounded batch, acknowledgment before marking PUBLISHED.
+5. `OutboxPollingRepository`: session lock, short statements, success/failure updates, cleanup.
+6. `QuoteOutboxPublisherTests`, `QuotePostgresIT`, then `QuoteKafkaIT`: failure windows and recovery.
 
-Read code in this order: `QuotePersistenceService`, `QuotePricedEventFactory`, the envelope/data records in `event/`, `QuoteEventPublisher`, then `QuoteKafkaConfiguration`. `QuoteCorrelationId` captures the bounded request ID before the asynchronous callback. See [event contract and example JSON](../../docs/quote-priced-event.md).
+Quote V6 widens the outbox correlation column from 100 to 128 to preserve the existing contract. There is no historical backfill. The envelope, quote UUID Kafka key, topic, and version are unchanged; the stored JSON is sent using StringSerializer.
 
-Validation commands from the root:
+Validation commands from the root (run profiles separately):
 
 ```bash
 ./mvnw -B clean verify
@@ -211,4 +214,4 @@ Validation commands from the root:
 ./mvnw -B -pl services/quote-service -Pkafka-it verify
 ```
 
-The normal suite needs no Docker or Kafka. Run the opt-in profiles separately: postgres-it uses a disposable PostgreSQL database and mocked Kafka; kafka-it uses disposable PostgreSQL and Kafka with the existing three-partition topic shape. Its inspection client manually assigns partitions without committing consumer offsets or creating a consumer group. See [Phase 12 validation](../../docs/phase-12-validation.md).
+Normal tests disable scheduling and need no Docker. Integration profiles use disposable databases/brokers. See [full outbox design and operational checks](../../docs/transactional-outbox.md), [event contract](../../docs/quote-priced-event.md), [specification](../../docs/specs/phase-16-transactional-outbox.md), and [validation](../../docs/phase-16-validation.md).

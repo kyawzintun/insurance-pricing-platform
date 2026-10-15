@@ -10,7 +10,8 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
-import org.springframework.context.ApplicationEventPublisher;
+import com.insurance.platform.quote.repository.OutboxRepository;
+import tools.jackson.databind.json.JsonMapper;
 import com.insurance.platform.quote.event.QuotePricedEventFactory;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,14 +20,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class QuotePersistenceService {
     private final QuoteRepository repository;
     private final Clock clock;
-    private final ApplicationEventPublisher events;
+    private final OutboxRepository outbox;
+    private final JsonMapper json;
     private final QuotePricedEventFactory eventFactory;
 
-    public QuotePersistenceService(QuoteRepository repository, Clock clock, ApplicationEventPublisher events,
-                                   QuotePricedEventFactory eventFactory) {
+    public QuotePersistenceService(QuoteRepository repository,
+            Clock clock,
+            OutboxRepository outbox,
+            JsonMapper json,
+            QuotePricedEventFactory eventFactory) {
         this.repository = repository;
         this.clock = clock;
-        this.events = events;
+        this.outbox = outbox;
+        this.json = json;
         this.eventFactory = eventFactory;
     }
 
@@ -50,8 +56,9 @@ public class QuotePersistenceService {
         }
         quote.attachSnapshots(driver, storedVehicle, breakdown);
         var response = QuoteResponse.from(repository.saveAndFlush(quote));
-        // This registers a transaction-bound event; flushing is not committing.
-        events.publishEvent(eventFactory.create(customerId, response));
+        // Event intent and the whole quote graph commit or roll back together. No Kafka call here.
+        var envelope = eventFactory.create(customerId, response).envelope();
+        outbox.saveAndFlush(new OutboxEvent(envelope, json.writeValueAsString(envelope)));
         return response;
     }
 }

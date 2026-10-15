@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 15 complete; Phase 16 not started.
+Status: Phases 0 through 16 complete; Phase 17 — Retry and DLQ not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -70,8 +70,12 @@ Completed. Notification and Audit atomically claim local processed-event markers
 
 ## Phase 16 — Transactional Outbox
 
+Completed. Quote graph and full QuotePriced envelope commit atomically; bounded scheduled dispatch marks publication only after Kafka acknowledgment, with stable event identity across duplicates/recovery. See [design](transactional-outbox.md), [specification](specs/phase-16-transactional-outbox.md), and [validation](phase-16-validation.md).
+
+## Phase 17 — Retry and DLQ
+
 Not started.
 
 ## Later Phases
 
-Detailed phase sequencing is pending approved planning notes. Application implementation will proceed incrementally through feature specifications. Transactional Outbox publishing is deferred; Phase 3 provides only its tables.
+Detailed phase sequencing is pending approved planning notes. Application implementation will proceed incrementally through feature specifications. Quote outbox publishing is implemented in Phase 16; Auth/Pricing outboxes remain unused.

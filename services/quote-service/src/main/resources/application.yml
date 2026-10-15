@@ -13,14 +13,21 @@ spring:
   autoconfigure:
     # JWT authentication; no generated user or password.
     exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  datasource:
+    hikari:
+      data-source-properties:
+        # PostgreSQL error details can otherwise print an entire rejected outbox payload.
+        logServerErrorDetail: false
   kafka:
     producer:
+      acks: all
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
       properties:
-        "spring.json.add.type.headers": false
-        # Bound synchronous metadata/buffer waiting; broker acknowledgements stay asynchronous.
+        # Bound Kafka waits on the background publisher, never the quote HTTP request.
         "max.block.ms": 1000
+        "delivery.timeout.ms": 5000
+        "request.timeout.ms": 1000
   jpa:
     hibernate:
       ddl-auto: none
@@ -50,3 +57,10 @@ pricing:
 quote:
   events:
     topic: ${QUOTE_EVENTS_TOPIC:insurance.quote.events}
+
+# Explicit opt-in outside local development. Unit/HTTP tests do not start the scheduler.
+outbox:
+  publisher:
+    enabled: ${OUTBOX_PUBLISHER_ENABLED:false}
+    poll-interval: ${OUTBOX_POLL_INTERVAL:2000}
+    batch-size: ${OUTBOX_BATCH_SIZE:50}

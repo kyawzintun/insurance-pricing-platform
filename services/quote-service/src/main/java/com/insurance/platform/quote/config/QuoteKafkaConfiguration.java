@@ -8,7 +8,7 @@ import org.springframework.kafka.support.ProducerListener;
 public class QuoteKafkaConfiguration {
     @Bean
     ProducerListener<Object, Object> quoteProducerListener() {
-        // QuoteEventPublisher handles completion with bounded metadata-only logs.
+        // QuoteOutboxPublisher handles completion with bounded metadata-only logs.
         // Replace KafkaTemplate's default error listener, which can print the record contents.
         return new ProducerListener<>() {};
     }

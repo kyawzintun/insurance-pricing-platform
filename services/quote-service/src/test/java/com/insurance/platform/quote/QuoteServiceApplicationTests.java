@@ -61,6 +61,7 @@ class QuoteServiceApplicationTests {
     @MockitoBean VehicleBrandRepository brands;
     @MockitoBean VehicleModelRepository models;
     @MockitoBean QuoteRepository quotes;
+    @MockitoBean OutboxRepository outbox;
     @MockitoBean Clock clock;
     @BeforeEach void setup() {
         downstreamBody=null; downstreamAuthorization=null; downstreamStatus=200; downstreamResponse=PRICE; delay=0;

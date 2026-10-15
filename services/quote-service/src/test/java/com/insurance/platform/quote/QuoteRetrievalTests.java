@@ -30,6 +30,7 @@ class QuoteRetrievalTests {
     @LocalServerPort int port;
     @org.springframework.test.context.bean.override.mockito.MockitoSpyBean com.insurance.platform.quote.event.QuotePricedEventFactory eventFactory;
     @MockitoBean QuoteRepository quotes;
+    @MockitoBean OutboxRepository outbox;
     @MockitoBean VehicleBrandRepository brands;
     @MockitoBean VehicleModelRepository models;
     @MockitoBean PricingClient pricing;
