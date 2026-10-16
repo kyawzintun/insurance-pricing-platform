@@ -64,3 +64,9 @@ Audit independently consumes this same envelope in its audit-service group. The 
 ## Phase 15 duplicate handling
 
 The contract, topic, key and version are unchanged. Notification and Audit deduplicate locally by the existing envelope eventId plus their stable logical consumer name. Both can process the same event independently; a repeated delivery within either consumer succeeds without another business row. See [idempotency specification](specs/phase-15-idempotent-consumers.md).
+
+## Phase 17 — Consumer retry and DLQ
+
+Notification and Audit now use Spring Kafka DefaultErrorHandler with configurable fixed backoff (default three total attempts, 1000 ms). Invalid supported events go directly to the existing insurance.quote.events.dlq; unknown event types still skip and idempotent duplicates still succeed. Raw key/value bytes are preserved, with safe failure headers identifying the source coordinates and failing service/group. Source offsets advance only after business success or acknowledged DLQ publication; failed DLQ sends leave the source replayable. Independent group failure/recovery was verified with two actual packaged services in disposable infrastructure.
+
+The QuotePriced contract, Quote outbox, processed-event semantics, schemas and topic topology are unchanged. Earlier phase stopping-handler descriptions are historical and superseded here. No replay consumer, retry topics, new business events or Phase 18 work. See [policy and limitations](retry-and-dlq.md), [specification](specs/phase-17-retry-and-dlq.md), and [validation](phase-17-validation.md).

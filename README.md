@@ -6,7 +6,7 @@ The project focuses on a simple car-insurance pricing platform. It is not intend
 
 ## Current Project Status
 
-**Phase 16 — Transactional Outbox: Complete**
+**Phase 17 — Retry and DLQ: Complete**
 
 Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 adds secure quote retrieval and pagination. Phase 10 adds Angular registration/login and a protected dashboard foundation. Implementation will proceed phase by phase.
 
@@ -276,4 +276,12 @@ Quote Service atomically commits the quote graph and one PENDING QuotePriced env
 
 Local startup commands are unchanged. Polling is enabled locally, defaults to 2000 ms / 50 rows, and can be disabled with `OUTBOX_PUBLISHER_ENABLED=false`. A PostgreSQL session advisory lock excludes competing publishers without holding an open transaction during Kafka I/O. Quote V6 widens only the outbox correlation column to preserve the existing 128-character contract.
 
-See [Quote guide](services/quote-service/README.md), [outbox design](docs/transactional-outbox.md), [specification](docs/specs/phase-16-transactional-outbox.md), and [validation](docs/phase-16-validation.md). Phase 17 — Retry and DLQ has not started. Earlier phase sections record historical milestones; the Phase 12 direct producer has been removed.
+See [Quote guide](services/quote-service/README.md), [outbox design](docs/transactional-outbox.md), [specification](docs/specs/phase-16-transactional-outbox.md), and [validation](docs/phase-16-validation.md). Phase 17 is documented below. Earlier phase sections record historical milestones; the Phase 12 direct producer has been removed.
+
+## Phase 17 — Retry and DLQ
+
+Notification and Audit now retry processing failures with three total attempts and fixed 1000 ms backoff, configurable through `KAFKA_CONSUMER_MAX_ATTEMPTS` / `KAFKA_CONSUMER_BACKOFF_MS`. Invalid supported messages go directly to the existing `insurance.quote.events.dlq`; unknown event types still skip, and processed duplicates still succeed.
+
+The original key/value bytes are preserved with safe source-coordinate and consumer-identity headers. Source progress advances only after business success or acknowledged DLQ publication. If the DLQ send fails, the source remains replayable. Both groups fail independently; Quote's outbox and consumer idempotency are unchanged. No schema, topic, partition-count or business API changes.
+
+See [retry/DLQ policy](docs/retry-and-dlq.md), [specification](docs/specs/phase-17-retry-and-dlq.md), and [validation](docs/phase-17-validation.md). Phase 18 — Quote Expiration has not started. No DLQ replay mechanism is implemented.

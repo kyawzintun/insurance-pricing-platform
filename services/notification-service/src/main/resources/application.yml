@@ -11,14 +11,26 @@ spring:
       group-id: ${NOTIFICATION_CONSUMER_GROUP:notification-service}
       auto-offset-reset: earliest
       enable-auto-commit: false
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      key-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
       properties:
         "allow.auto.create.topics": false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      acks: all
+      properties:
+        "max.block.ms": 1000
+        "delivery.timeout.ms": 5000
+        "request.timeout.ms": 1000
     listener:
       ack-mode: record
       concurrency: 1
       log-container-config: false
+  datasource:
+    hikari:
+      data-source-properties:
+        logServerErrorDetail: false
   jpa:
     hibernate:
       ddl-auto: none
@@ -38,3 +50,8 @@ management:
 notification:
   events:
     topic: ${QUOTE_EVENTS_TOPIC:insurance.quote.events}
+
+kafka:
+  consumer:
+    max-attempts: ${KAFKA_CONSUMER_MAX_ATTEMPTS:3}
+    backoff-ms: ${KAFKA_CONSUMER_BACKOFF_MS:1000}

@@ -97,7 +97,7 @@ class AuditEventTests {
     }
     @Test void keyMismatchIsDiagnosticAndDoesNotPreventValidEventProcessing() {
         var service = mock(AuditService.class);
-        new QuoteAuditListener(decoder, service).receive(new ConsumerRecord<>("insurance.quote.events", 1, 2, "wrong-key", json()));
+        new QuoteAuditListener(decoder, service).receive(new ConsumerRecord<>("insurance.quote.events", 1, 2, "wrong-key".getBytes(java.nio.charset.StandardCharsets.UTF_8), json().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         verify(service).create(decoder.decode(json()).orElseThrow());
     }
     static void assertMetadata(String value) {
@@ -113,7 +113,7 @@ class AuditEventTests {
         assertThat(data.path("expiresAt").asText()).isEqualTo("2026-11-11T09:00:00Z");
         assertThat(value).doesNotContain("password", "Authorization", "JWT", "dateOfBirth", "customerId", "secret");
     }
-    private ConsumerRecord<String, String> record(String json) {
-        return new ConsumerRecord<>("insurance.quote.events", 1, 2, QUOTE.toString(), json);
+    private ConsumerRecord<byte[], byte[]> record(String json) {
+        return new ConsumerRecord<>("insurance.quote.events", 1, 2, QUOTE.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8), json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 }

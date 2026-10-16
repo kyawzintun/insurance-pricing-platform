@@ -15,6 +15,17 @@ public class QuoteEventDecoder {
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
             .build();
 
+    public Optional<QuotePricedEnvelope> decode(byte[] bytes) {
+        if (bytes == null) throw new InvalidQuoteEventException("INVALID_ENVELOPE");
+        try {
+            // Report invalid UTF-8 instead of replacing bytes; the original bytes remain available for DLQ.
+            return decode(java.nio.charset.StandardCharsets.UTF_8.newDecoder()
+                    .decode(java.nio.ByteBuffer.wrap(bytes)).toString());
+        } catch (java.nio.charset.CharacterCodingException failure) {
+            throw new InvalidQuoteEventException("MALFORMED_UTF8");
+        }
+    }
+
     public Optional<QuotePricedEnvelope> decode(String json) {
         JsonNode root;
 

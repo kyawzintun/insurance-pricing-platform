@@ -1,4 +1,4 @@
-# Notification Service — through Phase 15
+# Notification Service — through Phase 17
 
 The first application Kafka consumer. A new valid QuotePriced v1 event creates a simulated notification in `notification_db.notifications`; there is no email/SMS integration or notification REST API.
 
@@ -28,11 +28,11 @@ Notification defaults to the `local` profile: HTTP 8084, PostgreSQL 15432, Kafka
 
 `earliest` is deliberate for learning historical consumption. It applies when a partition has no usable committed offset, including a brand-new group. Restarting a group with committed offsets resumes there; it does not replay everything. The Phase 12 historical test event can therefore create a notification referencing an already-deleted temporary quote/customer. Those UUIDs are logical references, not cross-service foreign keys. Notification does not query other services to check their existence.
 
-The existing topic has **3 partitions**. One instance can consume all three. Instances sharing this group divide partitions; a partition has one active consumer in that group at a time. More than three consumers leave some idle. A future Audit consumer will use a different group and independently receive the same events. No Audit consumer is implemented here.
+The existing topic has **3 partitions**. One instance can consume all three. Instances sharing this group divide partitions; a partition has one active consumer in that group at a time. More than three consumers leave some idle. Audit uses its own group and independently receives the same events.
 
 ## Contract and validation
 
-The consumer-owned `QuotePricedEnvelope` and `QuotePricedData` records match the [Phase 12 wire contract](../../docs/quote-priced-event.md). They do not create a new wire format or depend on Quote Service classes. Kafka uses String deserializers; `QuoteEventDecoder` explicitly maps JSON to the fixed DTO with Jackson, with no Java type headers, wildcard trusted packages, or polymorphic default typing.
+The consumer-owned `QuotePricedEnvelope` and `QuotePricedData` records match the [Phase 12 wire contract](../../docs/quote-priced-event.md). They do not create a new wire format or depend on Quote Service classes. Kafka retains raw key/value bytes; `QuoteEventDecoder` explicitly maps JSON to the fixed DTO with Jackson, with no Java type headers, wildcard trusted packages, or polymorphic default typing.
 
 Only QuotePriced version 1 is supported. Validation checks event/aggregate/customer/quote UUIDs, aggregate-to-payload ID equality, producer/aggregate names, UTC-compatible timestamps, a bounded safe correlation ID, quote reference, PRICED status, supported coverage, nonnegative premium with the existing precision/scale, THB currency, and expiration after pricing. Amounts are formatted to two decimals using BigDecimal; no pricing calculation or external HTTP call occurs. A mismatched/missing Kafka key is logged without echoing it; the validated payload remains authoritative.
 
@@ -41,15 +41,15 @@ Only QuotePriced version 1 is supported. Validation checks event/aggregate/custo
 | New valid QuotePriced v1 | Persist marker and notification atomically, then return successfully |
 | Duplicate eventId | Return DUPLICATE successfully without another business insert |
 | Nonempty unsupported event type | Log intentional skip; return and advance offset |
-| Malformed JSON or invalid supported-event data | Log safe reason and stop listener container; leave failed offset uncommitted |
-| Unsupported QuotePriced version | Stop; never silently interpret it as v1 |
-| Genuine database failure | Stop; leave failed offset uncommitted |
+| Malformed JSON or invalid supported-event data | Direct DLQ; advance source offset only after acknowledgment |
+| Unsupported QuotePriced version | Direct DLQ; never silently interpret it as v1 |
+| Genuine database failure | Retry up to three total attempts, then acknowledged DLQ |
 
-Malformed input is identified by topic/partition/offset. Validated event failures additionally log event ID, event type, quote ID and correlation ID. Payloads, exception messages and nested causes are not logged by the listener. The stopping handler emits its framework stack trace only at DEBUG. A stopped listener requires operator investigation and an explicit restart after remediation; repeated restarts encounter the same poison record. Do not casually skip/reset offsets. The existing HTTP health endpoint is not proof that consumption is progressing: inspect logs and group lag as well.
+Malformed input is identified by topic/partition/offset. Validated event failures additionally log event ID, event type, quote ID and correlation ID. Payloads, exception messages and nested causes are not logged by the listener. Retry attempts and DLQ acknowledgments log bounded metadata. Failed DLQ publication leaves the source record pending for later recovery. Do not casually skip/reset offsets. The existing HTTP health endpoint is not proof that consumption is progressing: inspect logs and group lag as well.
 
 ## Database and offset ordering
 
-`QuoteEventListener` calls the separate Spring bean `NotificationService.create()`, annotated `@Transactional`. It inserts and flushes one row. The transaction proxy commits before returning to the listener. Only a successful listener return allows the container's RECORD mode to commit the next offset. No manual acknowledgment, Kafka transaction, distributed transaction, XA, retry topic, DLQ or application retry is configured. Spring's `CommonContainerStoppingErrorHandler` replaces the default retry/recovery handler; it stops rather than recovering/skipping failures. Normal client networking/rebalance behavior still applies.
+`QuoteEventListener` calls the separate Spring bean `NotificationService.create()`, annotated `@Transactional`. It inserts and flushes one row. The transaction proxy commits before returning to the listener. RECORD mode completes a record only after successful processing or acknowledged DLQ recovery. No manual acknowledgment, Kafka transaction, distributed transaction, XA or retry topic is configured. Normal client networking/rebalance behavior still applies.
 
 Mapping:
 
@@ -65,7 +65,7 @@ Mapping:
 
 Only `notifications` and `processed_events` are written. Existing Flyway migrations and constraints remain unchanged; no new schema is required.
 
-**Phase 15 makes duplicate delivery idempotent** using the existing processed_events table. See the transaction and historical compatibility details below. Retry/DLQ remains deferred to Phase 17 and Quote producer reliability remains deferred to Phase 16 Outbox.
+**Phase 15 makes duplicate delivery idempotent** using the existing processed_events table. See the transaction and historical compatibility details below. Phase 16 implements Quote outbox reliability; Phase 17 implements the retry/DLQ behavior below.
 
 ## Tests and learning order
 
@@ -127,6 +127,18 @@ PostgreSQL's existing composite primary key chooses the winner. Concurrent dupli
 
 For a normal new event, `processed_at` is the same injected UTC/microsecond processing instant used for the business row's creation time. Duplicate conflict handling does not update the marker or business row. For a pre-Phase-15 business row lacking a marker, the service first wins the atomic marker claim, then checks `existsByEventId`. It returns DUPLICATE and commits the new marker without rewriting the historical row. That marker's time is the first tracked replay time, not a reconstructed historical processing time. There is no startup scan or automatic bulk backfill, and no attempt to catch a unique violation inside an already-aborted PostgreSQL transaction.
 
-The listener logs `result=PROCESSED` or `result=DUPLICATE` at INFO with safe event/type/consumer/quote/correlation/partition/offset metadata. Unsupported event types are still intentionally skipped without markers. Malformed supported events, unsupported versions and genuine database failures still stop the consumer; they are never converted into duplicate success. No retry/DLQ, Outbox, Kafka transaction or new event type is introduced.
+The listener logs `result=PROCESSED` or `result=DUPLICATE` at INFO with safe event/type/consumer/quote/correlation/partition/offset metadata. Unsupported event types are still intentionally skipped without markers. Invalid supported events now go directly to DLQ; genuine processing failures use bounded retries first. Neither is converted into duplicate success. The Phase 15 business transaction and deduplication semantics remain unchanged.
 
-Tests prove first/duplicate/different-event behavior, unchanged timestamps, marker and business rollback, stable names, lazy historical compatibility, concurrent commit and rollback outcomes. The Kafka test injects a test-only failure in the listener **after the service transaction commits but before the listener returns**, then restarts the same group. Both listener invocations receive partition 0 offset 0: true same-record redelivery, without offset resets or republishing. A separate second Kafka record carrying the same eventId also succeeds. Invalid JSON still stops without advancing past it. See [Phase 15 specification](../../docs/specs/phase-15-idempotent-consumers.md) and [validation](../../docs/phase-15-validation.md).
+Tests prove first/duplicate/different-event behavior, unchanged timestamps, marker and business rollback, stable names, lazy historical compatibility, concurrent commit and rollback outcomes. The Kafka test injects a test-only failure in the listener **after the service transaction commits but before the listener returns**, then restarts the same group. Both listener invocations receive partition 0 offset 0: true same-record redelivery, without offset resets or republishing. A separate second Kafka record carrying the same eventId also succeeds. Phase 17 now sends invalid JSON to DLQ before advancing past it. See [Phase 15 specification](../../docs/specs/phase-15-idempotent-consumers.md) and [validation](../../docs/phase-15-validation.md).
+
+## Phase 17 — Retry and DLQ
+
+`DefaultErrorHandler` uses fixed backoff with `KAFKA_CONSUMER_MAX_ATTEMPTS=3` total attempts and `KAFKA_CONSUMER_BACKOFF_MS=1000`. Processing/database failures retry; malformed UTF-8/JSON, unsupported versions and invalid supported data go directly to DLQ. Unknown nonempty event types remain intentional skips. DUPLICATE remains successful and bypasses retry/DLQ.
+
+`QuoteDeadLetterRecoverer` is a framework recovery callback, not a retry loop. It publishes unchanged key/value bytes to the existing **insurance.quote.events.dlq**, preserving source partition (both topics have three partitions). Fresh headers identify the original topic/partition/offset/key, failing consumer service/group, safe exception class/reason, failure time, attempt count, and readable event/correlation IDs. No stack traces or incoming authorization headers are copied.
+
+Source offsets advance after business success or DLQ acknowledgment. If DLQ publication fails, recovery throws and the original record stays replayable; later bounded processing/recovery cycles can continue. DLQ send and source commit are not atomic, so duplicate DLQ publication remains possible. No automatic replay is provided.
+
+Consumer attempts are separate from Quote's outbox retry_count. No schemas, idempotency services/repositories, outbox semantics, topics or partition counts changed. There are no retry topics, DLQ consumer, new business events, or Phase 18 changes.
+
+For learning, read the Kafka configuration → listener's two exception categories → `QuoteDeadLetterRecoverer` → retry unit tests → Kafka integration test. See [policy, headers, acknowledgment details and inspection commands](../../docs/retry-and-dlq.md), [specification](../../docs/specs/phase-17-retry-and-dlq.md), and [validation](../../docs/phase-17-validation.md).

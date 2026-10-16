@@ -97,4 +97,4 @@ SELECT status, count(*) FROM outbox_events GROUP BY status;
 
 Do not manually mark pending events PUBLISHED to clear a backlog: that would discard event intent. No retention or cleanup job is implemented.
 
-See [specification](specs/phase-16-transactional-outbox.md) and [validation](phase-16-validation.md). Phase 17 retry/DLQ is not implemented.
+See [specification](specs/phase-16-transactional-outbox.md) and [validation](phase-16-validation.md). Phase 17 now adds consumer retry/DLQ handling; the outbox publication policy described here remains unchanged. See [consumer retry/DLQ](retry-and-dlq.md).

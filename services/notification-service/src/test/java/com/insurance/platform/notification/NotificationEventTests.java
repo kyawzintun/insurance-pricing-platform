@@ -91,10 +91,10 @@ class NotificationEventTests {
     }
     @Test void keyMismatchIsDiagnosticAndDoesNotPreventValidEventProcessing() {
         var service = mock(NotificationService.class);
-        new QuoteEventListener(decoder, service).receive(new ConsumerRecord<>("insurance.quote.events", 1, 2, "wrong-key", json()));
+        new QuoteEventListener(decoder, service).receive(new ConsumerRecord<>("insurance.quote.events", 1, 2, "wrong-key".getBytes(java.nio.charset.StandardCharsets.UTF_8), json().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         verify(service).create(decoder.decode(json()).orElseThrow());
     }
-    private ConsumerRecord<String, String> record(String json) {
-        return new ConsumerRecord<>("insurance.quote.events", 1, 2, QUOTE.toString(), json);
+    private ConsumerRecord<byte[], byte[]> record(String json) {
+        return new ConsumerRecord<>("insurance.quote.events", 1, 2, QUOTE.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8), json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 }

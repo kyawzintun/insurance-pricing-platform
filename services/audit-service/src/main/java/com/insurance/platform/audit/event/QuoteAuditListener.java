@@ -1,6 +1,7 @@
 package com.insurance.platform.audit.event;
 
 import com.insurance.platform.audit.exception.InvalidQuoteEventException;
+import com.insurance.platform.audit.exception.QuoteProcessingException;
 import com.insurance.platform.audit.service.AuditService;
 import com.insurance.platform.audit.service.ProcessResult;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -22,7 +23,7 @@ public class QuoteAuditListener {
 
     @KafkaListener(id = "quote-audit", idIsGroup = false,
             topics = "${audit.events.topic:insurance.quote.events}")
-    public void receive(ConsumerRecord<String, String> record) {
+    public void receive(ConsumerRecord<byte[], byte[]> record) {
         QuotePricedEnvelope event;
         try {
             var decoded = decoder.decode(record.value());
@@ -32,12 +33,12 @@ public class QuoteAuditListener {
             }
             event = decoded.get();
         } catch (InvalidQuoteEventException failure) {
-            LOG.warn("Rejected quote event reason={} topic={} partition={} offset={}; consumer will stop",
+            LOG.warn("Rejected quote event reason={} topic={} partition={} offset={}; error handler will classify this failure",
                     failure.getMessage(), record.topic(), record.partition(), record.offset());
             throw failure;
         }
 
-        if (!event.data().quoteId().toString().equals(record.key())) {
+        if (!java.util.Arrays.equals(event.data().quoteId().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8), record.key())) {
             // The event body is authoritative. Do not echo an untrusted key.
             LOG.warn("Quote event key mismatch eventId={} quoteId={} partition={} offset={}",
                     event.eventId(), event.aggregateId(), record.partition(), record.offset());
@@ -48,7 +49,7 @@ public class QuoteAuditListener {
             result = service.create(event);
         } catch (RuntimeException failure) {
             log(event, record, "PERSISTENCE_FAILURE");
-            throw new InvalidQuoteEventException("PERSISTENCE_FAILURE");
+            throw new QuoteProcessingException(failure);
         }
 
         LOG.info("Event handled result={} eventId={} eventType={} consumerName={} quoteId={} correlationId={} partition={} offset={}",
@@ -56,8 +57,8 @@ public class QuoteAuditListener {
                 event.correlationId(), record.partition(), record.offset());
     }
 
-    private void log(QuotePricedEnvelope event, ConsumerRecord<String, String> record, String reason) {
-        LOG.warn("Audit record failed reason={} eventId={} eventType={} quoteId={} correlationId={} partition={} offset={}; consumer will stop",
+    private void log(QuotePricedEnvelope event, ConsumerRecord<byte[], byte[]> record, String reason) {
+        LOG.warn("Audit record failed reason={} eventId={} eventType={} quoteId={} correlationId={} partition={} offset={}; error handler will classify this failure",
                 reason, event.eventId(), event.eventType(), event.aggregateId(), event.correlationId(), record.partition(), record.offset());
     }
 }

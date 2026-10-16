@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 16 complete; Phase 17 — Retry and DLQ not started.
+Status: Phases 0 through 17 complete; Phase 18 — Quote Expiration not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -73,6 +73,10 @@ Completed. Notification and Audit atomically claim local processed-event markers
 Completed. Quote graph and full QuotePriced envelope commit atomically; bounded scheduled dispatch marks publication only after Kafka acknowledgment, with stable event identity across duplicates/recovery. See [design](transactional-outbox.md), [specification](specs/phase-16-transactional-outbox.md), and [validation](phase-16-validation.md).
 
 ## Phase 17 — Retry and DLQ
+
+Completed. Notification/Audit use bounded fixed-backoff retries, non-retryable validation failures, and acknowledged publication of exact original bytes to the existing shared DLQ. Source progress is retained on DLQ failure; groups remain independent. See [policy](retry-and-dlq.md), [specification](specs/phase-17-retry-and-dlq.md), and [validation](phase-17-validation.md).
+
+## Phase 18 — Quote Expiration
 
 Not started.
 

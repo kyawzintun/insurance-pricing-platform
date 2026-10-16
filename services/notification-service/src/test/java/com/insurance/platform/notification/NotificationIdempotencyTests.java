@@ -52,7 +52,7 @@ class NotificationIdempotencyTests {
         var logs = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
         logs.start(); logger.addAppender(logs);
         try {
-            new QuoteEventListener(new QuoteEventDecoder(), processing).receive(new ConsumerRecord<>("insurance.quote.events", 1, 4, QUOTE.toString(), json()));
+            new QuoteEventListener(new QuoteEventDecoder(), processing).receive(new ConsumerRecord<>("insurance.quote.events", 1, 4, QUOTE.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8), json().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
             assertThat(logs.list).anySatisfy(log -> assertThat(log.getFormattedMessage())
                     .contains("DUPLICATE", EVENT.toString(), "consumerName=notification-service", "partition=1", "offset=4")
                     .doesNotContain("11200", "Q-TEST-123"));
