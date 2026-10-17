@@ -215,3 +215,7 @@ Validation commands from the root (run profiles separately):
 ```
 
 Normal tests disable scheduling and need no Docker. Integration profiles use disposable databases/brokers. See [full outbox design and operational checks](../../docs/transactional-outbox.md), [event contract](../../docs/quote-priced-event.md), [specification](../../docs/specs/phase-16-transactional-outbox.md), and [validation](../../docs/phase-16-validation.md).
+
+## Phase 18 — Quote Expiration
+
+Automatic PRICED → EXPIRED transitions use bounded PostgreSQL transactions and the existing outbox. Notification supports QUOTE_EXPIRED; Audit uses a SYSTEM actor. See the [Phase 18 specification](../../docs/specs/phase-18-quote-expiration.md) for configuration, contract, concurrency and failure semantics. Phase 19 is outside this change.

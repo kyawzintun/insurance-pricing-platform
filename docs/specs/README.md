@@ -15,3 +15,7 @@ Each implementation feature may later have a specification covering:
 - Definition of Done
 
 Record approved behavior and identify unresolved questions before implementation. Keep specifications aligned with the current phase and approved architecture.
+
+## Phase 18 — Quote Expiration
+
+Automatic PRICED → EXPIRED transitions use bounded PostgreSQL transactions and the existing outbox. Notification supports QUOTE_EXPIRED; Audit uses a SYSTEM actor. See the [Phase 18 specification](phase-18-quote-expiration.md) for configuration, contract, concurrency and failure semantics. Phase 19 is outside this change.

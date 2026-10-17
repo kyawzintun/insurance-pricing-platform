@@ -284,4 +284,4 @@ Notification and Audit now retry processing failures with three total attempts a
 
 The original key/value bytes are preserved with safe source-coordinate and consumer-identity headers. Source progress advances only after business success or acknowledged DLQ publication. If the DLQ send fails, the source remains replayable. Both groups fail independently; Quote's outbox and consumer idempotency are unchanged. No schema, topic, partition-count or business API changes.
 
-See [retry/DLQ policy](docs/retry-and-dlq.md), [specification](docs/specs/phase-17-retry-and-dlq.md), and [validation](docs/phase-17-validation.md). Phase 18 — Quote Expiration has not started. No DLQ replay mechanism is implemented.
+See [retry/DLQ policy](docs/retry-and-dlq.md), [specification](docs/specs/phase-17-retry-and-dlq.md), and [validation](docs/phase-17-validation.md). Phase 18 — Quote Expiration is implemented; see the [specification](docs/specs/phase-18-quote-expiration.md) and [validation](docs/phase-18-validation.md). No DLQ replay mechanism is implemented.

@@ -29,6 +29,7 @@ import static org.mockito.Mockito.*;
 class QuotePostgresIT {
     @Container static final PostgreSQLContainer DATABASE=new PostgreSQLContainer("postgres:17.11-bookworm");
     @DynamicPropertySource static void properties(DynamicPropertyRegistry registry) {
+        registry.add("quote.expiration.enabled", () -> "false");
         registry.add("spring.datasource.url",DATABASE::getJdbcUrl);
         registry.add("spring.datasource.username",DATABASE::getUsername);
         registry.add("spring.datasource.password",DATABASE::getPassword);
@@ -155,7 +156,7 @@ class QuotePostgresIT {
         // Multiple adjustment rows must not duplicate root quotes or change page counts.
         jdbc.update("insert into pricing_adjustments select ?, pricing_breakdown_id, pricing_rule_id, rule_type, description, input_value, factor, amount_after, amount_after, 2 from pricing_adjustments where pricing_breakdown_id = (select id from pricing_breakdowns where quote_id=?)", UUID.randomUUID(), a1.id());
         var before = contents();
-        clearInvocations(pricing);
+        clearInvocations(pricing, kafka);
         var statistics = entityManagerFactory.unwrap(org.hibernate.SessionFactory.class).getStatistics();
         statistics.clear();
         var firstPage = retrieval.list(customerA, false, 0, 2);
@@ -197,7 +198,7 @@ class QuotePostgresIT {
         jdbc.update("update vehicle_models set name='Changed catalog model' where id=?", MODEL);
         try {
             when(pricing.calculate(any())).thenThrow(new AssertionError("Retrieval must not call Pricing"));
-            clearInvocations(pricing);
+            clearInvocations(pricing, kafka);
             var before = contents();
             assertThat(retrieval.get(original.id(), owner, false)).isEqualTo(original);
             assertThat(retrieval.list(owner, false, 0, 20).content()).containsExactly(original);
@@ -403,6 +404,90 @@ class QuotePostgresIT {
         assertThat(payload.getAllValues().getFirst()).isEqualTo(payload.getAllValues().getLast());
         assertThat(jdbc.queryForObject("select status from outbox_events", String.class)).isEqualTo("PUBLISHED");
         publisher.poll(); verifyNoMoreInteractions(kafka);
+    }
+
+    @Autowired com.insurance.platform.quote.service.QuoteExpirationService expiration;
+
+    @Test void expirationIsBoundedInclusivePreservesHistoryAndIgnoresOtherStatuses() {
+        var owner = UUID.randomUUID();
+        var ids = new ArrayList<UUID>();
+        for (int i = 0; i < 5; i++) ids.add(service.create(owner, request()).id());
+        jdbc.update("update quotes set expires_at=? where id=?", java.sql.Timestamp.from(NOW.minusSeconds(1)), ids.get(0));
+        jdbc.update("update quotes set expires_at=? where id=?", java.sql.Timestamp.from(NOW), ids.get(1));
+        jdbc.update("update quotes set status='EXPIRED', expires_at=? where id=?", java.sql.Timestamp.from(NOW), ids.get(3));
+        jdbc.update("update quotes set status='FAILED', expires_at=? where id=?", java.sql.Timestamp.from(NOW), ids.get(4));
+        var before = retrieval.get(ids.get(0), owner, false);
+        var snapshots = new LinkedHashMap<String, Object>();
+        for (String table : List.of("quote_drivers", "quote_vehicles", "pricing_breakdowns", "pricing_adjustments"))
+            snapshots.put(table, jdbc.queryForList("select * from " + table + " order by id"));
+        clearInvocations(pricing, kafka);
+        assertThat(expiration.expireBatch(1)).isEqualTo(1);
+        assertThat(retrieval.get(ids.get(0), owner, false).status().name()).isEqualTo("EXPIRED");
+        assertThat(retrieval.get(ids.get(1), owner, false).status().name()).isEqualTo("PRICED");
+        assertThat(expiration.expireBatch(50)).isEqualTo(1);
+        assertThat(expiration.expireBatch(50)).isZero();
+        assertThat(retrieval.get(ids.get(2), owner, false).status().name()).isEqualTo("PRICED");
+        assertThat(retrieval.get(ids.get(4), owner, false).status().name()).isEqualTo("FAILED");
+        var after = retrieval.get(ids.get(0), owner, false);
+        assertThat(after).usingRecursiveComparison().ignoringFields("status").isEqualTo(before);
+        assertThat(retrieval.list(owner, false, 0, 20).content()).hasSize(5);
+        for (var entry : snapshots.entrySet())
+            assertThat(jdbc.queryForList("select * from " + entry.getKey() + " order by id")).isEqualTo(entry.getValue());
+        var rows = jdbc.queryForList("select * from outbox_events where event_type='QuoteExpired'");
+        assertThat(rows).hasSize(2);
+        for (var row : rows) {
+            var event = tools.jackson.databind.json.JsonMapper.builder().build().readTree(row.get("payload").toString());
+            assertThat(event.path("eventVersion").asInt()).isEqualTo(1);
+            assertThat(event.path("aggregateId").asText()).isEqualTo(row.get("aggregate_id"));
+            assertThat(event.path("producer").asText()).isEqualTo("quote-service");
+            assertThat(event.path("data").path("expiredAt").asText()).isEqualTo(NOW.toString());
+            assertThat(event.path("data").path("status").asText()).isEqualTo("EXPIRED");
+            assertThat(event.path("correlationId").asText()).isEqualTo(row.get("correlation_id"));
+            assertThatCode(() -> UUID.fromString(event.path("correlationId").asText())).doesNotThrowAnyException();
+            assertThat(row.get("status")).isEqualTo("PENDING");
+            assertThat(row.get("retry_count")).isEqualTo(0);
+            assertThat(row.get("published_at")).isNull();
+        }
+        verifyNoInteractions(pricing, kafka);
+    }
+
+    @Test void expirationAndOutboxRollBackTogetherOnEitherWriteFailureOrOuterRollback() {
+        var quote = service.create(CUSTOMER, request());
+        jdbc.update("update quotes set expires_at=? where id=?", java.sql.Timestamp.from(NOW), quote.id());
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        tx.executeWithoutResult(status -> { assertThat(expiration.expireBatch(50)).isEqualTo(1); status.setRollbackOnly(); });
+        for (String table : List.of("outbox_events", "quotes")) {
+            var constraint = table.equals("quotes") ? "status <> 'EXPIRED'" : "event_type <> 'QuoteExpired'";
+            jdbc.execute("ALTER TABLE " + table + " ADD CONSTRAINT phase18_fail CHECK (" + constraint + ") NOT VALID");
+            try { assertThatThrownBy(() -> expiration.expireBatch(50)).isInstanceOf(DataIntegrityViolationException.class); }
+            finally { jdbc.execute("ALTER TABLE " + table + " DROP CONSTRAINT phase18_fail"); }
+            assertThat(jdbc.queryForObject("select status from quotes where id=?", String.class, quote.id())).isEqualTo("PRICED");
+            assertThat(jdbc.queryForObject("select count(*) from outbox_events where event_type='QuoteExpired'", Long.class)).isZero();
+        }
+        assertThat(expiration.expireBatch(50)).isEqualTo(1);
+    }
+
+    @Test void concurrentExpirationWorkersSkipLockedRowsAndCreateOneIntent() throws Exception {
+        var quote = service.create(CUSTOMER, request());
+        jdbc.update("update quotes set expires_at=? where id=?", java.sql.Timestamp.from(NOW), quote.id());
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        var claimed = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> tx.execute(status -> {
+                var count = expiration.expireBatch(50); claimed.countDown();
+                try { if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("timeout"); }
+                catch (InterruptedException e) { throw new IllegalStateException(e); }
+                return count;
+            }));
+            try {
+                assertThat(claimed.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                assertThat(executor.submit(() -> expiration.expireBatch(50)).get(5, java.util.concurrent.TimeUnit.SECONDS)).isZero();
+            } finally { release.countDown(); }
+            assertThat(first.get(5, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(1);
+        }
+        assertThat(expiration.expireBatch(50)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from outbox_events where event_type='QuoteExpired'", Long.class)).isEqualTo(1);
     }
 
     private com.insurance.platform.quote.dto.QuoteResponse persistInTransaction(UUID owner) {

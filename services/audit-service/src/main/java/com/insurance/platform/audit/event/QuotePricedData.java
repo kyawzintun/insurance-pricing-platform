@@ -13,4 +13,11 @@ public record QuotePricedData(
         BigDecimal finalPremium,
         String currency,
         Instant pricedAt,
-        Instant expiresAt) {}
+        Instant expiresAt,
+        Instant expiredAt,
+        Instant originalExpiresAt) {
+    public QuotePricedData(UUID quoteId, String quoteReference, UUID customerId, String status,
+            String coverageType, BigDecimal finalPremium, String currency, Instant pricedAt, Instant expiresAt) {
+        this(quoteId, quoteReference, customerId, status, coverageType, finalPremium, currency, pricedAt, expiresAt, null, null);
+    }
+}

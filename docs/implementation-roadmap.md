@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 17 complete; Phase 18 — Quote Expiration not started.
+Status: Phases 0 through 18 implemented; Phase 19 — Auth/User Events not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -78,8 +78,12 @@ Completed. Notification/Audit use bounded fixed-backoff retries, non-retryable v
 
 ## Phase 18 — Quote Expiration
 
-Not started.
+Implemented. UTC eligibility (`PRICED` and `expires_at <= now`), bounded PostgreSQL
+row locking, atomic status/outbox commits, and QuoteExpired v1 reuse the existing
+publisher, consumer idempotency, retries and DLQ. Notification creates QUOTE_EXPIRED;
+Audit records SYSTEM with null actor ID. See the [specification](specs/phase-18-quote-expiration.md)
+and [validation](phase-18-validation.md).
 
-## Later Phases
+## Phase 19 — Auth/User Events
 
-Detailed phase sequencing is pending approved planning notes. Application implementation will proceed incrementally through feature specifications. Quote outbox publishing is implemented in Phase 16; Auth/Pricing outboxes remain unused.
+Not started. No Phase 19 code is included.

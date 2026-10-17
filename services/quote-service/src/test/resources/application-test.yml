@@ -11,3 +11,5 @@ spring:
 outbox:
   publisher:
     enabled: false
+
+quote.expiration.enabled: false

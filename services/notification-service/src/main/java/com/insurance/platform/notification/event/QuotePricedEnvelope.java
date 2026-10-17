@@ -3,7 +3,7 @@ package com.insurance.platform.notification.event;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Consumer-owned DTO matching the Phase 12 wire contract; no dependency on producer code. */
+/** Consumer-owned envelope for QuotePriced and QuoteExpired v1; no producer dependency. */
 public record QuotePricedEnvelope(
         UUID eventId,
         String eventType,

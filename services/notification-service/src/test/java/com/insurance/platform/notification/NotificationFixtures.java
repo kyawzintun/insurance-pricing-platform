@@ -17,4 +17,9 @@ final class NotificationFixtures {
            "coverageType":"COMPREHENSIVE","finalPremium":11200.00,"currency":"THB",
            "pricedAt":"2026-10-12T09:00:00Z","expiresAt":"2026-11-11T09:00:00Z"}}
         """; }
+    static String expiredJson() {
+        return json().replace("QuotePriced", "QuoteExpired").replace("PRICED", "EXPIRED")
+                .replace("pricedAt", "originalExpiresAt").replace("expiresAt", "expiredAt")
+                .replace("2026-11-11T09:00:00Z", "2026-10-12T09:00:00Z");
+    }
 }

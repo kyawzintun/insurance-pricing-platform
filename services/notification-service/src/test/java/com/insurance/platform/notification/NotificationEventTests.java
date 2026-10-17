@@ -19,6 +19,22 @@ import static org.mockito.Mockito.*;
 class NotificationEventTests {
     final QuoteEventDecoder decoder = new QuoteEventDecoder();
 
+    @Test void expiredContractMappingAndDuplicateUseExistingWorkflow() {
+        var event = decoder.decode(expiredJson()).orElseThrow();
+        var repository = mock(com.insurance.platform.notification.repository.NotificationRepository.class);
+        var markers = mock(com.insurance.platform.notification.repository.ProcessedEventRepository.class);
+        when(markers.tryMarkProcessed(EVENT, NotificationService.CONSUMER_NAME, NOW)).thenReturn(true, false);
+        var service = new NotificationService(repository, Clock.fixed(NOW, ZoneOffset.UTC), markers);
+        assertThat(service.create(event).name()).isEqualTo("PROCESSED");
+        assertThat(service.create(event).name()).isEqualTo("DUPLICATE");
+        var row = org.mockito.ArgumentCaptor.forClass(com.insurance.platform.notification.entity.Notification.class);
+        verify(repository).saveAndFlush(row.capture());
+        assertThat(row.getValue().getType()).isEqualTo("QUOTE_EXPIRED");
+        assertThat(row.getValue().getStatus()).isEqualTo("CREATED");
+        assertThat(row.getValue().getMessage()).isEqualTo("Your quote Q-TEST-123 has expired.");
+        assertThatThrownBy(() -> decoder.decode(expiredJson().replace("\"eventVersion\":1", "\"eventVersion\":2")))
+                .isInstanceOf(com.insurance.platform.notification.exception.InvalidQuoteEventException.class);
+    }
     @Test void mapsContractAndPersistsExpectedFieldsUsingClock() {
         var event = decoder.decode(json()).orElseThrow();
         var repository = mock(NotificationRepository.class);

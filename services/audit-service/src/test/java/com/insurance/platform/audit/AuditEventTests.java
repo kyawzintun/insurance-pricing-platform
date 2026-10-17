@@ -19,6 +19,23 @@ import static org.mockito.Mockito.*;
 class AuditEventTests {
     final QuoteEventDecoder decoder = new QuoteEventDecoder();
 
+    @Test void expiredContractMappingAndDuplicateUseExistingWorkflow() {
+        var event = decoder.decode(expiredJson()).orElseThrow();
+        var repository = mock(com.insurance.platform.audit.repository.AuditRecordRepository.class);
+        var markers = mock(com.insurance.platform.audit.repository.ProcessedEventRepository.class);
+        when(markers.tryMarkProcessed(EVENT, AuditService.CONSUMER_NAME, NOW)).thenReturn(true, false);
+        var service = new AuditService(repository, Clock.fixed(NOW, ZoneOffset.UTC), markers);
+        assertThat(service.create(event).name()).isEqualTo("PROCESSED");
+        assertThat(service.create(event).name()).isEqualTo("DUPLICATE");
+        var row = org.mockito.ArgumentCaptor.forClass(com.insurance.platform.audit.entity.AuditRecord.class);
+        verify(repository).saveAndFlush(row.capture());
+        assertThat(row.getValue().getEventType()).isEqualTo("QuoteExpired");
+        assertThat(row.getValue().getActorType()).isEqualTo("SYSTEM");
+        assertThat(row.getValue().getActorId()).isNull();
+        assertThat(row.getValue().getMetadata()).contains("originalExpiresAt", "expiredAt").doesNotContain("customerId");
+        assertThatThrownBy(() -> decoder.decode(expiredJson().replace("\"eventVersion\":1", "\"eventVersion\":2")))
+                .isInstanceOf(com.insurance.platform.audit.exception.InvalidQuoteEventException.class);
+    }
     @Test void mapsContractAndPersistsExpectedFieldsUsingClock() {
         var event = decoder.decode(json()).orElseThrow();
         var repository = mock(AuditRecordRepository.class);

@@ -36,7 +36,8 @@ public class NotificationService {
             return ProcessResult.DUPLICATE;
         }
         var d = event.data();
-        var message = "Your quote " + d.quoteReference() + " is ready. Premium: "
+        var expired = "QuoteExpired".equals(event.eventType());
+        var message = expired ? "Your quote " + d.quoteReference() + " has expired." : "Your quote " + d.quoteReference() + " is ready. Premium: "
                 + d.finalPremium().setScale(2).toPlainString() + " " + d.currency() + ".";
 
         repository.saveAndFlush(new Notification(UUID.randomUUID(),
@@ -44,7 +45,7 @@ public class NotificationService {
                 d.quoteId(),
                 event.eventId(),
                 message,
-                now));
+                now, expired ? "QUOTE_EXPIRED" : "QUOTE_PRICED"));
         return ProcessResult.PROCESSED;
     }
 }

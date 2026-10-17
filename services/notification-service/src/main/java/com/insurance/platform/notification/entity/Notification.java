@@ -39,6 +39,11 @@ public class Notification {
         this.processedAt = now;
     }
 
+    public Notification(UUID id, UUID customerId, UUID quoteId, UUID eventId, String message, Instant now, String type) {
+        this(id, customerId, quoteId, eventId, message, now);
+        this.type = type;
+    }
+
     public UUID getId() { return id; }
     public UUID getCustomerId() { return customerId; }
     public UUID getQuoteId() { return quoteId; }

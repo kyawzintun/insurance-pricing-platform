@@ -24,6 +24,7 @@ import static org.mockito.Mockito.*;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class QuoteRetrievalTests {
+    @MockitoBean org.springframework.jdbc.core.JdbcTemplate expirationJdbc;
     @DynamicPropertySource static void properties(DynamicPropertyRegistry registry) {
         registry.add("auth.jwt.secret", QuoteJwtSupport::secret);
     }

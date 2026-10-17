@@ -55,6 +55,10 @@ pricing:
     read-timeout: ${PRICING_READ_TIMEOUT:5s}
 
 quote:
+  expiration:
+    enabled: ${QUOTE_EXPIRATION_ENABLED:true}
+    poll-interval: ${QUOTE_EXPIRATION_POLL_INTERVAL:60000}
+    batch-size: ${QUOTE_EXPIRATION_BATCH_SIZE:50}
   events:
     topic: ${QUOTE_EVENTS_TOPIC:insurance.quote.events}
 

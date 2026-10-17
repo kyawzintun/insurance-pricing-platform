@@ -38,7 +38,8 @@ public class QuoteEventDecoder {
         require(root != null && root.isObject(), "INVALID_ENVELOPE");
         require(root.path("eventType").isString() && !root.path("eventType").asText().isBlank(), "INVALID_EVENT_TYPE");
 
-        if (!"QuotePriced".equals(root.path("eventType").asText())) return Optional.empty();
+        if (!"QuotePriced".equals(root.path("eventType").asText())
+                && !"QuoteExpired".equals(root.path("eventType").asText())) return Optional.empty();
 
         require(root.path("eventVersion").isIntegralNumber() && root.path("eventVersion").bigIntegerValue().equals(java.math.BigInteger.ONE),
                 "UNSUPPORTED_EVENT_VERSION");
@@ -69,11 +70,18 @@ public class QuoteEventDecoder {
         var d = event.data();
         require(d.quoteId() != null && d.customerId() != null && event.aggregateId().equals(d.quoteId()), "INVALID_QUOTE_ID");
         require(d.quoteReference() != null && d.quoteReference().matches("[A-Za-z0-9-]{1,50}"), "INVALID_REFERENCE");
-        require("PRICED".equals(d.status()) && ("COMPREHENSIVE".equals(d.coverageType()) || "THIRD_PARTY".equals(d.coverageType())), "INVALID_DATA");
+        require(("QuoteExpired".equals(event.eventType()) ? "EXPIRED" : "PRICED").equals(d.status()) && ("COMPREHENSIVE".equals(d.coverageType()) || "THIRD_PARTY".equals(d.coverageType())), "INVALID_DATA");
         require(d.finalPremium() != null && d.finalPremium().signum() >= 0 && d.finalPremium().scale() <= 2
                 && (long) d.finalPremium().precision() - d.finalPremium().scale() <= 13, "INVALID_PREMIUM");
-        require("THB".equals(d.currency()) && d.pricedAt() != null && d.expiresAt() != null
-                && d.expiresAt().isAfter(d.pricedAt()), "INVALID_DATA");
+        require("THB".equals(d.currency()), "INVALID_DATA");
+        if ("QuoteExpired".equals(event.eventType())) {
+            require(d.expiredAt() != null && d.originalExpiresAt() != null
+                    && !d.originalExpiresAt().isAfter(d.expiredAt())
+                    && d.expiredAt().equals(event.occurredAt()), "INVALID_DATA");
+        } else {
+            require(d.pricedAt() != null && d.expiresAt() != null
+                    && d.expiresAt().isAfter(d.pricedAt()), "INVALID_DATA");
+        }
     }
 
     private static void require(boolean condition, String reason) {

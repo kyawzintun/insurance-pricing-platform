@@ -25,6 +25,7 @@ import static org.mockito.Mockito.*;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class QuoteServiceApplicationTests {
+    @MockitoBean org.springframework.jdbc.core.JdbcTemplate expirationJdbc;
     private static final HttpServer PRICING;
     private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool();
     private static volatile String downstreamBody;

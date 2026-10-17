@@ -1,7 +1,6 @@
 package com.insurance.platform.quote.entity;
 
 import com.insurance.platform.quote.event.EventEnvelope;
-import com.insurance.platform.quote.event.QuotePricedEventData;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
@@ -47,7 +46,7 @@ public class OutboxEvent {
 
     protected OutboxEvent() {}
 
-    public OutboxEvent(EventEnvelope<QuotePricedEventData> event, String payload) {
+    public OutboxEvent(EventEnvelope<?> event, String payload) {
         this.id = UUID.randomUUID();
         this.eventId = event.eventId();
         this.aggregateType = event.aggregateType();

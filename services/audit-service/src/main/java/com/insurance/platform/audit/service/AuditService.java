@@ -39,11 +39,14 @@ public class AuditService {
             return ProcessResult.DUPLICATE;
         }
         var d = event.data();
-        var metadata = new AuditMetadata(d.quoteReference(), d.status(), d.coverageType(),
+        var expired = "QuoteExpired".equals(event.eventType());
+        Object metadata = expired ? java.util.Map.of("quoteReference", d.quoteReference(), "status", d.status(),
+                "coverageType", d.coverageType(), "finalPremium", d.finalPremium(), "currency", d.currency(),
+                "originalExpiresAt", d.originalExpiresAt(), "expiredAt", d.expiredAt()) : new AuditMetadata(d.quoteReference(), d.status(), d.coverageType(),
                 d.finalPremium(), d.currency(), d.pricedAt(), d.expiresAt());
-        repository.saveAndFlush(new AuditRecord(UUID.randomUUID(), event.eventId(), d.customerId().toString(),
+        repository.saveAndFlush(new AuditRecord(UUID.randomUUID(), event.eventId(), expired ? null : d.customerId().toString(),
                 d.quoteId().toString(), event.correlationId(), event.occurredAt().truncatedTo(ChronoUnit.MICROS),
-                event.producer(), mapper.writeValueAsString(metadata), now));
+                event.producer(), mapper.writeValueAsString(metadata), now, event.eventType(), expired ? "SYSTEM" : "CUSTOMER"));
         return ProcessResult.PROCESSED;
     }
 }

@@ -191,6 +191,18 @@ class AuditKafkaIT {
             assertThat(end(admin, dlqPartition)).isEqualTo(1);
             assertCounts(3, 3);
             assertThat(end(admin, partition)).isEqualTo(11);
+            var expiration = expiredJson().replace(EVENT.toString(), java.util.UUID.randomUUID().toString());
+            send(producer, bytes(QUOTE.toString()), bytes(expiration));
+            send(producer, bytes(QUOTE.toString()), bytes(expiration));
+            awaitOffset(admin, partition, 13);
+            assertCounts(4, 4);
+            assertThat(jdbc.queryForObject("select count(*) from audit_records where event_type=?", Long.class,
+                    "QuoteExpired")).isEqualTo(1);
+            send(producer, bytes("invalid-expired"), bytes(expiration.replace("\"eventVersion\":1", "\"eventVersion\":2")));
+            awaitOffset(admin, partition, 14);
+            assertCounts(4, 4);
+            assertThat(end(admin, dlqPartition)).isEqualTo(2);
+
         } finally {
             container.stop();
             jdbc.execute("ALTER TABLE audit_records DROP CONSTRAINT IF EXISTS phase17_failure");

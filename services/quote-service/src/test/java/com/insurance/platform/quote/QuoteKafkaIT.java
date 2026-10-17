@@ -38,6 +38,7 @@ class QuoteKafkaIT {
     @Container static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.1.2")
             .withEnv("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "false");
     @DynamicPropertySource static void properties(DynamicPropertyRegistry registry) {
+        registry.add("quote.expiration.enabled", () -> "false");
         registry.add("spring.datasource.url", DATABASE::getJdbcUrl);
         registry.add("spring.datasource.username", DATABASE::getUsername);
         registry.add("spring.datasource.password", DATABASE::getPassword);
@@ -52,6 +53,7 @@ class QuoteKafkaIT {
         }
     }
     @Autowired org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor scheduling;
+    @Autowired QuoteExpirationService expiration;
     @Autowired QuoteService service;
     @Autowired QuoteRetrievalService retrieval;
     @Autowired VehicleReferenceService catalog;
@@ -169,6 +171,29 @@ class QuoteKafkaIT {
             assertThat(status(duplicateQuote.id())).isEqualTo("PUBLISHED");
             manual.poll();
             assertThat(consumer.poll(Duration.ofSeconds(1)).isEmpty()).isTrue();
+            var beforeExpiration = retrieval.get(duplicateQuote.id(), CUSTOMER, false);
+            jdbc.update("update quotes set expires_at=? where id=?", java.sql.Timestamp.from(NOW), duplicateQuote.id());
+            assertThat(expiration.expireBatch(50)).isEqualTo(1);
+            assertThat(jdbc.queryForObject("select status from outbox_events where event_type='QuoteExpired'", String.class)).isEqualTo("PENDING");
+            manual.poll();
+            var expired = read(consumer, 1);
+            assertThat(expired).hasSize(1);
+            var expirationRecord = expired.getFirst();
+            assertThat(expirationRecord.key()).isEqualTo(duplicateQuote.id().toString());
+            assertThat(expirationRecord.partition()).isEqualTo(duplicate.getFirst().partition());
+            assertThat(expirationRecord.offset()).isGreaterThan(duplicate.getLast().offset());
+            var envelope = JsonMapper.builder().build().readTree(expirationRecord.value());
+            assertThat(envelope.path("eventType").asText()).isEqualTo("QuoteExpired");
+            assertThat(envelope.path("eventVersion").asInt()).isEqualTo(1);
+            assertThat(envelope.path("data").path("finalPremium").decimalValue()).isEqualByComparingTo("11200.00");
+            assertThat(jdbc.queryForObject("select status from outbox_events where event_type='QuoteExpired'", String.class)).isEqualTo("PUBLISHED");
+            var afterExpiration = retrieval.get(duplicateQuote.id(), CUSTOMER, false);
+            assertThat(afterExpiration.status().name()).isEqualTo("EXPIRED");
+            assertThat(afterExpiration).usingRecursiveComparison().ignoringFields("status", "expiresAt").isEqualTo(beforeExpiration);
+            assertThat(expiration.expireBatch(50)).isZero();
+            manual.poll();
+            assertThat(consumer.poll(Duration.ofSeconds(1)).isEmpty()).isTrue();
+
         } finally { automatic.set(false); scheduling.destroy(); }
     }
     private String status(UUID id) { return jdbc.queryForObject("select status from outbox_events where aggregate_id=?", String.class, id.toString()); }

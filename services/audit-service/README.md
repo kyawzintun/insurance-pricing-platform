@@ -173,3 +173,7 @@ Source offsets advance after business success or DLQ acknowledgment. If DLQ publ
 Consumer attempts are separate from Quote's outbox retry_count. No schemas, idempotency services/repositories, outbox semantics, topics or partition counts changed. There are no retry topics, DLQ consumer, new business events, or Phase 18 changes.
 
 For learning, read the Kafka configuration → listener's two exception categories → `QuoteDeadLetterRecoverer` → retry unit tests → Kafka integration test. See [policy, headers, acknowledgment details and inspection commands](../../docs/retry-and-dlq.md), [specification](../../docs/specs/phase-17-retry-and-dlq.md), and [validation](../../docs/phase-17-validation.md).
+
+## Phase 18 — Quote Expiration
+
+Automatic PRICED → EXPIRED transitions use bounded PostgreSQL transactions and the existing outbox. Notification supports QUOTE_EXPIRED; Audit uses a SYSTEM actor. See the [Phase 18 specification](../../docs/specs/phase-18-quote-expiration.md) for configuration, contract, concurrency and failure semantics. Phase 19 is outside this change.
