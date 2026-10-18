@@ -146,3 +146,19 @@ For learning, read the Kafka configuration → listener's two exception categori
 ## Phase 18 — Quote Expiration
 
 Automatic PRICED → EXPIRED transitions use bounded PostgreSQL transactions and the existing outbox. Notification supports QUOTE_EXPIRED; Audit uses a SYSTEM actor. See the [Phase 18 specification](../../docs/specs/phase-18-quote-expiration.md) for configuration, contract, concurrency and failure semantics. Phase 19 is outside this change.
+
+## Phase 19 — UserRegistered
+
+See the [UserRegistered v1 contract and operational configuration](../../docs/user-registered-event.md)
+and [Phase 19 validation](../../docs/phase-19-validation.md). Registration commits user +
+outbox intent atomically; the Auth publisher later sends stored JSON to
+insurance.user.events keyed by userId. Notification creates a simulated
+USER_REGISTERED / CREATED row with null quote_id. Audit records CUSTOMER/user UUID
+with User entity and role/status metadata, excluding email. Both consumers reuse
+processed_events, bounded retries and insurance.user.events.dlq. Unknown types skip.
+No historical user backfill, admin status events or Phase 20 work is included.
+
+User event topics are configured with `USER_EVENTS_TOPIC` (default
+`insurance.user.events`) and `USER_EVENTS_DLQ_TOPIC` (default
+`insurance.user.events.dlq`). Listener and DLQ routing use these same settings.
+Provision overridden topics with matching source/DLQ partition counts before use.

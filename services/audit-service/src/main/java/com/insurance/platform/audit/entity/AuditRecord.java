@@ -36,6 +36,11 @@ public class AuditRecord {
         this(id, eventId, actorId, entityId, correlationId, occurredAt, producer, metadata, createdAt);
         this.eventType = eventType; this.actorType = actorType;
     }
+    public AuditRecord(UUID id, UUID eventId, String actorId, String entityId, String correlationId,
+            Instant occurredAt, String producer, String metadata, Instant createdAt, String eventType, String actorType, String entityType) {
+        this(id, eventId, actorId, entityId, correlationId, occurredAt, producer, metadata, createdAt, eventType, actorType);
+        this.entityType = entityType;
+    }
     public UUID getId() { return id; }
     public UUID getEventId() { return eventId; }
     public String getEventType() { return eventType; }

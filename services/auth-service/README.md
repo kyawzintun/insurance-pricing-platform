@@ -1,6 +1,6 @@
 # Auth Service — Authentication Basics
 
-Phase 4 implements customer registration and login using the existing `auth_db.users` table. Flyway migrations are unchanged. There is no refresh-token, logout, token rotation, Kafka, outbox-publishing implementation. Phase 5 now routes Auth requests through Gateway.
+Phase 4 implements customer registration and login using the existing `auth_db.users` table. Flyway migrations are unchanged. There is no refresh-token, logout or token rotation implementation. Phase 19 adds Kafka outbox publication for new registrations. Phase 5 now routes Auth requests through Gateway.
 
 ## Run Locally
 
@@ -132,3 +132,17 @@ config/       Spring Security and JWT configuration
 ```
 
 `AuthServiceApplication` stays in the root package so component, entity, and repository discovery cover these subpackages. Request flow is controller → service → repository. Responses use DTOs, never the entity. This organization does not change URLs, database mappings, or authentication behavior.
+
+## Phase 19 — UserRegistered
+
+See the [UserRegistered v1 contract and operational configuration](../../docs/user-registered-event.md)
+and [Phase 19 validation](../../docs/phase-19-validation.md). Registration commits user +
+outbox intent atomically; the Auth publisher later sends stored JSON to
+insurance.user.events keyed by userId. Notification creates a simulated
+USER_REGISTERED / CREATED row with null quote_id. Audit records CUSTOMER/user UUID
+with User entity and role/status metadata, excluding email. Both consumers reuse
+processed_events, bounded retries and insurance.user.events.dlq. Unknown types skip.
+No historical user backfill, admin status events or Phase 20 work is included.
+
+`USER_EVENTS_TOPIC` configures Auth publication (default `insurance.user.events`).
+Use the same source topic setting in Notification and Audit. Auth has no producer DLQ.

@@ -32,6 +32,8 @@ import static org.awaitility.Awaitility.await;
 @ActiveProfiles("integration")
 @Testcontainers
 class NotificationKafkaIT {
+    static final String USER_TOPIC = "custom.user.events";
+    static final String USER_DLQ = "custom.user.failures";
     static final String TOPIC = "insurance.quote.events";
     static final String DLQ = "insurance.quote.events.dlq";
     static final String GROUP = "notification-service-test";
@@ -43,6 +45,8 @@ class NotificationKafkaIT {
         r.add("spring.datasource.username", DATABASE::getUsername);
         r.add("spring.datasource.password", DATABASE::getPassword);
         r.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
+        r.add("user.events.topic", () -> USER_TOPIC);
+        r.add("user.events.dlq-topic", () -> USER_DLQ);
         r.add("spring.kafka.consumer.group-id", () -> GROUP);
     }
     @Autowired JdbcTemplate jdbc;
@@ -247,5 +251,57 @@ class NotificationKafkaIT {
     }
     private String text(ConsumerRecord<?, ?> record, String header) {
         return new String(record.headers().lastHeader(header).value(), StandardCharsets.UTF_8);
+    }
+
+    @Test void userRegisteredIsIdempotentAndInvalidVersionUsesUserDlq() throws Exception {
+        when(clock.instant()).thenReturn(NOW);
+        String userTopic = USER_TOPIC;
+        var tp = new TopicPartition(userTopic, 0);
+        var userId = UUID.randomUUID(); var eventId = UUID.randomUUID();
+        var json = """
+                {"eventId":"%s","eventType":"UserRegistered","eventVersion":1,"aggregateType":"User",
+                 "aggregateId":"%s","occurredAt":"%s","correlationId":"phase19-test","producer":"auth-service",
+                 "data":{"userId":"%s","email":"temporary@example.com","role":"CUSTOMER","status":"ACTIVE","registeredAt":"%s"}}
+                """.formatted(eventId,userId,NOW,userId,NOW);
+        try(var admin = Admin.create(Map.of("bootstrap.servers",KAFKA.getBootstrapServers()));
+            var producer = new KafkaProducer<byte[],byte[]>(Map.of("bootstrap.servers",KAFKA.getBootstrapServers(),
+                "key.serializer",ByteArraySerializer.class,"value.serializer",ByteArraySerializer.class))) {
+            admin.createTopics(List.of(new NewTopic(userTopic,3,(short)1),new NewTopic(USER_DLQ,3,(short)1))).all().get(20,TimeUnit.SECONDS);
+            var container = registry.getListenerContainer("user-notification");
+            try {
+                container.start();
+                producer.send(new ProducerRecord<>(userTopic,0,bytes(userId.toString()),bytes(json))).get(10,TimeUnit.SECONDS);
+                producer.send(new ProducerRecord<>(userTopic,0,bytes(userId.toString()),bytes(json))).get(10,TimeUnit.SECONDS);
+                awaitOffset(admin,tp,2);
+                assertThat(jdbc.queryForObject("select count(*) from notifications where event_id=?",Integer.class,eventId)).isEqualTo(1);
+                assertThat(jdbc.queryForObject("select count(*) from processed_events where event_id=?",Integer.class,eventId)).isEqualTo(1);
+                var row=jdbc.queryForMap("select * from notifications where event_id=?",eventId);
+                assertThat(row.get("type")).isEqualTo("USER_REGISTERED");assertThat(row.get("quote_id")).isNull();
+                producer.send(new ProducerRecord<>(userTopic,0,bytes(userId.toString()),bytes(json.replace("\"eventVersion\":1","\"eventVersion\":2")))).get(10,TimeUnit.SECONDS);
+                producer.send(new ProducerRecord<>(userTopic,0,bytes(userId.toString()),bytes("{broken"))).get(10,TimeUnit.SECONDS);
+                awaitOffset(admin,tp,4);
+                try (var reader = new KafkaConsumer<byte[],byte[]>(Map.of("bootstrap.servers",KAFKA.getBootstrapServers(),
+                        "key.deserializer",ByteArrayDeserializer.class,"value.deserializer",ByteArrayDeserializer.class,"enable.auto.commit",false))) {
+                    var destination = new TopicPartition(USER_DLQ,0);
+                    reader.assign(List.of(destination)); reader.seekToBeginning(List.of(destination));
+                    var dead = new ArrayList<ConsumerRecord<byte[],byte[]>>();
+                    await().atMost(Duration.ofSeconds(15)).until(() -> { reader.poll(Duration.ofMillis(100)).forEach(dead::add); return dead.size()==2; });
+                    assertThat(dead.get(0).key()).containsExactly(bytes(userId.toString()));
+                    assertThat(dead.get(0).value()).containsExactly(bytes(json.replace("\"eventVersion\":1","\"eventVersion\":2")));
+                    assertThat(dead.get(1).value()).containsExactly(bytes("{broken"));
+                    for (var record : dead) {
+                        assertThat(text(record,"x-original-topic")).isEqualTo(userTopic);
+                        assertThat(text(record,"x-consumer-service")).isEqualTo("notification-service");
+                        assertThat(text(record,"x-attempt-count")).isEqualTo("1");
+                    }
+                }
+                assertThat(admin.listOffsets(Map.of(tp,OffsetSpec.latest())).all().get().get(tp).offset()).isEqualTo(4);
+                assertThat(admin.listOffsets(Map.of(new TopicPartition(USER_DLQ,0),OffsetSpec.latest())).all().get().values().iterator().next().offset()).isEqualTo(2);
+            } finally {
+                container.stop();
+                jdbc.update("delete from notifications where event_id=?",eventId);
+                jdbc.update("delete from processed_events where event_id=?",eventId);
+            }
+        }
     }
 }

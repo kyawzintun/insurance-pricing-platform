@@ -89,3 +89,12 @@ Both consumers now use their own existing processed_events tables, keyed by even
 Quote creation now stores the aggregate and a complete QuotePriced v1 JSONB envelope in the same transaction. The direct after-commit publisher is removed. HTTP 201 means durable quote/event intent; scheduled polling publishes later with the same event ID, correlation, occurrence time, topic and quote UUID key. An autocommit connection with a shared PostgreSQL session advisory lock excludes competing dispatchers without holding a transaction during Kafka I/O. Acknowledged sends become PUBLISHED; failed attempts remain PENDING and increment retry_count. Duplicate publication remains possible and Phase 15 consumers handle it unchanged.
 
 Quote V6 widens only outbox correlation_id to 128 to match the existing contract; no other schema or seed changes, historical backfill, Auth/Pricing outbox, or Phase 17 retry/DLQ policy. The preceding phase sections describe historical milestones; this section supersedes their producer limitations. See [design and operational limits](transactional-outbox.md), [specification](specs/phase-16-transactional-outbox.md), and [validation](phase-16-validation.md).
+
+## Phase 19 — Auth/User Events
+
+Auth now persists UserRegistered v1 in its existing outbox during registration, then
+publishes to insurance.user.events keyed by userId. Notification and Audit reuse
+their idempotency and retry/DLQ paths with insurance.user.events.dlq. Auth V4 widens
+outbox correlation_id to 128; consumer schemas need no migration. No historical
+backfill or admin status events. See [contract and lifecycle](user-registered-event.md)
+and [validation](phase-19-validation.md). Earlier phase sections are historical.

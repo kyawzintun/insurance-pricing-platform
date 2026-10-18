@@ -64,3 +64,12 @@ The QuotePriced contract, Quote outbox, processed-event semantics, schemas and t
 ## Phase 18 — Quote Expiration
 
 Automatic PRICED → EXPIRED transitions use bounded PostgreSQL transactions and the existing outbox. Notification supports QUOTE_EXPIRED; Audit uses a SYSTEM actor. See the [Phase 18 specification](specs/phase-18-quote-expiration.md) for configuration, contract, concurrency and failure semantics. Phase 19 is outside this change.
+
+## Phase 19 — Auth/User Events
+
+Auth now persists UserRegistered v1 in its existing outbox during registration, then
+publishes to insurance.user.events keyed by userId. Notification and Audit reuse
+their idempotency and retry/DLQ paths with insurance.user.events.dlq. Auth V4 widens
+outbox correlation_id to 128; consumer schemas need no migration. No historical
+backfill or admin status events. See [contract and lifecycle](user-registered-event.md)
+and [validation](phase-19-validation.md). Earlier phase sections are historical.

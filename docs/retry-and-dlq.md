@@ -137,3 +137,12 @@ Raw malformed/binary data may not render as readable terminal text. Do not publi
 No replay API, DLQ consumer, replay automation, retry topics, exponential policy, QuoteExpired, outbox cleanup or new metrics framework was added. Dedicated retry/DLQ counters are deferred; existing Actuator remains available. See [specification](specs/phase-17-retry-and-dlq.md) and [validation](phase-17-validation.md).
 
 Framework reference: [Spring Kafka error handling and recovery](https://docs.spring.io/spring-kafka/reference/kafka/annotation-error-handling.html).
+
+## Phase 19 — Auth/User Events
+
+Auth now persists UserRegistered v1 in its existing outbox during registration, then
+publishes to insurance.user.events keyed by userId. Notification and Audit reuse
+their idempotency and retry/DLQ paths with insurance.user.events.dlq. Auth V4 widens
+outbox correlation_id to 128; consumer schemas need no migration. No historical
+backfill or admin status events. See [contract and lifecycle](user-registered-event.md)
+and [validation](phase-19-validation.md). Earlier phase sections are historical.

@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 18 implemented; Phase 19 — Auth/User Events not started.
+Status: Phases 0 through 19 implemented; Phase 20 — Pricing Events not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -86,4 +86,4 @@ and [validation](phase-18-validation.md).
 
 ## Phase 19 — Auth/User Events
 
-Not started. No Phase 19 code is included.
+Implemented: transactional UserRegistered v1 outbox, Auth publisher, idempotent Notification/Audit user consumers, and existing retry/user DLQ integration. No historical backfill or admin status events. See [specification](specs/phase-19-auth-user-events.md), [contract](user-registered-event.md), and [validation](phase-19-validation.md).

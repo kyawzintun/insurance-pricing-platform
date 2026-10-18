@@ -12,3 +12,7 @@ auth:
   jwt:
     # PUBLIC DEVELOPMENT-ONLY KEY. Never reuse outside this learning project.
     secret: ${AUTH_JWT_SECRET:VnczjVEg+Q2DUmsGnX7ZtEAeji5U42s55cOsNvTc3aY=}
+
+outbox:
+  publisher:
+    enabled: ${AUTH_OUTBOX_PUBLISHER_ENABLED:true}

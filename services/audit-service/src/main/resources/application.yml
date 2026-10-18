@@ -55,3 +55,8 @@ kafka:
   consumer:
     max-attempts: ${KAFKA_CONSUMER_MAX_ATTEMPTS:3}
     backoff-ms: ${KAFKA_CONSUMER_BACKOFF_MS:1000}
+
+user:
+  events:
+    topic: ${USER_EVENTS_TOPIC:insurance.user.events}
+    dlq-topic: ${USER_EVENTS_DLQ_TOPIC:insurance.user.events.dlq}

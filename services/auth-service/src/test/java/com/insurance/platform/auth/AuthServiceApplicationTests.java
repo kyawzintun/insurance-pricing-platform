@@ -47,6 +47,7 @@ class AuthServiceApplicationTests {
         registry.add("auth.jwt.secret", () -> Base64.getEncoder().encodeToString(KEY));
     }
 
+    @MockitoBean com.insurance.platform.auth.repository.OutboxRepository outbox;
     @MockitoBean UserRepository users;
     @Autowired PasswordEncoder passwords;
     @Autowired ObjectMapper mapper;

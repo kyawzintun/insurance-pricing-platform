@@ -4,6 +4,7 @@ import com.insurance.platform.notification.entity.Notification;
 import com.insurance.platform.notification.event.QuotePricedEnvelope;
 import com.insurance.platform.notification.repository.NotificationRepository;
 import com.insurance.platform.notification.repository.ProcessedEventRepository;
+import com.insurance.platform.notification.event.UserRegisteredEnvelope;
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -46,6 +47,23 @@ public class NotificationService {
                 event.eventId(),
                 message,
                 now, expired ? "QUOTE_EXPIRED" : "QUOTE_PRICED"));
+        return ProcessResult.PROCESSED;
+    }
+
+    @Transactional
+    public ProcessResult registerUser(UserRegisteredEnvelope event) {
+        var now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+
+        if (!processedEvents.tryMarkProcessed(event.eventId(), CONSUMER_NAME, now)) {
+            return ProcessResult.DUPLICATE;
+        }
+
+        if (repository.existsByEventId(event.eventId())) {
+            return ProcessResult.DUPLICATE;
+        }
+
+        repository.saveAndFlush(new Notification(UUID.randomUUID(), event.aggregateId(), null, event.eventId(),
+                "Welcome! Your account has been registered successfully.", now, "USER_REGISTERED"));
         return ProcessResult.PROCESSED;
     }
 }

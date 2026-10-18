@@ -5,6 +5,7 @@ import com.insurance.platform.audit.entity.AuditRecord;
 import com.insurance.platform.audit.event.QuotePricedEnvelope;
 import com.insurance.platform.audit.repository.AuditRecordRepository;
 import com.insurance.platform.audit.repository.ProcessedEventRepository;
+import com.insurance.platform.audit.event.UserRegisteredEnvelope;
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -47,6 +48,18 @@ public class AuditService {
         repository.saveAndFlush(new AuditRecord(UUID.randomUUID(), event.eventId(), expired ? null : d.customerId().toString(),
                 d.quoteId().toString(), event.correlationId(), event.occurredAt().truncatedTo(ChronoUnit.MICROS),
                 event.producer(), mapper.writeValueAsString(metadata), now, event.eventType(), expired ? "SYSTEM" : "CUSTOMER"));
+        return ProcessResult.PROCESSED;
+    }
+
+    @Transactional
+    public ProcessResult registerUser(UserRegisteredEnvelope event) {
+        var now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+        if (!processedEvents.tryMarkProcessed(event.eventId(), CONSUMER_NAME, now)) return ProcessResult.DUPLICATE;
+        if (repository.existsByEventId(event.eventId())) return ProcessResult.DUPLICATE;
+        repository.saveAndFlush(new AuditRecord(UUID.randomUUID(), event.eventId(), event.aggregateId().toString(),
+                event.aggregateId().toString(), event.correlationId(), event.occurredAt(), event.producer(),
+                mapper.writeValueAsString(java.util.Map.of("role", event.data().role(), "status", event.data().status())),
+                now, "UserRegistered", "CUSTOMER", "User"));
         return ProcessResult.PROCESSED;
     }
 }

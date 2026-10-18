@@ -1,6 +1,6 @@
 # Transactional Outbox — Quote Service
 
-Implemented in Phase 16 for QuotePriced v1 only. Auth and Pricing outbox tables remain unused. Notification and Audit retain their Phase 15 idempotency behavior.
+Quote outbox was introduced in Phase 16 and extended for QuoteExpired in Phase 18. Phase 19 adds a service-local Auth outbox publisher for UserRegistered. Pricing outbox remains unused. Notification and Audit retain Phase 15 idempotency.
 
 ## Why it is needed
 
@@ -98,3 +98,12 @@ SELECT status, count(*) FROM outbox_events GROUP BY status;
 Do not manually mark pending events PUBLISHED to clear a backlog: that would discard event intent. No retention or cleanup job is implemented.
 
 See [specification](specs/phase-16-transactional-outbox.md) and [validation](phase-16-validation.md). Phase 17 now adds consumer retry/DLQ handling; the outbox publication policy described here remains unchanged. See [consumer retry/DLQ](retry-and-dlq.md).
+
+## Phase 19 — Auth/User Events
+
+Auth now persists UserRegistered v1 in its existing outbox during registration, then
+publishes to insurance.user.events keyed by userId. Notification and Audit reuse
+their idempotency and retry/DLQ paths with insurance.user.events.dlq. Auth V4 widens
+outbox correlation_id to 128; consumer schemas need no migration. No historical
+backfill or admin status events. See [contract and lifecycle](user-registered-event.md)
+and [validation](phase-19-validation.md). Earlier phase sections are historical.

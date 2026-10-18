@@ -2,6 +2,7 @@ package com.insurance.platform.notification.config;
 
 import com.insurance.platform.notification.event.QuoteDeadLetterRecoverer;
 import com.insurance.platform.notification.exception.InvalidQuoteEventException;
+import com.insurance.platform.notification.exception.InvalidUserEventException;
 import java.time.Clock;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,12 +22,14 @@ public class NotificationKafkaConfiguration {
     @Bean
     QuoteDeadLetterRecoverer notificationDeadLetterRecoverer(KafkaTemplate<byte[], byte[]> kafka, Clock clock,
             @Value("${spring.kafka.consumer.group-id}") String group,
-            @Value("${kafka.consumer.max-attempts:3}") int maxAttempts) {
+            @Value("${kafka.consumer.max-attempts:3}") int maxAttempts,
+            @Value("${user.events.topic:insurance.user.events}") String userTopic,
+            @Value("${user.events.dlq-topic:insurance.user.events.dlq}") String userDlqTopic) {
 
         if (maxAttempts < 1 || maxAttempts > 10) {
             throw new IllegalArgumentException("Consumer max attempts must be 1..10");
         }
-        return new QuoteDeadLetterRecoverer(kafka, clock, group, maxAttempts);
+        return new QuoteDeadLetterRecoverer(kafka, clock, group, maxAttempts, userTopic, userDlqTopic);
     }
 
     @Bean
@@ -40,7 +43,7 @@ public class NotificationKafkaConfiguration {
 
         var handler = new DefaultErrorHandler(recoverer, new FixedBackOff(backoffMs, maxAttempts - 1L));
         // All processing exceptions retry; only our validated permanent-input failures bypass retries.
-        handler.setClassifications(Map.of(InvalidQuoteEventException.class, false), true);
+        handler.setClassifications(Map.of(InvalidQuoteEventException.class, false, InvalidUserEventException.class, false), true);
         handler.setResetStateOnExceptionChange(false);
         handler.setResetStateOnRecoveryFailure(true);
         handler.setRetryListeners(recoverer);

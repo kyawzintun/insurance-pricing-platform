@@ -1,6 +1,7 @@
 package com.insurance.platform.audit.event;
 
 import com.insurance.platform.audit.exception.InvalidQuoteEventException;
+import com.insurance.platform.audit.exception.InvalidUserEventException;
 import com.insurance.platform.audit.exception.QuoteProcessingException;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -28,10 +29,14 @@ public class QuoteDeadLetterRecoverer implements ConsumerRecordRecoverer, RetryL
     private final Clock clock;
     private final String group;
     private final int maxAttempts;
+    private final String userTopic;
+    private final String userDlqTopic;
     private final JsonMapper mapper = JsonMapper.builder().build();
 
-    public QuoteDeadLetterRecoverer(KafkaTemplate<byte[], byte[]> kafka, Clock clock, String group, int maxAttempts) {
+    public QuoteDeadLetterRecoverer(KafkaTemplate<byte[], byte[]> kafka, Clock clock, String group, int maxAttempts,
+            String userTopic, String userDlqTopic) {
         this.kafka = kafka; this.clock = clock; this.group = group; this.maxAttempts = maxAttempts;
+        this.userTopic = userTopic; this.userDlqTopic = userDlqTopic;
     }
 
     @Override
@@ -64,7 +69,8 @@ public class QuoteDeadLetterRecoverer implements ConsumerRecordRecoverer, RetryL
         add(headers, "x-correlation-id", metadata.correlationId());
         // Fresh allowlisted headers: do not forward credentials, spoofed metadata, or old stack traces.
         // Phase 1 source and DLQ both have three partitions; preserve the source partition.
-        var output = new ProducerRecord<byte[], byte[]>(DLQ, record.partition(), null,
+        var dlq = userTopic.equals(record.topic()) ? userDlqTopic : DLQ;
+        var output = new ProducerRecord<byte[], byte[]>(dlq, record.partition(), null,
                 (byte[]) record.key(), (byte[]) record.value(), headers);
         try {
             kafka.send(output).get(7, TimeUnit.SECONDS);
@@ -73,16 +79,16 @@ public class QuoteDeadLetterRecoverer implements ConsumerRecordRecoverer, RetryL
             throw new IllegalStateException("DLQ_PUBLICATION_INTERRUPTED");
         } catch (Exception sendFailure) {
             LOG.warn("DLQ publication failed consumerService=audit-service topic={} partition={} offset={} dlqTopic={} attempt={} exceptionClass={}; source remains replayable",
-                    record.topic(), record.partition(), record.offset(), DLQ, attempt, sendFailure.getClass().getName());
+                    record.topic(), record.partition(), record.offset(), dlq, attempt, sendFailure.getClass().getName());
             // No nested Kafka exception: it may contain record contents. Throwing prevents source completion.
             throw new IllegalStateException("DLQ_PUBLICATION_FAILED");
         }
         LOG.info("DLQ publication acknowledged consumerService=audit-service topic={} partition={} offset={} dlqTopic={} attempt={}",
-                record.topic(), record.partition(), record.offset(), DLQ, attempt);
+                record.topic(), record.partition(), record.offset(), dlq, attempt);
     }
 
     private int attempts(ConsumerRecord<?, ?> record, Exception failure) {
-        if (maxAttempts == 1 || root(failure) instanceof InvalidQuoteEventException) return 1;
+        if (maxAttempts == 1 || (root(failure) instanceof InvalidQuoteEventException || root(failure) instanceof InvalidUserEventException)) return 1;
         var header = record.headers().lastHeader(ATTEMPT);
         return header == null ? 1 : Integer.parseInt(new String(header.value(), StandardCharsets.UTF_8));
     }
@@ -97,7 +103,7 @@ public class QuoteDeadLetterRecoverer implements ConsumerRecordRecoverer, RetryL
             if (candidate.matches("[A-Za-z0-9._-]{1,128}")) correlationId = candidate;
         } catch (RuntimeException ignored) { /* Malformed input has only record coordinates. */ }
         var cause = root(failure);
-        String reason = cause instanceof InvalidQuoteEventException && INVALID_REASONS.contains(cause.getMessage())
+        String reason = (cause instanceof InvalidQuoteEventException || cause instanceof InvalidUserEventException) && INVALID_REASONS.contains(cause.getMessage())
                 ? cause.getMessage() : "PROCESSING_FAILURE";
         String failureClass = cause instanceof QuoteProcessingException processing
                 ? processing.failureClass() : cause.getClass().getName();

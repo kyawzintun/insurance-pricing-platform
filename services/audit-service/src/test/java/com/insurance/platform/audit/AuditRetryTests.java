@@ -18,7 +18,7 @@ import static org.mockito.Mockito.*;
 
 class AuditRetryTests {
     @SuppressWarnings("unchecked") final KafkaTemplate<byte[], byte[]> kafka = mock(KafkaTemplate.class);
-    final QuoteDeadLetterRecoverer recoverer = new QuoteDeadLetterRecoverer(kafka, Clock.fixed(NOW, ZoneOffset.UTC), "test-group", 3);
+    final QuoteDeadLetterRecoverer recoverer = new QuoteDeadLetterRecoverer(kafka, Clock.fixed(NOW, ZoneOffset.UTC), "test-group", 3, "custom.user.events", "custom.user.failures");
     ConsumerRecord<byte[], byte[]> record(byte[] value) {
         return new ConsumerRecord<>("insurance.quote.events", 1, 42, QUOTE.toString().getBytes(StandardCharsets.UTF_8), value);
     }
@@ -127,4 +127,19 @@ class AuditRetryTests {
         verify(callback).accept(input, failure);
     }
     String text(ProducerRecord<?, ?> record, String name) { return new String(record.headers().lastHeader(name).value(), StandardCharsets.UTF_8); }
+    @Test void configuredUserTopicRoutesToConfiguredDlqWithOriginalBytes() {
+        byte[] malformed = {(byte) 0xff, '{'};
+        var input = new ConsumerRecord<byte[],byte[]>("custom.user.events", 1, 42,
+                QUOTE.toString().getBytes(StandardCharsets.UTF_8), malformed);
+        when(kafka.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.completedFuture(null));
+        recoverer.accept(input, new InvalidUserEventException("MALFORMED_UTF8"));
+        var sent = ArgumentCaptor.forClass(ProducerRecord.class); verify(kafka).send(sent.capture());
+        var output = sent.getValue();
+        assertThat(output.topic()).isEqualTo("custom.user.failures");
+        assertThat(output.partition()).isEqualTo(1);
+        assertThat((byte[]) output.key()).containsExactly(input.key());
+        assertThat((byte[]) output.value()).containsExactly(malformed);
+        assertThat(text(output, "x-original-topic")).isEqualTo("custom.user.events");
+        assertThat(text(output, "x-attempt-count")).isEqualTo("1");
+    }
 }
