@@ -193,3 +193,18 @@ User event topics are configured with `USER_EVENTS_TOPIC` (default
 `insurance.user.events`) and `USER_EVENTS_DLQ_TOPIC` (default
 `insurance.user.events.dlq`). Listener and DLQ routing use these same settings.
 Provision overridden topics with matching source/DLQ partition counts before use.
+
+## Phase 20 — Pricing events
+
+PricingRuleCreated/Updated/Enabled/Disabled v1 use the existing transactional outbox
+and Audit idempotency/retry design. Authenticated ADMIN UUID, request correlation
+and the resulting rule snapshot are recorded; the pricingRuleId is the Kafka key.
+`PRICING_EVENTS_TOPIC` defaults to insurance.pricing.events in Pricing/Audit;
+`PRICING_EVENTS_DLQ_TOPIC` defaults to insurance.pricing.events.dlq in Audit.
+Pricing publisher settings are `PRICING_OUTBOX_PUBLISHER_ENABLED` (true locally,
+false otherwise), `PRICING_OUTBOX_POLL_INTERVAL` (2000 ms) and
+`PRICING_OUTBOX_BATCH_SIZE` (50, valid 1–500). No Kafka wait in HTTP handling.
+Only Pricing V4 widens outbox correlation IDs to 128; existing migrations stay intact.
+No pricing-calculation events, customer notifications or historical backfill.
+See [contract/configuration](../../docs/pricing-rule-events.md) and
+[validation](../../docs/phase-20-validation.md). Phase 21 is not implemented.

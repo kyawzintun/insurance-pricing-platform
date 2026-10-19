@@ -32,6 +32,8 @@ import static org.awaitility.Awaitility.await;
 @ActiveProfiles("integration")
 @Testcontainers
 class AuditKafkaIT {
+    static final String PRICING_TOPIC = "custom.pricing.events";
+    static final String PRICING_DLQ = "custom.pricing.failures";
     static final String USER_TOPIC = "custom.user.events";
     static final String USER_DLQ = "custom.user.failures";
     static final String TOPIC = "insurance.quote.events";
@@ -47,6 +49,8 @@ class AuditKafkaIT {
         r.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
         r.add("user.events.topic", () -> USER_TOPIC);
         r.add("user.events.dlq-topic", () -> USER_DLQ);
+        r.add("pricing.events.topic", () -> PRICING_TOPIC);
+        r.add("pricing.events.dlq-topic", () -> PRICING_DLQ);
         r.add("spring.kafka.consumer.group-id", () -> GROUP);
     }
     @Autowired JdbcTemplate jdbc;
@@ -306,6 +310,51 @@ class AuditKafkaIT {
                 container.stop();
                 jdbc.update("delete from audit_records where event_id=?",eventId);
                 jdbc.update("delete from processed_events where event_id=?",eventId);
+            }
+        }
+    }
+
+    @Test void allPricingMutationsAreAuditedIndividuallyAndDuplicatesAndInvalidInputAreSafe() throws Exception {
+        when(clock.instant()).thenReturn(NOW);
+        var rule=UUID.randomUUID();var actor=UUID.randomUUID();
+        var eventIds=new ArrayList<UUID>();
+        try(var admin=Admin.create(Map.of("bootstrap.servers",KAFKA.getBootstrapServers()));
+            var producer=new KafkaProducer<byte[],byte[]>(Map.of("bootstrap.servers",KAFKA.getBootstrapServers(),
+                "key.serializer",ByteArraySerializer.class,"value.serializer",ByteArraySerializer.class));
+            var reader=new KafkaConsumer<byte[],byte[]>(Map.of("bootstrap.servers",KAFKA.getBootstrapServers(),
+                "key.deserializer",ByteArrayDeserializer.class,"value.deserializer",ByteArrayDeserializer.class,"enable.auto.commit",false))) {
+            admin.createTopics(List.of(new NewTopic(PRICING_TOPIC,3,(short)1),new NewTopic(PRICING_DLQ,3,(short)1))).all().get(20,TimeUnit.SECONDS);
+            var partition=new TopicPartition(PRICING_TOPIC,0);
+            var destination=new TopicPartition(PRICING_DLQ,0);reader.assign(List.of(destination));reader.seekToBeginning(List.of(destination));
+            var container=registry.getListenerContainer("pricing-audit");
+            try {
+                container.start();String first=null;int version=0;
+                for(String type:List.of("PricingRuleCreated","PricingRuleUpdated","PricingRuleDisabled","PricingRuleEnabled")) {
+                    var eventId=UUID.randomUUID();eventIds.add(eventId);
+                    var json=PricingEventTests.json(eventId,rule,actor,type,!type.equals("PricingRuleDisabled"),version++);
+                    if(first==null) first=json;
+                    producer.send(new ProducerRecord<>(PRICING_TOPIC,0,bytes(rule.toString()),bytes(json))).get(10,TimeUnit.SECONDS);
+                }
+                awaitOffset(admin,partition,4);
+                assertThat(jdbc.queryForObject("select count(*) from audit_records where entity_id=?",Integer.class,rule.toString())).isEqualTo(4);
+                var rows=jdbc.queryForList("select * from audit_records where entity_id=?",rule.toString());
+                assertThat(rows).extracting(row -> row.get("event_type")).containsExactlyInAnyOrder("PricingRuleCreated","PricingRuleUpdated","PricingRuleDisabled","PricingRuleEnabled");
+                for(var row:rows) { assertThat(row.get("actor_type")).isEqualTo("ADMIN");assertThat(row.get("actor_id")).isEqualTo(actor.toString());assertThat(row.get("entity_type")).isEqualTo("PricingRule");assertThat(row.get("producer")).isEqualTo("pricing-service"); }
+                producer.send(new ProducerRecord<>(PRICING_TOPIC,0,bytes(rule.toString()),bytes(first))).get(10,TimeUnit.SECONDS);
+                awaitOffset(admin,partition,5);
+                for(var id:eventIds) assertThat(jdbc.queryForObject("select count(*) from processed_events where event_id=?",Integer.class,id)).isEqualTo(1);
+                assertThat(jdbc.queryForObject("select count(*) from audit_records where entity_id=?",Integer.class,rule.toString())).isEqualTo(4);
+                var invalid=first.replace("\"eventVersion\":1","\"eventVersion\":2");
+                producer.send(new ProducerRecord<>(PRICING_TOPIC,0,bytes(rule.toString()),bytes(invalid))).get(10,TimeUnit.SECONDS);
+                awaitOffset(admin,partition,6);
+                var dead=read(reader);assertThat(dead.topic()).isEqualTo(PRICING_DLQ);assertThat(dead.value()).containsExactly(bytes(invalid));
+                assertThat(text(dead,"x-original-topic")).isEqualTo(PRICING_TOPIC);assertThat(text(dead,"x-attempt-count")).isEqualTo("1");
+                producer.send(new ProducerRecord<>(PRICING_TOPIC,0,bytes(rule.toString()),bytes("{broken"))).get(10,TimeUnit.SECONDS);
+                awaitOffset(admin,partition,7);assertThat(read(reader).value()).containsExactly(bytes("{broken"));
+            } finally {
+                container.stop();
+                jdbc.update("delete from audit_records where entity_id=?",rule.toString());
+                for(var id:eventIds) jdbc.update("delete from processed_events where event_id=?",id);
             }
         }
     }

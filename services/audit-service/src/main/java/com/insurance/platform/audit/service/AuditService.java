@@ -62,4 +62,17 @@ public class AuditService {
                 now, "UserRegistered", "CUSTOMER", "User"));
         return ProcessResult.PROCESSED;
     }
+
+    @Transactional
+    public ProcessResult recordPricing(com.insurance.platform.audit.event.PricingRuleEnvelope event) {
+        var now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+        if (!processedEvents.tryMarkProcessed(event.eventId(), CONSUMER_NAME, now)) return ProcessResult.DUPLICATE;
+        if (repository.existsByEventId(event.eventId())) return ProcessResult.DUPLICATE;
+        var d = event.data();
+        // Consumer-owned fixed DTO is the metadata allowlist; no whole envelope or credentials.
+        repository.saveAndFlush(new AuditRecord(UUID.randomUUID(), event.eventId(), d.changedBy().toString(),
+                d.pricingRuleId().toString(), event.correlationId(), event.occurredAt(), event.producer(),
+                mapper.writeValueAsString(d), now, event.eventType(), "ADMIN", "PricingRule"));
+        return ProcessResult.PROCESSED;
+    }
 }

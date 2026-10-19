@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 19 implemented; Phase 20 — Pricing Events not started.
+Status: Phases 0 through 20 implemented; Phase 21 — Admin Customer Management not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -87,3 +87,12 @@ and [validation](phase-18-validation.md).
 ## Phase 19 — Auth/User Events
 
 Implemented: transactional UserRegistered v1 outbox, Auth publisher, idempotent Notification/Audit user consumers, and existing retry/user DLQ integration. No historical backfill or admin status events. See [specification](specs/phase-19-auth-user-events.md), [contract](user-registered-event.md), and [validation](phase-19-validation.md).
+
+## Phase 20 — Pricing Events
+
+Implemented and validated: PricingRuleCreated/Updated/Enabled/Disabled v1 use
+atomic pricing-rule/outbox transactions, authenticated ADMIN attribution, the
+established advisory-lock publisher, and Audit idempotency/retry/pricing DLQ.
+Calculation and Notification are unchanged; no historical backfill. See
+[specification](specs/phase-20-pricing-events.md), [contracts](pricing-rule-events.md),
+and [validation](phase-20-validation.md). Phase 21 has not been started.

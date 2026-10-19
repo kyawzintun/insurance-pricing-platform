@@ -13,6 +13,19 @@ spring:
   autoconfigure:
     # Temporary Phase 2: no generated user or password; no authentication yet.
     exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  datasource:
+    hikari:
+      data-source-properties:
+        logServerErrorDetail: false
+  kafka:
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        "max.block.ms": 1000
+        "delivery.timeout.ms": 5000
+        "request.timeout.ms": 1000
   jpa:
     hibernate:
       ddl-auto: none
@@ -33,3 +46,12 @@ auth:
   jwt:
     secret: ${AUTH_JWT_SECRET:}
     issuer: ${AUTH_JWT_ISSUER:insurance-auth-service}
+
+pricing:
+  events:
+    topic: ${PRICING_EVENTS_TOPIC:insurance.pricing.events}
+outbox:
+  publisher:
+    enabled: ${PRICING_OUTBOX_PUBLISHER_ENABLED:false}
+    poll-interval: ${PRICING_OUTBOX_POLL_INTERVAL:2000}
+    batch-size: ${PRICING_OUTBOX_BATCH_SIZE:50}

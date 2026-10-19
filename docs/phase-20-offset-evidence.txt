@@ -1,0 +1,44 @@
+Phase 20 disposable Gateway → Pricing → Kafka → Audit: PASS
+
+ADMIN provisioned through Auth registration, explicit local promotion, then login; UUID comes from JWT.
+
+Initial create: pricing row + PENDING outbox; source end=0. Publisher enabled → PUBLISHED; source end=1.
+
+Create/update/disable/enable: 4 distinct event IDs, resulting versions 0/1/2/3, 4 ADMIN/PricingRule Audit rows + markers; source end=4.
+
+Stale request: 409 with no intent. Concurrent same-version requests: 200 + 409, exactly one additional Updated intent; Audit rows=5, source end=5.
+
+Calculation output unchanged and no extra pricing intent; no historical seed backfill.
+
+Republished exact original key/value/eventId: source end=6; Audit rows/markers remain 5; group caught up.
+
+Topic: insurance.pricing.events	TopicId: GC70Vh8jTOWJgbQZe9l_CA	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+	Topic: insurance.pricing.events	Partition: 0	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr:
+	Topic: insurance.pricing.events	Partition: 1	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr:
+	Topic: insurance.pricing.events	Partition: 2	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr:
+
+insurance.pricing.events:0:0
+insurance.pricing.events:1:6
+insurance.pricing.events:2:0
+
+Topic: insurance.pricing.events.dlq	TopicId: mapTX_75Rn2PQWM8taqbpA	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+	Topic: insurance.pricing.events.dlq	Partition: 0	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr:
+	Topic: insurance.pricing.events.dlq	Partition: 1	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr:
+	Topic: insurance.pricing.events.dlq	Partition: 2	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr:
+
+insurance.pricing.events.dlq:0:0
+insurance.pricing.events.dlq:1:0
+insurance.pricing.events.dlq:2:0
+
+GROUP           TOPIC                    PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                                   HOST            CLIENT-ID
+audit-service   insurance.user.events    2          -               0               -               consumer-audit-service-2-3eaf9200-6f97-4d73-8afb-c2a4c461eb7e /172.17.0.1     consumer-audit-service-2
+audit-service   insurance.user.events    1          -               0               -               consumer-audit-service-2-3eaf9200-6f97-4d73-8afb-c2a4c461eb7e /172.17.0.1     consumer-audit-service-2
+audit-service   insurance.user.events    0          -               0               -               consumer-audit-service-2-3eaf9200-6f97-4d73-8afb-c2a4c461eb7e /172.17.0.1     consumer-audit-service-2
+audit-service   insurance.quote.events   0          -               0               -               consumer-audit-service-3-f9846f58-e47e-462d-8104-7364a41dba8b /172.17.0.1     consumer-audit-service-3
+audit-service   insurance.quote.events   1          -               0               -               consumer-audit-service-3-f9846f58-e47e-462d-8104-7364a41dba8b /172.17.0.1     consumer-audit-service-3
+audit-service   insurance.quote.events   2          -               0               -               consumer-audit-service-3-f9846f58-e47e-462d-8104-7364a41dba8b /172.17.0.1     consumer-audit-service-3
+audit-service   insurance.pricing.events 0          -               0               -               consumer-audit-service-1-e8ac5d9e-5168-4a7e-be0c-814cfd6dca81 /172.17.0.1     consumer-audit-service-1
+audit-service   insurance.pricing.events 2          -               0               -               consumer-audit-service-1-e8ac5d9e-5168-4a7e-be0c-814cfd6dca81 /172.17.0.1     consumer-audit-service-1
+audit-service   insurance.pricing.events 1          6               6               0               consumer-audit-service-1-e8ac5d9e-5168-4a7e-be0c-814cfd6dca81 /172.17.0.1     consumer-audit-service-1
+
+Security scan: PASS; no JWT, Authorization, credentials, signing key, password/hash or token fields in pricing payloads/application logs.

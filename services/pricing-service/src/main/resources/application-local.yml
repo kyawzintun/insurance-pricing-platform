@@ -14,3 +14,7 @@ auth:
   jwt:
     # Same PUBLIC DEVELOPMENT-ONLY KEY as Auth/Gateway. Never reuse outside local learning.
     secret: ${AUTH_JWT_SECRET:VnczjVEg+Q2DUmsGnX7ZtEAeji5U42s55cOsNvTc3aY=}
+
+outbox:
+  publisher:
+    enabled: ${PRICING_OUTBOX_PUBLISHER_ENABLED:true}

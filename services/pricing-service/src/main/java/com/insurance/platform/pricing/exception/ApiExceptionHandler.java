@@ -13,6 +13,7 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.security.access.AccessDeniedException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -40,6 +41,11 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiError> invalidConfiguration(Exception ex) {
         return ResponseEntity.internalServerError().body(new ApiError(
                 "PRICING_CONFIGURATION_ERROR", "Pricing configuration is unavailable or invalid"));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<ApiError> forbidden() {
+        return ResponseEntity.status(403).body(new ApiError("FORBIDDEN", "Access denied"));
     }
 
     @ExceptionHandler(Exception.class)

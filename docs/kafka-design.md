@@ -1,8 +1,8 @@
 # Kafka Design
 
-Status: Implemented through Phase 17. Earlier phase sections record historical milestones.
+Status: Implemented through Phase 20. Earlier phase sections record historical milestones.
 
-Kafka carries QuotePriced events to Notification and Audit. Quote Service uses Transactional Outbox publishing; both consumers use idempotent processing. See the Phase 16 section below for current behavior.
+Kafka carries QuotePriced/QuoteExpired, UserRegistered, and pricing-rule mutation events. Quote, Auth and Pricing publish through their local transactional outboxes. Audit consumes all three domains; Notification consumes quote/user events. Consumers reuse idempotency and retry/DLQ handling.
 
 Phase 0 left topics, partitioning, event schemas, delivery handling, and consumer behavior unspecified. Phase 1 defines only the broker and topics below; event contracts and application behavior remain pending.
 
@@ -73,3 +73,13 @@ their idempotency and retry/DLQ paths with insurance.user.events.dlq. Auth V4 wi
 outbox correlation_id to 128; consumer schemas need no migration. No historical
 backfill or admin status events. See [contract and lifecycle](user-registered-event.md)
 and [validation](phase-19-validation.md). Earlier phase sections are historical.
+
+## Phase 20 — Pricing Events
+
+Pricing admin create/update/enable/disable now commit operation-specific v1 events
+in the existing outbox with the rule mutation. The service-local publisher sends to
+insurance.pricing.events keyed by pricingRuleId; Audit records ADMIN/PricingRule
+using existing idempotency and pricing retry/DLQ handling. Pricing V4 widens only
+outbox correlation_id to 128. Calculation emits no event; Notification is unchanged.
+See [contracts and lifecycle](pricing-rule-events.md), [specification](specs/phase-20-pricing-events.md),
+and [validation](phase-20-validation.md). No historical backfill or Phase 21 work.

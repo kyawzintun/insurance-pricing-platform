@@ -6,6 +6,13 @@ import com.insurance.platform.pricing.enums.RuleType;
 import com.insurance.platform.pricing.exception.PricingConfigurationException;
 import com.insurance.platform.pricing.exception.PricingRuleException;
 import com.insurance.platform.pricing.repository.PricingRuleRepository;
+import com.insurance.platform.pricing.repository.OutboxRepository;
+import com.insurance.platform.pricing.event.PricingAdminIdentity;
+import com.insurance.platform.pricing.event.PricingCorrelationId;
+import tools.jackson.databind.json.JsonMapper;
+import com.insurance.platform.pricing.event.PricingRuleEventData;
+import com.insurance.platform.pricing.event.EventEnvelope;
+import com.insurance.platform.pricing.entity.OutboxEvent;
 import jakarta.validation.Validator;
 import java.time.Clock;
 import java.time.Instant;
@@ -22,8 +29,23 @@ public class PricingRuleAdminService {
     private final PricingRuleRepository repository;
     private final Clock clock;
     private final Validator validator;
+    private final OutboxRepository outbox;
+    private final PricingAdminIdentity identity;
+    private final PricingCorrelationId correlation;
+    private final JsonMapper mapper;
 
-    public PricingRuleAdminService(PricingRuleRepository repository, Clock clock, Validator validator) {
+    public PricingRuleAdminService(
+            PricingRuleRepository repository,
+            Clock clock,
+            Validator validator,
+            OutboxRepository outbox,
+            PricingAdminIdentity identity,
+            PricingCorrelationId correlation,
+            JsonMapper mapper) {
+        this.outbox = outbox;
+        this.identity = identity;
+        this.correlation = correlation;
+        this.mapper = mapper;
         this.repository = repository;
         this.clock = clock;
         this.validator = validator;
@@ -41,38 +63,55 @@ public class PricingRuleAdminService {
     @Transactional
     public PricingRuleResponse create(CreatePricingRuleRequest request) {
         validateRequest(request);
+        var actor = identity.current();
         var rule = new PricingRule(UUID.randomUUID(), request.ruleType(), request.operator(),
                 request.comparisonValue(), request.comparisonValueTo(), request.factor(), request.fixedAmount(),
                 request.effectiveFrom().truncatedTo(ChronoUnit.MICROS), request.enabled(), request.description());
         validateRule(rule);
-        rule.initializeTimestamps(now());
-        return PricingRuleResponse.from(repository.saveAndFlush(rule));
+        var changedAt = now();
+        rule.initializeTimestamps(changedAt);
+        var saved = repository.saveAndFlush(rule);
+        recordEvent(saved, "PricingRuleCreated", actor, changedAt);
+        return PricingRuleResponse.from(saved);
     }
 
     @Transactional
     public PricingRuleResponse update(UUID id, UpdatePricingRuleRequest request) {
         validateRequest(request);
+        var actor = identity.current();
         var existing = find(id);
         checkVersion(existing, request.version());
         var values = new PricingRule(id, request.ruleType(), request.operator(), request.comparisonValue(),
                 request.comparisonValueTo(), request.factor(), request.fixedAmount(), request.effectiveFrom().truncatedTo(ChronoUnit.MICROS),
                 request.enabled(), request.description());
         validateRule(values);
-        existing.updateFrom(values, now());
+        var changedAt = now();
+        existing.updateFrom(values, changedAt);
         // Flush before mapping the response: Hibernate increments @Version during the SQL UPDATE.
         repository.flush();
+        recordEvent(existing, "PricingRuleUpdated", actor, changedAt);
         return PricingRuleResponse.from(existing);
     }
 
     @Transactional
     public PricingRuleResponse setEnabled(UUID id, PricingRuleVersionRequest request, boolean enabled) {
         validateRequest(request);
+        var actor = identity.current();
         var rule = find(id);
         checkVersion(rule, request.version());
         validateRule(rule);
-        rule.changeEnabled(enabled, now());
+        var changedAt = now();
+        rule.changeEnabled(enabled, changedAt);
         repository.flush();
+        recordEvent(rule, enabled ? "PricingRuleEnabled" : "PricingRuleDisabled", actor, changedAt);
         return PricingRuleResponse.from(rule);
+    }
+
+    private void recordEvent(PricingRule rule, String type, UUID actor, Instant now) {
+        var data = PricingRuleEventData.from(rule, actor, now);
+        var event = new EventEnvelope<>(UUID.randomUUID(), type, 1,
+                "PricingRule", rule.getId(), now, correlation.current(), "pricing-service", data);
+        outbox.saveAndFlush(new OutboxEvent(event, mapper.writeValueAsString(event)));
     }
 
     private PricingRule find(UUID id) { return repository.findById(id).orElseThrow(PricingRuleException::notFound); }

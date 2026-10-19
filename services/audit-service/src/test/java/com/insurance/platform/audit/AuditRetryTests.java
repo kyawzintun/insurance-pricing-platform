@@ -18,7 +18,7 @@ import static org.mockito.Mockito.*;
 
 class AuditRetryTests {
     @SuppressWarnings("unchecked") final KafkaTemplate<byte[], byte[]> kafka = mock(KafkaTemplate.class);
-    final QuoteDeadLetterRecoverer recoverer = new QuoteDeadLetterRecoverer(kafka, Clock.fixed(NOW, ZoneOffset.UTC), "test-group", 3, "custom.user.events", "custom.user.failures");
+    final QuoteDeadLetterRecoverer recoverer = new QuoteDeadLetterRecoverer(kafka, Clock.fixed(NOW, ZoneOffset.UTC), "test-group", 3, "custom.user.events", "custom.user.failures", "custom.pricing.events", "custom.pricing.failures");
     ConsumerRecord<byte[], byte[]> record(byte[] value) {
         return new ConsumerRecord<>("insurance.quote.events", 1, 42, QUOTE.toString().getBytes(StandardCharsets.UTF_8), value);
     }

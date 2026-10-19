@@ -33,6 +33,7 @@ class PricingServiceApplicationTests {
         registry.add("auth.jwt.secret", () -> Base64.getEncoder().encodeToString(key));
     }
     @LocalServerPort int port;
+    @MockitoBean com.insurance.platform.pricing.repository.OutboxRepository outbox;
     @MockitoBean PricingRuleRepository repository;
     @MockitoBean Clock clock;
 

@@ -21,3 +21,5 @@ Record approved behavior and identify unresolved questions before implementation
 Automatic PRICED → EXPIRED transitions use bounded PostgreSQL transactions and the existing outbox. Notification supports QUOTE_EXPIRED; Audit uses a SYSTEM actor. See the [Phase 18 specification](phase-18-quote-expiration.md) for configuration, contract, concurrency and failure semantics. Phase 19 is outside this change.
 
 - [Phase 19 — Auth/User Events](phase-19-auth-user-events.md)
+
+- [Phase 20 — Pricing Events](phase-20-pricing-events.md)

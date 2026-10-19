@@ -35,6 +35,7 @@ class PricingAdministrationTests {
         properties.add("auth.jwt.secret", AdminJwtSupport::secret);
     }
     @LocalServerPort int port;
+    @MockitoBean com.insurance.platform.pricing.repository.OutboxRepository outbox;
     @MockitoBean PricingRuleRepository repository;
     @MockitoBean Clock clock;
     private PricingRule stored;
@@ -50,7 +51,7 @@ class PricingAdministrationTests {
     }
     private HttpResponse<String> request(String method, String path, String body, String token) throws Exception {
         try (var client = HttpClient.newHttpClient()) {
-            var builder = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path));
+            var builder = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).header("X-Correlation-ID", "phase20-admin-request");
             if (token != null) builder.header("Authorization", "Bearer " + token);
             if (body != null) builder.header("Content-Type", "application/json");
             return client.send(builder.method(method, body == null ? HttpRequest.BodyPublishers.noBody()
@@ -67,13 +68,13 @@ class PricingAdministrationTests {
     @ParameterizedTest @ValueSource(strings = {"GET", "POST", "PUT", "PATCH"})
     void noTokenIs401(String method) throws Exception {
         error(request(method, PATH + (method.equals("PATCH") ? "/" + ID + "/enable" : ""), VALID, null),401,"UNAUTHORIZED");
-        verifyNoInteractions(repository);
+        verifyNoInteractions(repository, outbox);
     }
     @ParameterizedTest @ValueSource(strings = {"GET", "POST", "PUT", "PATCH"})
     void customerIs403(String method) throws Exception {
         error(request(method, PATH + (method.equals("PATCH") ? "/" + ID + "/disable" : ""), VALID,
                 AdminJwtSupport.token("CUSTOMER")),403,"FORBIDDEN");
-        verifyNoInteractions(repository);
+        verifyNoInteractions(repository, outbox);
     }
     @Test void tamperedJwtIs401() throws Exception {
         String jwt = AdminJwtSupport.token("ADMIN"); int start = jwt.lastIndexOf('.') + 1;
@@ -103,7 +104,7 @@ class PricingAdministrationTests {
     @ParameterizedTest @ValueSource(strings={"\"id\":\"00000000-0000-0000-0000-000000000001\"", "\"version\":0", "\"createdAt\":\"2026-01-01T00:00:00Z\"", "\"updatedAt\":\"2026-01-01T00:00:00Z\""})
     void serverFieldsCannotBeSuppliedOnCreate(String extra) throws Exception {
         error(admin("POST",PATH,VALID.replace("}",","+extra+"}")),400,"INVALID_PRICING_RULE");
-        verifyNoInteractions(repository);
+        verifyNoInteractions(repository, outbox);
     }
     @ParameterizedTest @ValueSource(strings={
             "\"factor\":-1", "\"factor\":null", "\"factor\":1000000", "\"factor\":1.12345",
@@ -172,5 +173,51 @@ class PricingAdministrationTests {
         var response=admin("PATCH",PATH+"/"+ID+"/enable","{\"version\":0}");
         error(response,409,"PRICING_RULE_VERSION_CONFLICT");
         assertThat(response.body()).contains("Pricing rule was modified by another request");
+    }
+
+    @Test void allFourMutationsCreateSafeResultingStateIntentsWithAuthenticatedAdmin() throws Exception {
+        assertThat(admin("POST",PATH,VALID).statusCode()).isEqualTo(201);
+        assertThat(admin("PUT",PATH+"/"+ID,VALID.replace("}",",\"version\":0}")).statusCode()).isEqualTo(200);
+        assertThat(admin("PATCH",PATH+"/"+ID+"/disable","{\"version\":0}").statusCode()).isEqualTo(200);
+        assertThat(admin("PATCH",PATH+"/"+ID+"/enable","{\"version\":0}").statusCode()).isEqualTo(200);
+        var captured=org.mockito.ArgumentCaptor.forClass(com.insurance.platform.pricing.entity.OutboxEvent.class);
+        verify(outbox,times(4)).saveAndFlush(captured.capture());
+        var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
+        var ids=new HashSet<String>();
+        var types=new ArrayList<String>();
+        for(var row:captured.getAllValues()) {
+            var event=mapper.readTree(row.getPayload()); var data=event.path("data");
+            assertThat(event.size()).isEqualTo(9); assertThat(event.path("eventVersion").asInt()).isEqualTo(1);
+            assertThat(event.path("aggregateType").asText()).isEqualTo("PricingRule");
+            assertThat(event.path("aggregateId").asText()).isEqualTo(data.path("pricingRuleId").asText());
+            assertThat(event.path("producer").asText()).isEqualTo("pricing-service");
+            assertThat(event.path("correlationId").asText()).isEqualTo("phase20-admin-request");
+            assertThat(event.path("occurredAt").asText()).isEqualTo(NOW.toString());
+            assertThat(data.path("changedAt").asText()).isEqualTo(NOW.toString());
+            assertThat(data.path("changedBy").asText()).isEqualTo("00000000-0000-0000-0000-000000000001");
+            assertThat(data.path("factor").decimalValue()).isEqualByComparingTo("1.30");
+            assertThat(row.getPayload()).doesNotContain("Authorization","password","accessToken","Bearer","test-only-redacted-token");
+            assertThat(row.getEventId().toString()).isEqualTo(event.path("eventId").asText());
+            ids.add(event.path("eventId").asText());types.add(event.path("eventType").asText());
+        }
+        assertThat(ids).hasSize(4);
+        assertThat(types).containsExactly("PricingRuleCreated","PricingRuleUpdated","PricingRuleDisabled","PricingRuleEnabled");
+        assertThat(mapper.readTree(captured.getAllValues().get(2).getPayload()).path("data").path("enabled").asBoolean()).isFalse();
+        assertThat(mapper.readTree(captured.getAllValues().get(3).getPayload()).path("data").path("enabled").asBoolean()).isTrue();
+    }
+
+    @Test void requestCannotSupplyActorAndInvalidAdminSubjectCreatesNoIntent() throws Exception {
+        error(admin("POST",PATH,VALID.replace("}",",\"changedBy\":\"00000000-0000-0000-0000-000000000002\"}")),400,"INVALID_PRICING_RULE");
+        var token=AdminJwtSupport.sign("{\"sub\":\"invalid-admin\",\"roles\":[\"ADMIN\"],\"iss\":\"insurance-auth-service\",\"exp\":"+(Instant.now().getEpochSecond()+300)+"}");
+        error(request("POST",PATH,VALID,token),403,"FORBIDDEN");
+        verifyNoInteractions(outbox);
+    }
+
+    @Test void invalidRulesAndBothVersionConflictPathsCreateNoIntent() throws Exception {
+        error(admin("POST",PATH,VALID.replace("1.30","-1.30")),400,"INVALID_PRICING_RULE");
+        error(admin("PUT",PATH+"/"+ID,VALID.replace("}",",\"version\":1}")),409,"PRICING_RULE_VERSION_CONFLICT");
+        doThrow(new ObjectOptimisticLockingFailureException(PricingRule.class,ID)).when(repository).flush();
+        error(admin("PUT",PATH+"/"+ID,VALID.replace("}",",\"version\":0}")),409,"PRICING_RULE_VERSION_CONFLICT");
+        verifyNoInteractions(outbox);
     }
 }

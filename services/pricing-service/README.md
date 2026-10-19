@@ -171,7 +171,7 @@ Multiple rules in a category are allowed; newest-effective matching selection is
 
 Admin errors add 400 `INVALID_PRICING_RULE`, 404 `PRICING_RULE_NOT_FOUND`, and 409 `PRICING_RULE_VERSION_CONFLICT`. Authentication errors are 401 `UNAUTHORIZED` and 403 `FORBIDDEN`; no SQL, token parsing details, or stack traces are returned.
 
-The internal calculation POST remains temporarily unauthenticated directly on 8083 and is not routed through Gateway. A supplied invalid Bearer token is rejected even on public endpoints; omit Authorization when testing the temporary internal calculation access. Service-to-service authentication remains deferred to Phase 25. No hard-delete endpoint, Angular admin UI, Quote integration, Kafka/outbox events, or audit integration exists.
+The internal calculation POST remains temporarily unauthenticated directly on 8083 and is not routed through Gateway. A supplied invalid Bearer token is rejected even on public endpoints; omit Authorization when testing the temporary internal calculation access. Service-to-service authentication remains deferred to Phase 25. No hard-delete endpoint or Angular admin UI exists. Phase 20 now adds transactional pricing events and Audit integration; calculation remains read-only.
 
 ### Administration tests
 
@@ -181,4 +181,19 @@ Normal `./mvnw clean verify` needs no Docker, PostgreSQL, or Kafka. It includes 
 ./mvnw -pl services/pricing-service -am -Ppostgres-it verify
 ```
 
-This profile runs `PricingRulePostgresIT` with the existing Flyway migrations in a disposable database, never your local pricing_db. See [Phase 7 validation](../../docs/phase-7-validation.md). Phase 8 — Quote Service MVP has not started.
+This profile runs `PricingRulePostgresIT` with the existing Flyway migrations in a disposable database, never your local pricing_db. See [Phase 7 validation](../../docs/phase-7-validation.md). Phase 20 event validation is documented below.
+
+## Phase 20 — Pricing events
+
+PricingRuleCreated/Updated/Enabled/Disabled v1 use the existing transactional outbox
+and Audit idempotency/retry design. Authenticated ADMIN UUID, request correlation
+and the resulting rule snapshot are recorded; the pricingRuleId is the Kafka key.
+`PRICING_EVENTS_TOPIC` defaults to insurance.pricing.events in Pricing/Audit;
+`PRICING_EVENTS_DLQ_TOPIC` defaults to insurance.pricing.events.dlq in Audit.
+Pricing publisher settings are `PRICING_OUTBOX_PUBLISHER_ENABLED` (true locally,
+false otherwise), `PRICING_OUTBOX_POLL_INTERVAL` (2000 ms) and
+`PRICING_OUTBOX_BATCH_SIZE` (50, valid 1–500). No Kafka wait in HTTP handling.
+Only Pricing V4 widens outbox correlation IDs to 128; existing migrations stay intact.
+No pricing-calculation events, customer notifications or historical backfill.
+See [contract/configuration](../../docs/pricing-rule-events.md) and
+[validation](../../docs/phase-20-validation.md). Phase 21 is not implemented.

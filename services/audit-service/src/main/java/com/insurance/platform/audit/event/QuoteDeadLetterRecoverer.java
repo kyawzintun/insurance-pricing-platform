@@ -2,6 +2,7 @@ package com.insurance.platform.audit.event;
 
 import com.insurance.platform.audit.exception.InvalidQuoteEventException;
 import com.insurance.platform.audit.exception.InvalidUserEventException;
+import com.insurance.platform.audit.exception.InvalidPricingEventException;
 import com.insurance.platform.audit.exception.QuoteProcessingException;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -31,12 +32,27 @@ public class QuoteDeadLetterRecoverer implements ConsumerRecordRecoverer, RetryL
     private final int maxAttempts;
     private final String userTopic;
     private final String userDlqTopic;
+    private final String pricingTopic;
+    private final String pricingDlqTopic;
     private final JsonMapper mapper = JsonMapper.builder().build();
 
-    public QuoteDeadLetterRecoverer(KafkaTemplate<byte[], byte[]> kafka, Clock clock, String group, int maxAttempts,
-            String userTopic, String userDlqTopic) {
-        this.kafka = kafka; this.clock = clock; this.group = group; this.maxAttempts = maxAttempts;
-        this.userTopic = userTopic; this.userDlqTopic = userDlqTopic;
+    public QuoteDeadLetterRecoverer(
+            KafkaTemplate<byte[], byte[]> kafka,
+            Clock clock,
+            String group,
+            int maxAttempts,
+            String userTopic,
+            String userDlqTopic,
+            String pricingTopic,
+            String pricingDlqTopic) {
+        this.kafka = kafka;
+        this.clock = clock;
+        this.group = group;
+        this.maxAttempts = maxAttempts;
+        this.userTopic = userTopic;
+        this.userDlqTopic = userDlqTopic;
+        this.pricingTopic = pricingTopic;
+        this.pricingDlqTopic = pricingDlqTopic;
     }
 
     @Override
@@ -69,7 +85,7 @@ public class QuoteDeadLetterRecoverer implements ConsumerRecordRecoverer, RetryL
         add(headers, "x-correlation-id", metadata.correlationId());
         // Fresh allowlisted headers: do not forward credentials, spoofed metadata, or old stack traces.
         // Phase 1 source and DLQ both have three partitions; preserve the source partition.
-        var dlq = userTopic.equals(record.topic()) ? userDlqTopic : DLQ;
+        var dlq = pricingTopic.equals(record.topic()) ? pricingDlqTopic : userTopic.equals(record.topic()) ? userDlqTopic : DLQ;
         var output = new ProducerRecord<byte[], byte[]>(dlq, record.partition(), null,
                 (byte[]) record.key(), (byte[]) record.value(), headers);
         try {
@@ -88,7 +104,7 @@ public class QuoteDeadLetterRecoverer implements ConsumerRecordRecoverer, RetryL
     }
 
     private int attempts(ConsumerRecord<?, ?> record, Exception failure) {
-        if (maxAttempts == 1 || (root(failure) instanceof InvalidQuoteEventException || root(failure) instanceof InvalidUserEventException)) return 1;
+        if (maxAttempts == 1 || (root(failure) instanceof InvalidQuoteEventException || root(failure) instanceof InvalidUserEventException || root(failure) instanceof InvalidPricingEventException)) return 1;
         var header = record.headers().lastHeader(ATTEMPT);
         return header == null ? 1 : Integer.parseInt(new String(header.value(), StandardCharsets.UTF_8));
     }
@@ -103,7 +119,7 @@ public class QuoteDeadLetterRecoverer implements ConsumerRecordRecoverer, RetryL
             if (candidate.matches("[A-Za-z0-9._-]{1,128}")) correlationId = candidate;
         } catch (RuntimeException ignored) { /* Malformed input has only record coordinates. */ }
         var cause = root(failure);
-        String reason = (cause instanceof InvalidQuoteEventException || cause instanceof InvalidUserEventException) && INVALID_REASONS.contains(cause.getMessage())
+        String reason = (cause instanceof InvalidQuoteEventException || cause instanceof InvalidUserEventException || cause instanceof InvalidPricingEventException) && INVALID_REASONS.contains(cause.getMessage())
                 ? cause.getMessage() : "PROCESSING_FAILURE";
         String failureClass = cause instanceof QuoteProcessingException processing
                 ? processing.failureClass() : cause.getClass().getName();

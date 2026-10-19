@@ -47,16 +47,21 @@ management:
     health:
       show-details: never
 
-audit:
-  events:
-    topic: ${QUOTE_EVENTS_TOPIC:insurance.quote.events}
-
 kafka:
   consumer:
     max-attempts: ${KAFKA_CONSUMER_MAX_ATTEMPTS:3}
     backoff-ms: ${KAFKA_CONSUMER_BACKOFF_MS:1000}
 
+audit:
+  events:
+    topic: ${QUOTE_EVENTS_TOPIC:insurance.quote.events}
+
 user:
   events:
     topic: ${USER_EVENTS_TOPIC:insurance.user.events}
     dlq-topic: ${USER_EVENTS_DLQ_TOPIC:insurance.user.events.dlq}
+
+pricing:
+  events:
+    topic: ${PRICING_EVENTS_TOPIC:insurance.pricing.events}
+    dlq-topic: ${PRICING_EVENTS_DLQ_TOPIC:insurance.pricing.events.dlq}

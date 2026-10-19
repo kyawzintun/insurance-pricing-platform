@@ -1,6 +1,6 @@
 # Transactional Outbox — Quote Service
 
-Quote outbox was introduced in Phase 16 and extended for QuoteExpired in Phase 18. Phase 19 adds a service-local Auth outbox publisher for UserRegistered. Pricing outbox remains unused. Notification and Audit retain Phase 15 idempotency.
+Quote outbox was introduced in Phase 16 and extended for QuoteExpired in Phase 18. Phase 19 adds a service-local Auth outbox publisher for UserRegistered. Phase 20 adds pricing-rule mutation intents and a Pricing publisher. Notification and Audit retain Phase 15 idempotency.
 
 ## Why it is needed
 
@@ -107,3 +107,13 @@ their idempotency and retry/DLQ paths with insurance.user.events.dlq. Auth V4 wi
 outbox correlation_id to 128; consumer schemas need no migration. No historical
 backfill or admin status events. See [contract and lifecycle](user-registered-event.md)
 and [validation](phase-19-validation.md). Earlier phase sections are historical.
+
+## Phase 20 — Pricing Events
+
+Pricing admin create/update/enable/disable now commit operation-specific v1 events
+in the existing outbox with the rule mutation. The service-local publisher sends to
+insurance.pricing.events keyed by pricingRuleId; Audit records ADMIN/PricingRule
+using existing idempotency and pricing retry/DLQ handling. Pricing V4 widens only
+outbox correlation_id to 128. Calculation emits no event; Notification is unchanged.
+See [contracts and lifecycle](pricing-rule-events.md), [specification](specs/phase-20-pricing-events.md),
+and [validation](phase-20-validation.md). No historical backfill or Phase 21 work.
