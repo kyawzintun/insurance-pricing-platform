@@ -31,6 +31,7 @@ class AuthKafkaIT {
         r.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
     }
     @Autowired AuthService service;
+    @Autowired com.insurance.platform.auth.service.CustomerAdminService customers;
     @Autowired JdbcTemplate jdbc;
     @Autowired javax.sql.DataSource datasource;
     @Autowired KafkaTemplate<String,String> kafka;
@@ -64,6 +65,40 @@ class AuthKafkaIT {
             assertThat(records).isNotEmpty();
             for(var record:records) { assertThat(record.key()).isEqualTo(user.toString());assertThat(record.value()).isEqualTo(payload); }
             var before=consumer.endOffsets(parts); publisher.poll();assertThat(consumer.endOffsets(parts)).isEqualTo(before);
+            AuthTestIdentity.authenticate();
+            try {
+                customers.setEnabled(user,false);
+                var disabled=jdbc.queryForObject("select payload::text from outbox_events where event_type='UserDisabled'",String.class);
+                // Broker accepts the event but the operational status UPDATE fails: replay must retain identity.
+                jdbc.execute("alter table outbox_events add constraint phase21_ack_failure check(event_type<>'UserDisabled' OR status='PENDING') NOT VALID");
+                try { publisher.poll();assertThat(jdbc.queryForObject("select status from outbox_events where event_type='UserDisabled'",String.class)).isEqualTo("PENDING"); }
+                finally { jdbc.execute("alter table outbox_events drop constraint phase21_ack_failure"); }
+                var firstDisable=readNext(consumer);assertThat(firstDisable.value()).isEqualTo(disabled);
+                publisher.poll();var repeatedDisable=readNext(consumer);
+                assertThat(repeatedDisable.key()).isEqualTo(user.toString());assertThat(repeatedDisable.value()).isEqualTo(disabled);
+                assertThat(repeatedDisable.partition()).isEqualTo(firstDisable.partition());
+                customers.setEnabled(user,true);var enabled=jdbc.queryForObject("select payload::text from outbox_events where event_type='UserEnabled'",String.class);
+                jdbc.execute("alter table outbox_events add constraint phase21_enable_ack_failure check(event_type<>'UserEnabled' OR status='PENDING') NOT VALID");
+                try { publisher.poll();assertThat(jdbc.queryForObject("select status from outbox_events where event_type='UserEnabled'",String.class)).isEqualTo("PENDING"); }
+                finally { jdbc.execute("alter table outbox_events drop constraint phase21_enable_ack_failure"); }
+                var enableRecord=readNext(consumer);
+                publisher.poll();var repeatedEnable=readNext(consumer);
+                assertThat(repeatedEnable.value()).isEqualTo(enabled);assertThat(repeatedEnable.key()).isEqualTo(user.toString());
+                assertThat(repeatedEnable.partition()).isEqualTo(enableRecord.partition());assertThat(repeatedEnable.offset()).isGreaterThan(enableRecord.offset());
+                assertThat(enableRecord.key()).isEqualTo(user.toString());assertThat(enableRecord.value()).isEqualTo(enabled);
+                assertThat(enableRecord.partition()).isEqualTo(firstDisable.partition()).isEqualTo(records.getFirst().partition());
+                assertThat(enableRecord.offset()).isGreaterThan(repeatedDisable.offset());
+                var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
+                assertThat(mapper.readTree(enabled).path("eventId").asText()).isNotEqualTo(mapper.readTree(disabled).path("eventId").asText());
+                assertThat(jdbc.queryForObject("select count(*) from outbox_events where status='PUBLISHED'",Integer.class)).isEqualTo(3);
+            } finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+
         }
+    }
+
+    ConsumerRecord<String,String> readNext(KafkaConsumer<String,String> consumer) {
+        var records=new ArrayList<ConsumerRecord<String,String>>();long end=System.nanoTime()+Duration.ofSeconds(20).toNanos();
+        while(records.isEmpty() && System.nanoTime()<end)consumer.poll(Duration.ofMillis(100)).forEach(records::add);
+        assertThat(records).hasSize(1);return records.getFirst();
     }
 }

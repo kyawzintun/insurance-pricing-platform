@@ -1,0 +1,54 @@
+Phase 21 disposable Gateway → Auth → Kafka → Audit/Notification: PASS
+
+Gateway and direct Auth independently enforce 401/403; customer-only list/detail, bounded pagination, ADMIN target 409 and client actor rejection pass.
+
+Initial disable: status DISABLED + UserDisabled PENDING atomically; original ADMIN/correlation/time preserved; source end=0.
+
+Publisher enabled: 2 UserRegistered + 1 UserDisabled published; Audit=3, Notification welcomes=2.
+
+Disabled login: uniform INVALID_CREDENTIALS/401; old issued bearer still validates (intentional no revocation).
+
+Repeat disable no new event; enable publishes UserEnabled, login succeeds; repeat enable no new event. Core lifecycle: 4 events/Audit rows, 2 welcome notifications.
+
+Concurrent same-status commands through Gateway: one intent each; final 2 Disabled + 2 Enabled intents, 2 Registered intents, Audit rows/markers=6.
+
+Exact status-event key/value/eventId replay: source end=7, Audit rows/markers remain 6; Notification rows/markers remain 2; both groups caught up; user DLQ empty.
+
+Topic: insurance.user.events	TopicId: WcWkCTBwS6iXeF5eIYQgtg	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+	Topic: insurance.user.events	Partition: 0	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr:
+	Topic: insurance.user.events	Partition: 1	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr:
+	Topic: insurance.user.events	Partition: 2	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr:
+
+insurance.user.events:0:1
+insurance.user.events:1:6
+insurance.user.events:2:0
+
+Topic: insurance.user.events.dlq	TopicId: 5fk7JAriRiGkgZ_8ERKI_A	PartitionCount: 3	ReplicationFactor: 1	Configs: min.insync.replicas=1
+	Topic: insurance.user.events.dlq	Partition: 0	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr:
+	Topic: insurance.user.events.dlq	Partition: 1	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr:
+	Topic: insurance.user.events.dlq	Partition: 2	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr:
+
+insurance.user.events.dlq:0:0
+insurance.user.events.dlq:1:0
+insurance.user.events.dlq:2:0
+
+GROUP           TOPIC                    PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                                   HOST            CLIENT-ID
+audit-service   insurance.pricing.events 0          -               0               -               consumer-audit-service-1-aa7b0806-6566-42c0-8c91-fc467c18a257 /172.17.0.1     consumer-audit-service-1
+audit-service   insurance.pricing.events 2          -               0               -               consumer-audit-service-1-aa7b0806-6566-42c0-8c91-fc467c18a257 /172.17.0.1     consumer-audit-service-1
+audit-service   insurance.pricing.events 1          -               0               -               consumer-audit-service-1-aa7b0806-6566-42c0-8c91-fc467c18a257 /172.17.0.1     consumer-audit-service-1
+audit-service   insurance.user.events    2          -               0               -               consumer-audit-service-2-d0b15b36-5808-4943-a9cd-88114cb30621 /172.17.0.1     consumer-audit-service-2
+audit-service   insurance.user.events    1          6               6               0               consumer-audit-service-2-d0b15b36-5808-4943-a9cd-88114cb30621 /172.17.0.1     consumer-audit-service-2
+audit-service   insurance.user.events    0          1               1               0               consumer-audit-service-2-d0b15b36-5808-4943-a9cd-88114cb30621 /172.17.0.1     consumer-audit-service-2
+audit-service   insurance.quote.events   0          -               0               -               consumer-audit-service-3-e9931e61-8cc8-4d00-ae0a-d755663c38fb /172.17.0.1     consumer-audit-service-3
+audit-service   insurance.quote.events   1          -               0               -               consumer-audit-service-3-e9931e61-8cc8-4d00-ae0a-d755663c38fb /172.17.0.1     consumer-audit-service-3
+audit-service   insurance.quote.events   2          -               0               -               consumer-audit-service-3-e9931e61-8cc8-4d00-ae0a-d755663c38fb /172.17.0.1     consumer-audit-service-3
+
+GROUP                TOPIC                  PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                                          HOST            CLIENT-ID
+notification-service insurance.quote.events 0          -               0               -               consumer-notification-service-1-827cb721-25a2-4839-b4fb-42b45d6c27ac /172.17.0.1     consumer-notification-service-1
+notification-service insurance.quote.events 1          -               0               -               consumer-notification-service-1-827cb721-25a2-4839-b4fb-42b45d6c27ac /172.17.0.1     consumer-notification-service-1
+notification-service insurance.quote.events 2          -               0               -               consumer-notification-service-1-827cb721-25a2-4839-b4fb-42b45d6c27ac /172.17.0.1     consumer-notification-service-1
+notification-service insurance.user.events  2          -               0               -               consumer-notification-service-2-5ae3f132-bb69-45fa-abb8-8706eff25364 /172.17.0.1     consumer-notification-service-2
+notification-service insurance.user.events  1          6               6               0               consumer-notification-service-2-5ae3f132-bb69-45fa-abb8-8706eff25364 /172.17.0.1     consumer-notification-service-2
+notification-service insurance.user.events  0          1               1               0               consumer-notification-service-2-5ae3f132-bb69-45fa-abb8-8706eff25364 /172.17.0.1     consumer-notification-service-2
+
+Security scan PASS: safe admin API fields, compact event payloads, metadata without email, no credentials/tokens/hashes/signing key in application logs.

@@ -1,4 +1,4 @@
-# Notification Service — through Phase 17
+# Notification Service — through Phase 21
 
 The first application Kafka consumer. A new valid QuotePriced v1 event creates a simulated notification in `notification_db.notifications`; there is no email/SMS integration or notification REST API.
 
@@ -162,3 +162,17 @@ User event topics are configured with `USER_EVENTS_TOPIC` (default
 `insurance.user.events`) and `USER_EVENTS_DLQ_TOPIC` (default
 `insurance.user.events.dlq`). Listener and DLQ routing use these same settings.
 Provision overridden topics with matching source/DLQ partition counts before use.
+
+## Phase 21 — Customer status management
+
+Auth exposes ADMIN-only CUSTOMER list/detail/disable/enable APIs through Gateway,
+with independent Auth JWT validation. Safe paginated views, ADMIN targets rejected
+with 409, idempotent status repeats and transactional row-lock/outbox correctness.
+UserDisabled/UserEnabled reuse the Auth publisher and user topic/key. Audit records
+ADMIN/User with role/status metadata and existing idempotency/retry/user DLQ.
+Notification intentionally skips status events without messages, markers or DLQ.
+UserRegistered is unchanged. Disabling blocks new login; already-issued JWTs remain
+valid until expiry and can still authorize Quote requests. No token revocation,
+migration, historical backfill, admin UI or Phase 22 work.
+See [API contract](../../docs/admin-customer-management.md),
+[status events](../../docs/user-status-events.md), and [validation](../../docs/phase-21-validation.md).

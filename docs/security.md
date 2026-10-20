@@ -1,10 +1,10 @@
 # Security
 
-Status: Approved high-level intent recorded; detailed design pending migration from approved planning notes.
+Status: Implemented through Phase 21; earlier phase sections record historical milestones.
 
-Spring Security, customer registration and authentication, quote ownership security, and admin pricing-rule management are planned. The main users are CUSTOMER and ADMIN.
+Spring Security implements registration/login, HS256 JWT validation, Quote ownership, ADMIN pricing rules and ADMIN customer status management. The main roles are CUSTOMER and ADMIN.
 
-Authentication mechanisms and detailed authorization rules remain unspecified. No authentication or security implementation is included in Phase 0.
+Phase 0 left mechanisms unspecified; later phase sections describe the implemented boundaries. Phase 21 does not revoke already-issued tokens or introduce a session store.
 
 Do not commit credentials, private keys, access tokens, refresh tokens, or database passwords. Any future example environment files must contain safe placeholders only.
 
@@ -93,3 +93,15 @@ Quote V6 widens only outbox correlation_id to 128 to match the existing contract
 Notification and Audit now use Spring Kafka DefaultErrorHandler with configurable fixed backoff (default three total attempts, 1000 ms). Invalid supported events go directly to the existing insurance.quote.events.dlq; unknown event types still skip and idempotent duplicates still succeed. Raw key/value bytes are preserved, with safe failure headers identifying the source coordinates and failing service/group. Source offsets advance only after business success or acknowledged DLQ publication; failed DLQ sends leave the source replayable. Independent group failure/recovery was verified with two actual packaged services in disposable infrastructure.
 
 The QuotePriced contract, Quote outbox, processed-event semantics, schemas and topic topology are unchanged. Earlier phase stopping-handler descriptions are historical and superseded here. No replay consumer, retry topics, new business events or Phase 18 work. See [policy and limitations](retry-and-dlq.md), [specification](specs/phase-17-retry-and-dlq.md), and [validation](phase-17-validation.md).
+
+## Phase 21 — Admin Customer Management
+
+Gateway and Auth independently authorize ADMIN customer list/detail/enable/disable.
+PostgreSQL customer row locks serialize real status transitions with existing Auth
+outbox inserts. Idempotent repeats create no intent. UserDisabled/UserEnabled v1
+reuse the user topic/key, publisher and Audit idempotency/retry/user DLQ. Audit uses
+ADMIN attribution; Notification intentionally skips status events. No migration,
+backfill or token revocation: already-issued JWTs may still authorize Quote access
+until expiry. See [API/security contract](admin-customer-management.md),
+[event contract](user-status-events.md) and [validation](phase-21-validation.md).
+Phase 22 is not implemented.

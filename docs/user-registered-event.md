@@ -98,11 +98,18 @@ acknowledged DLQ recovery. Failed recovery leaves the source replayable. Notific
 and Audit have independent groups and failures. Source/DLQ retain Phase 1 three
 partitions, replication factor one; no new topic or retry topic is introduced.
 
-Deferred: admin user status/role events, login/password events, refresh tokens,
-asymmetric JWT, real messaging, DLQ replay, CDC/Schema Registry and Pricing events.
-Phase 20 is not implemented.
+Phase 19 originally deferred later lifecycle events. Phase 20 adds pricing-rule
+events; Phase 21 adds UserDisabled/UserEnabled. Role changes, login/password events,
+refresh tokens, asymmetric JWT, real messaging, DLQ replay and CDC/Schema Registry
+remain deferred.
 
 User listeners and DLQ routing resolve `user.events.topic` and
 `user.events.dlq-topic`; defaults preserve the Phase 1 topics. Set the same
 `USER_EVENTS_TOPIC` in Auth, Notification and Audit when overriding. Provision
 custom source/DLQ topics with matching partitions; applications do not create them.
+
+## Phase 21 companion status events
+
+UserRegistered v1 is unchanged. [UserDisabled/UserEnabled v1](user-status-events.md)
+now share its topic, userId key and Auth publisher. Audit handles the status events;
+Notification intentionally skips them. No registration or historical backfill behavior changes.

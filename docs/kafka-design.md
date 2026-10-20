@@ -1,6 +1,6 @@
 # Kafka Design
 
-Status: Implemented through Phase 20. Earlier phase sections record historical milestones.
+Status: Implemented through Phase 21. Earlier phase sections record historical milestones.
 
 Kafka carries QuotePriced/QuoteExpired, UserRegistered, and pricing-rule mutation events. Quote, Auth and Pricing publish through their local transactional outboxes. Audit consumes all three domains; Notification consumes quote/user events. Consumers reuse idempotency and retry/DLQ handling.
 
@@ -83,3 +83,15 @@ using existing idempotency and pricing retry/DLQ handling. Pricing V4 widens onl
 outbox correlation_id to 128. Calculation emits no event; Notification is unchanged.
 See [contracts and lifecycle](pricing-rule-events.md), [specification](specs/phase-20-pricing-events.md),
 and [validation](phase-20-validation.md). No historical backfill or Phase 21 work.
+
+## Phase 21 — Admin Customer Management
+
+Gateway and Auth independently authorize ADMIN customer list/detail/enable/disable.
+PostgreSQL customer row locks serialize real status transitions with existing Auth
+outbox inserts. Idempotent repeats create no intent. UserDisabled/UserEnabled v1
+reuse the user topic/key, publisher and Audit idempotency/retry/user DLQ. Audit uses
+ADMIN attribution; Notification intentionally skips status events. No migration,
+backfill or token revocation: already-issued JWTs may still authorize Quote access
+until expiry. See [API/security contract](admin-customer-management.md),
+[event contract](user-status-events.md) and [validation](phase-21-validation.md).
+Phase 22 is not implemented.

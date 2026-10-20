@@ -1,4 +1,4 @@
-# Audit Service — through Phase 17
+# Audit Service — through Phase 21
 
 Consumes the existing QuotePriced v1 envelope and persists one audit record. Audit uses its own `audit-service` Kafka consumer group, independent of Notification's `notification-service` group. Each group receives the same record and tracks its own progress.
 
@@ -208,3 +208,17 @@ Only Pricing V4 widens outbox correlation IDs to 128; existing migrations stay i
 No pricing-calculation events, customer notifications or historical backfill.
 See [contract/configuration](../../docs/pricing-rule-events.md) and
 [validation](../../docs/phase-20-validation.md). Phase 21 is not implemented.
+
+## Phase 21 — Customer status management
+
+Auth exposes ADMIN-only CUSTOMER list/detail/disable/enable APIs through Gateway,
+with independent Auth JWT validation. Safe paginated views, ADMIN targets rejected
+with 409, idempotent status repeats and transactional row-lock/outbox correctness.
+UserDisabled/UserEnabled reuse the Auth publisher and user topic/key. Audit records
+ADMIN/User with role/status metadata and existing idempotency/retry/user DLQ.
+Notification intentionally skips status events without messages, markers or DLQ.
+UserRegistered is unchanged. Disabling blocks new login; already-issued JWTs remain
+valid until expiry and can still authorize Quote requests. No token revocation,
+migration, historical backfill, admin UI or Phase 22 work.
+See [API contract](../../docs/admin-customer-management.md),
+[status events](../../docs/user-status-events.md), and [validation](../../docs/phase-21-validation.md).

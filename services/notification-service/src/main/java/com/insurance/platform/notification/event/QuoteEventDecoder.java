@@ -1,10 +1,14 @@
 package com.insurance.platform.notification.event;
 
 import com.insurance.platform.notification.exception.InvalidQuoteEventException;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
@@ -19,9 +23,9 @@ public class QuoteEventDecoder {
         if (bytes == null) throw new InvalidQuoteEventException("INVALID_ENVELOPE");
         try {
             // Report invalid UTF-8 instead of replacing bytes; the original bytes remain available for DLQ.
-            return decode(java.nio.charset.StandardCharsets.UTF_8.newDecoder()
-                    .decode(java.nio.ByteBuffer.wrap(bytes)).toString());
-        } catch (java.nio.charset.CharacterCodingException failure) {
+            return decode(StandardCharsets.UTF_8.newDecoder()
+                    .decode(ByteBuffer.wrap(bytes)).toString());
+        } catch (CharacterCodingException failure) {
             throw new InvalidQuoteEventException("MALFORMED_UTF8");
         }
     }
@@ -41,7 +45,7 @@ public class QuoteEventDecoder {
         if (!"QuotePriced".equals(root.path("eventType").asText())
                 && !"QuoteExpired".equals(root.path("eventType").asText())) return Optional.empty();
 
-        require(root.path("eventVersion").isIntegralNumber() && root.path("eventVersion").bigIntegerValue().equals(java.math.BigInteger.ONE),
+        require(root.path("eventVersion").isIntegralNumber() && root.path("eventVersion").bigIntegerValue().equals(BigInteger.ONE),
                 "UNSUPPORTED_EVENT_VERSION");
 
         var data = root.path("data");

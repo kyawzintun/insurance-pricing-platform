@@ -105,3 +105,10 @@ The existing quote route forwards GET `/api/v1/quotes` (including page/size para
 ## Phase 11 — Vehicle reference routing
 
 Gateway additionally forwards `/api/v1/vehicles/brands` and `/api/v1/vehicles/brands/*/models` to `QUOTE_SERVICE_URL`, preserving the Bearer token. These are authenticated routes. Quote independently restricts them to CUSTOMER/ADMIN GET requests and active reference data. No new downstream service or CORS policy is required.
+
+## Phase 21 — ADMIN customer routing
+
+`/api/v1/admin/customers` and nested detail/enable/disable paths route to
+`AUTH_SERVICE_URL`, preserving bearer authorization and correlation. Gateway requires
+ADMIN; Auth independently validates the JWT and CUSTOMER-only managed scope.
+See [API/security contract](../../docs/admin-customer-management.md). No Phase 22 UI.

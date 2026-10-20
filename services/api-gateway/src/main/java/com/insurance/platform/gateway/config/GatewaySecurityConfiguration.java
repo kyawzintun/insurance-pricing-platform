@@ -41,6 +41,7 @@ public class GatewaySecurityConfiguration {
                         .pathMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login").permitAll()
                         .pathMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
                         .pathMatchers("/api/v1/admin/pricing/**").hasRole("ADMIN")
+                        .pathMatchers("/api/v1/admin/customers", "/api/v1/admin/customers/**").hasRole("ADMIN")
                         .anyExchange().authenticated())
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((exchange, ex) -> unauthorized(exchange))

@@ -23,4 +23,9 @@ class UserEventTests {
         }
         assertThatThrownBy(()->decoder.decode(new byte[]{(byte)0xff})).hasMessage("MALFORMED_UTF8");
     }
+
+    @Test void adminStatusEventsAreIntentionallyIgnored() {
+        for(String type:java.util.List.of("UserDisabled","UserEnabled"))
+            assertThat(decoder.decode(json.replace("UserRegistered",type).getBytes(StandardCharsets.UTF_8))).isEmpty();
+    }
 }

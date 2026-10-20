@@ -83,7 +83,7 @@ Spring Security `BCryptPasswordEncoder` uses cost **12**, with a fresh salt per 
 
 JWT generation uses Spring Security's Boot-managed `spring-security-oauth2-jose` / Nimbus implementation, with **HS256**. Claims are limited to `sub` (user UUID), `roles` (CUSTOMER or ADMIN), `iat`, `exp`, and `iss`. No password, name, or email is embedded. The lifetime is configurable and defaults to 15 minutes. Changing the signing key changes which key a future validator needs.
 
-The API is stateless, uses no login session/cookie, and disables form login, HTTP Basic, CSRF, and logout handlers. Only the four method/path combinations listed above are public. Other requests require authentication. This phase issues tokens but does not install a bearer-token validation filter or distributed JWT validation; no protected business APIs exist yet. Gateway now validates Bearer tokens in Phase 5; Auth-side validation remains deferred. Disabling a user prevents subsequent login, but revoking already-issued access tokens is outside this phase.
+The API is stateless, uses no login session/cookie, and disables form login, HTTP Basic, CSRF, and logout handlers. Only the four method/path combinations listed above are public. Other requests require authentication. Phase 4 originally only issued tokens. Phase 21 now installs independent bearer-token validation for ADMIN customer-management APIs. Gateway now validates Bearer tokens in Phase 5; Phase 21 adds Auth-side JWT validation for customer administration. Disabling a user prevents subsequent login, but revoking already-issued access tokens is outside this phase.
 
 ## Explicit Local ADMIN Creation
 
@@ -146,3 +146,17 @@ No historical user backfill, admin status events or Phase 20 work is included.
 
 `USER_EVENTS_TOPIC` configures Auth publication (default `insurance.user.events`).
 Use the same source topic setting in Notification and Audit. Auth has no producer DLQ.
+
+## Phase 21 — Customer status management
+
+Auth exposes ADMIN-only CUSTOMER list/detail/disable/enable APIs through Gateway,
+with independent Auth JWT validation. Safe paginated views, ADMIN targets rejected
+with 409, idempotent status repeats and transactional row-lock/outbox correctness.
+UserDisabled/UserEnabled reuse the Auth publisher and user topic/key. Audit records
+ADMIN/User with role/status metadata and existing idempotency/retry/user DLQ.
+Notification intentionally skips status events without messages, markers or DLQ.
+UserRegistered is unchanged. Disabling blocks new login; already-issued JWTs remain
+valid until expiry and can still authorize Quote requests. No token revocation,
+migration, historical backfill, admin UI or Phase 22 work.
+See [API contract](../../docs/admin-customer-management.md),
+[status events](../../docs/user-status-events.md), and [validation](../../docs/phase-21-validation.md).

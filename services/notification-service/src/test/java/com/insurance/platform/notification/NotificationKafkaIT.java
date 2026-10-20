@@ -297,6 +297,16 @@ class NotificationKafkaIT {
                 }
                 assertThat(admin.listOffsets(Map.of(tp,OffsetSpec.latest())).all().get().get(tp).offset()).isEqualTo(4);
                 assertThat(admin.listOffsets(Map.of(new TopicPartition(USER_DLQ,0),OffsetSpec.latest())).all().get().values().iterator().next().offset()).isEqualTo(2);
+                for(String type:List.of("UserDisabled","UserEnabled")) {
+                    String statusJson=json.replace("UserRegistered",type).replace(eventId.toString(),UUID.randomUUID().toString())
+                            .replace("\"registeredAt\":", "\"changedBy\":\""+UUID.randomUUID()+"\",\"changedAt\":");
+                    if(type.equals("UserDisabled"))statusJson=statusJson.replace("\"status\":\"ACTIVE\"","\"status\":\"DISABLED\"");
+                    producer.send(new ProducerRecord<>(userTopic,0,bytes(userId.toString()),bytes(statusJson))).get(10,TimeUnit.SECONDS);
+                }
+                awaitOffset(admin,tp,6);
+                assertThat(jdbc.queryForObject("select count(*) from notifications where customer_id=?",Integer.class,userId)).isEqualTo(1);
+                assertThat(admin.listOffsets(Map.of(new TopicPartition(USER_DLQ,0),OffsetSpec.latest())).all().get().values().iterator().next().offset()).isEqualTo(2);
+
             } finally {
                 container.stop();
                 jdbc.update("delete from notifications where event_id=?",eventId);

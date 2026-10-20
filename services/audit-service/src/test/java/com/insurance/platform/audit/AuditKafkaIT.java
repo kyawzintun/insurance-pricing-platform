@@ -266,6 +266,7 @@ class AuditKafkaIT {
         String userTopic = USER_TOPIC;
         var tp = new TopicPartition(userTopic, 0);
         var userId = UUID.randomUUID(); var eventId = UUID.randomUUID();
+        var disabledId=UUID.randomUUID();var enabledId=UUID.randomUUID();var actor=UUID.randomUUID();
         var json = """
                 {"eventId":"%s","eventType":"UserRegistered","eventVersion":1,"aggregateType":"User",
                  "aggregateId":"%s","occurredAt":"%s","correlationId":"phase19-test","producer":"auth-service",
@@ -306,9 +307,35 @@ class AuditKafkaIT {
                 }
                 assertThat(admin.listOffsets(Map.of(tp,OffsetSpec.latest())).all().get().get(tp).offset()).isEqualTo(4);
                 assertThat(admin.listOffsets(Map.of(new TopicPartition(USER_DLQ,0),OffsetSpec.latest())).all().get().values().iterator().next().offset()).isEqualTo(2);
+                var disabled=UserStatusEventTests.json(disabledId,userId,actor,"UserDisabled",NOW);
+                var enabled=UserStatusEventTests.json(enabledId,userId,actor,"UserEnabled",NOW);
+                for(String statusJson:List.of(disabled,enabled,disabled))
+                    producer.send(new ProducerRecord<>(userTopic,0,bytes(userId.toString()),bytes(statusJson))).get(10,TimeUnit.SECONDS);
+                awaitOffset(admin,tp,7);
+                assertThat(jdbc.queryForObject("select count(*) from audit_records where entity_id=?",Integer.class,userId.toString())).isEqualTo(3);
+                for(var statusId:List.of(disabledId,enabledId)) {
+                    var statusRow=jdbc.queryForMap("select * from audit_records where event_id=?",statusId);
+                    assertThat(statusRow.get("actor_type")).isEqualTo("ADMIN");assertThat(statusRow.get("actor_id")).isEqualTo(actor.toString());
+                    assertThat(statusRow.get("entity_type")).isEqualTo("User");assertThat(statusRow.get("producer")).isEqualTo("auth-service");
+                    var metadata=tools.jackson.databind.json.JsonMapper.builder().build().readTree(statusRow.get("metadata").toString());
+                    assertThat(metadata.size()).isEqualTo(2);assertThat(metadata.has("email")).isFalse();
+                    assertThat(jdbc.queryForObject("select count(*) from processed_events where event_id=?",Integer.class,statusId)).isEqualTo(1);
+                }
+                var invalidStatus=disabled.replace("\"eventVersion\":1","\"eventVersion\":2");
+                try(var statusDlq=new KafkaConsumer<byte[],byte[]>(Map.of("bootstrap.servers",KAFKA.getBootstrapServers(),
+                        "key.deserializer",ByteArrayDeserializer.class,"value.deserializer",ByteArrayDeserializer.class,"enable.auto.commit",false))) {
+                    var dp=new TopicPartition(USER_DLQ,0);statusDlq.assign(List.of(dp));statusDlq.seekToEnd(List.of(dp));statusDlq.position(dp);
+                    producer.send(new ProducerRecord<>(userTopic,0,bytes(userId.toString()),bytes(invalidStatus))).get(10,TimeUnit.SECONDS);
+                    awaitOffset(admin,tp,8);var statusDead=read(statusDlq);
+                    assertThat(statusDead.value()).containsExactly(bytes(invalidStatus));assertThat(text(statusDead,"x-attempt-count")).isEqualTo("1");
+                    assertThat(text(statusDead,"x-original-topic")).isEqualTo(userTopic);
+                }
+
             } finally {
                 container.stop();
-                jdbc.update("delete from audit_records where event_id=?",eventId);
+                jdbc.update("delete from audit_records where entity_id=?",userId.toString());
+                jdbc.update("delete from processed_events where event_id=?",disabledId);
+                jdbc.update("delete from processed_events where event_id=?",enabledId);
                 jdbc.update("delete from processed_events where event_id=?",eventId);
             }
         }

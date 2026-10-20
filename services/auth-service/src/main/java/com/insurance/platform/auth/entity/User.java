@@ -12,22 +12,30 @@ import jakarta.persistence.*;
 public class User {
     @Id
     private UUID id;
+
     @Column(nullable = false, unique = true, length = 255)
     private String email;
+
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
+
     @Column(name = "first_name", nullable = false, length = 100)
     private String firstName;
+
     @Column(name = "last_name", nullable = false, length = 100)
     private String lastName;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private Role role;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private UserStatus status;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -46,6 +54,12 @@ public class User {
         this.updatedAt = now;
     }
 
+    public void changeStatus(UserStatus status, Instant now) {
+        this.status = status;
+        this.updatedAt = now;
+    }
+
+    public Instant getUpdatedAt() { return updatedAt; }
     public UUID getId() { return id; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }

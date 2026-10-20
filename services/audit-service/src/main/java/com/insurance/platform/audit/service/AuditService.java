@@ -3,15 +3,16 @@ package com.insurance.platform.audit.service;
 import com.insurance.platform.audit.dto.AuditMetadata;
 import com.insurance.platform.audit.entity.AuditRecord;
 import com.insurance.platform.audit.event.QuotePricedEnvelope;
+import com.insurance.platform.audit.event.UserRegisteredEnvelope;
 import com.insurance.platform.audit.repository.AuditRecordRepository;
 import com.insurance.platform.audit.repository.ProcessedEventRepository;
-import com.insurance.platform.audit.event.UserRegisteredEnvelope;
-import java.time.Clock;
-import java.time.temporal.ChronoUnit;
-import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.time.Clock;
+import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 
 @Service
 public class AuditService {
@@ -54,8 +55,15 @@ public class AuditService {
     @Transactional
     public ProcessResult registerUser(UserRegisteredEnvelope event) {
         var now = clock.instant().truncatedTo(ChronoUnit.MICROS);
-        if (!processedEvents.tryMarkProcessed(event.eventId(), CONSUMER_NAME, now)) return ProcessResult.DUPLICATE;
-        if (repository.existsByEventId(event.eventId())) return ProcessResult.DUPLICATE;
+
+        if (!processedEvents.tryMarkProcessed(event.eventId(), CONSUMER_NAME, now)) {
+            return ProcessResult.DUPLICATE;
+        }
+
+        if (repository.existsByEventId(event.eventId())) {
+            return ProcessResult.DUPLICATE;
+        }
+
         repository.saveAndFlush(new AuditRecord(UUID.randomUUID(), event.eventId(), event.aggregateId().toString(),
                 event.aggregateId().toString(), event.correlationId(), event.occurredAt(), event.producer(),
                 mapper.writeValueAsString(java.util.Map.of("role", event.data().role(), "status", event.data().status())),
@@ -66,13 +74,40 @@ public class AuditService {
     @Transactional
     public ProcessResult recordPricing(com.insurance.platform.audit.event.PricingRuleEnvelope event) {
         var now = clock.instant().truncatedTo(ChronoUnit.MICROS);
-        if (!processedEvents.tryMarkProcessed(event.eventId(), CONSUMER_NAME, now)) return ProcessResult.DUPLICATE;
-        if (repository.existsByEventId(event.eventId())) return ProcessResult.DUPLICATE;
+
+        if (!processedEvents.tryMarkProcessed(event.eventId(), CONSUMER_NAME, now)) {
+            return ProcessResult.DUPLICATE;
+        }
+
+        if (repository.existsByEventId(event.eventId())) {
+            return ProcessResult.DUPLICATE;
+        }
         var d = event.data();
         // Consumer-owned fixed DTO is the metadata allowlist; no whole envelope or credentials.
         repository.saveAndFlush(new AuditRecord(UUID.randomUUID(), event.eventId(), d.changedBy().toString(),
                 d.pricingRuleId().toString(), event.correlationId(), event.occurredAt(), event.producer(),
                 mapper.writeValueAsString(d), now, event.eventType(), "ADMIN", "PricingRule"));
+        return ProcessResult.PROCESSED;
+    }
+
+    @Transactional
+    public ProcessResult recordUserStatus(com.insurance.platform.audit.event.UserStatusEnvelope event) {
+        var now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+
+        if (!processedEvents.tryMarkProcessed(event.eventId(), CONSUMER_NAME, now)) {
+            return ProcessResult.DUPLICATE;
+        }
+
+        if (repository.existsByEventId(event.eventId())) {
+            return ProcessResult.DUPLICATE;
+        }
+
+        var d = event.data();
+        repository.saveAndFlush(new AuditRecord(UUID.randomUUID(), event.eventId(), d.changedBy().toString(),
+                d.userId().toString(), event.correlationId(), event.occurredAt(), event.producer(),
+                mapper.writeValueAsString(java.util.Map.of("role", d.role(), "status", d.status())),
+                now, event.eventType(), "ADMIN", "User"));
+
         return ProcessResult.PROCESSED;
     }
 }

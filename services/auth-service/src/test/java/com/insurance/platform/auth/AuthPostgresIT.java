@@ -27,6 +27,8 @@ class AuthPostgresIT {
         r.add("auth.jwt.secret", () -> java.util.Base64.getEncoder().encodeToString(new byte[32]));
     }
     @Autowired AuthService service;
+    @Autowired com.insurance.platform.auth.service.CustomerAdminService customers;
+    @Autowired com.insurance.platform.auth.repository.UserRepository users;
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager transactions;
     @Autowired javax.sql.DataSource datasource;
@@ -82,5 +84,77 @@ class AuthPostgresIT {
             assertThat(jdbc.queryForObject("select payload::text from outbox_events where id=?",String.class,event.id())).isEqualTo(event.payload());
         }
         try (var batch = poller.claim(50).orElseThrow()) { assertThat(batch.events()).hasSize(1); }
+    }
+
+    @AfterEach void clearAdminContext() { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+
+    @Test void customerPaginationScopeTransitionsAndLoginRegression() {
+        AuthTestIdentity.authenticate();
+        var first=service.register(request("one@example.com"));var second=service.register(request("two@example.com"));
+        users.saveAndFlush(new com.insurance.platform.auth.entity.User(AuthTestIdentity.ADMIN,"admin@example.com","not-a-login-hash","Admin","User",
+                com.insurance.platform.auth.enums.Role.ADMIN,com.insurance.platform.auth.enums.UserStatus.ACTIVE,NOW));
+        var list=customers.list(0,100);assertThat(list.totalElements()).isEqualTo(2);
+        assertThat(list.content()).extracting(com.insurance.platform.auth.dto.CustomerResponse::id).doesNotContain(AuthTestIdentity.ADMIN);
+        var expected=java.util.stream.Stream.of(first.id(),second.id()).sorted(java.util.Comparator.comparing(java.util.UUID::toString).reversed()).toList();
+        assertThat(list.content()).extracting(com.insurance.platform.auth.dto.CustomerResponse::id).containsExactlyElementsOf(expected);
+        assertThat(customers.list(0,1).totalPages()).isEqualTo(2);assertThat(customers.list(2,1).content()).isEmpty();
+        assertThat(customers.get(first.id()).email()).isEqualTo("one@example.com");counts(3,2);
+        assertThatThrownBy(()->customers.get(AuthTestIdentity.ADMIN)).hasMessage("Only CUSTOMER accounts can be managed");
+        assertThatThrownBy(()->customers.setEnabled(AuthTestIdentity.ADMIN,false)).hasMessage("Only CUSTOMER accounts can be managed");
+        var credentials=new com.insurance.platform.auth.dto.LoginRequest(first.email(),"Test-password-42!");
+        assertThat(service.login(credentials).accessToken()).isNotBlank();
+        var before=jdbc.queryForMap("select * from users where id=?",first.id());
+        var disabled=customers.setEnabled(first.id(),false);assertThat(disabled.status().name()).isEqualTo("DISABLED");
+        assertThat(disabled.updatedAt()).isEqualTo(NOW);assertThat(customers.setEnabled(first.id(),false)).isEqualTo(disabled);
+        assertThatThrownBy(()->service.login(credentials)).hasMessage("Invalid credentials");
+        customers.setEnabled(first.id(),true);customers.setEnabled(first.id(),true);
+        assertThat(service.login(credentials).accessToken()).isNotBlank();
+        assertThat(jdbc.queryForObject("select password_hash from users where id=?",String.class,first.id())).isEqualTo(before.get("password_hash"));
+        assertThat(jdbc.queryForObject("select count(*) from outbox_events where event_type='UserDisabled'",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select count(*) from outbox_events where event_type='UserEnabled'",Integer.class)).isEqualTo(1);
+        counts(3,4);
+    }
+
+    @Test void statusAndOutboxRollbackTogetherAndInvalidTargetHasNoIntent() {
+        AuthTestIdentity.authenticate();var user=service.register(request("rollback-status@example.com"));
+        var before=jdbc.queryForMap("select * from users where id=?",user.id());
+        jdbc.execute("alter table users add constraint phase21_status_failure check(status='ACTIVE') NOT VALID");
+        try {
+            assertThatThrownBy(()->customers.setEnabled(user.id(),false)).isInstanceOf(RuntimeException.class);
+            assertThat(jdbc.queryForMap("select * from users where id=?",user.id())).isEqualTo(before);counts(1,1);
+        } finally { jdbc.execute("alter table users drop constraint phase21_status_failure"); }
+        jdbc.execute("alter table outbox_events add constraint phase21_failure check(event_type='UserRegistered')");
+        try {
+            assertThatThrownBy(()->customers.setEnabled(user.id(),false)).isInstanceOf(RuntimeException.class);
+            assertThat(jdbc.queryForMap("select * from users where id=?",user.id())).isEqualTo(before);counts(1,1);
+        } finally { jdbc.execute("alter table outbox_events drop constraint phase21_failure"); }
+        new TransactionTemplate(transactions).executeWithoutResult(tx->{customers.setEnabled(user.id(),false);tx.setRollbackOnly();});
+        assertThat(jdbc.queryForMap("select * from users where id=?",user.id())).isEqualTo(before);counts(1,1);
+        assertThatThrownBy(()->customers.setEnabled(java.util.UUID.randomUUID(),false)).hasMessage("Customer not found");counts(1,1);
+        customers.setEnabled(user.id(),false);
+        jdbc.execute("alter table outbox_events add constraint phase21_enable_failure check(event_type<>'UserEnabled')");
+        try {
+            assertThatThrownBy(()->customers.setEnabled(user.id(),true)).isInstanceOf(RuntimeException.class);
+            assertThat(customers.get(user.id()).status().name()).isEqualTo("DISABLED");counts(1,2);
+        } finally { jdbc.execute("alter table outbox_events drop constraint phase21_enable_failure"); }
+    }
+
+    @Test void concurrentSameStatusCommandsCreateExactlyOneIntentPerTransition() throws Exception {
+        var user=service.register(request("concurrent@example.com"));
+        for(boolean enabled:java.util.List.of(false,true)) {
+            var barrier=new java.util.concurrent.CyclicBarrier(2);
+            java.util.concurrent.Callable<String> call=()->{
+                AuthTestIdentity.authenticate();
+                try { barrier.await(10,java.util.concurrent.TimeUnit.SECONDS);return customers.setEnabled(user.id(),enabled).status().name(); }
+                finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+            };
+            try(var executor=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+                var a=executor.submit(call);var b=executor.submit(call);
+                assertThat(java.util.List.of(a.get(20,java.util.concurrent.TimeUnit.SECONDS),b.get(20,java.util.concurrent.TimeUnit.SECONDS)))
+                        .containsOnly(enabled?"ACTIVE":"DISABLED");
+            }
+            assertThat(jdbc.queryForObject("select count(*) from outbox_events where event_type=?",Integer.class,enabled?"UserEnabled":"UserDisabled")).isEqualTo(1);
+        }
+        counts(1,3);
     }
 }

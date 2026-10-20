@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 20 implemented; Phase 21 — Admin Customer Management not started.
+Status: Phases 0 through 21 implemented; Phase 22 — Audit UI not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -96,3 +96,13 @@ established advisory-lock publisher, and Audit idempotency/retry/pricing DLQ.
 Calculation and Notification are unchanged; no historical backfill. See
 [specification](specs/phase-20-pricing-events.md), [contracts](pricing-rule-events.md),
 and [validation](phase-20-validation.md). Phase 21 has not been started.
+
+## Phase 21 — Admin Customer Management
+
+Implemented and validated: independent Gateway/Auth ADMIN authorization, CUSTOMER-only
+safe paginated list/detail, idempotent enable/disable under PostgreSQL row locks,
+atomic UserDisabled/UserEnabled Auth outbox intents, ADMIN/User Audit processing and
+intentional Notification skips. Login status is enforced; existing issued JWTs are
+not revoked. No migration or historical backfill. See [specification](specs/phase-21-admin-customer-management.md),
+[API/security contract](admin-customer-management.md), [events](user-status-events.md)
+and [validation](phase-21-validation.md). Phase 22 has not been started.

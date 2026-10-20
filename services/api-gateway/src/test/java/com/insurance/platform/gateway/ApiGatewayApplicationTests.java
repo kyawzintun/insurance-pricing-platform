@@ -44,6 +44,13 @@ class ApiGatewayApplicationTests {
                 exchange.getResponseBody().write(body);
                 exchange.close();
             });
+            DOWNSTREAM.createContext("/api/v1/admin/customers", exchange -> {
+                forwardedAuthorization=exchange.getRequestHeaders().getFirst("Authorization");
+                forwardedCorrelation=exchange.getRequestHeaders().getFirst("X-Correlation-ID");
+                byte[] body="{\"customerDownstream\":true}".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type","application/json");exchange.sendResponseHeaders(200,body.length);
+                exchange.getResponseBody().write(body);exchange.close();
+            });
             DOWNSTREAM.createContext("/api/v1/admin/pricing/", exchange -> {
                 forwardedAuthorization = exchange.getRequestHeaders().getFirst("Authorization");
                 byte[] body = "{\"pricingDownstream\":true}".getBytes(StandardCharsets.UTF_8);
@@ -255,5 +262,19 @@ class ApiGatewayApplicationTests {
         assertThat(response.body()).isEqualTo("[]");
         assertThat(forwardedQuoteUri).isEqualTo(path);
         assertThat(forwardedAuthorization).isEqualTo(bearer);
+    }
+
+    @Test void customerAdminRoutesRequireAdminAndPreserveBearerAndCorrelation() throws Exception {
+        String base="/api/v1/admin/customers";
+        for(String suffix:List.of("","/00000000-0000-0000-0000-000000000002","/00000000-0000-0000-0000-000000000002/disable","/00000000-0000-0000-0000-000000000002/enable")) {
+            var method=suffix.endsWith("disable")||suffix.endsWith("enable")?"PATCH":"GET";
+            assertUnauthorized(request(method,base+suffix));
+            var customer=token(claims("insurance-auth-service",Instant.now().getEpochSecond()+300));
+            assertThat(request(method,base+suffix,"Authorization","Bearer "+customer).statusCode()).isEqualTo(403);
+            var admin=token(claims("insurance-auth-service",Instant.now().getEpochSecond()+300).replace("CUSTOMER","ADMIN"));
+            var response=request(method,base+suffix,"Authorization","Bearer "+admin,"X-Correlation-ID","admin-customers-test");
+            assertThat(response.statusCode()).isEqualTo(200);assertThat(response.body()).contains("customerDownstream");
+            assertThat(forwardedAuthorization).isEqualTo("Bearer "+admin);assertThat(forwardedCorrelation).isEqualTo("admin-customers-test");
+        }
     }
 }

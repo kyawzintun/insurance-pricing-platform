@@ -23,3 +23,5 @@ Automatic PRICED → EXPIRED transitions use bounded PostgreSQL transactions and
 - [Phase 19 — Auth/User Events](phase-19-auth-user-events.md)
 
 - [Phase 20 — Pricing Events](phase-20-pricing-events.md)
+
+- [Phase 21 — Admin Customer Management](phase-21-admin-customer-management.md)
