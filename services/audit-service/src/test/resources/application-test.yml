@@ -10,3 +10,8 @@ spring:
   kafka:
     listener:
       auto-startup: false
+
+auth:
+  jwt:
+    secret: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    issuer: insurance-auth-service

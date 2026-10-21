@@ -15,6 +15,8 @@ export class AppComponent {
   readonly authenticated = this.store.selectSignal(authFeature.selectIsAuthenticated);
   readonly roles = this.store.selectSignal(authFeature.selectRoles);
   readonly customer = computed(() => this.roles().includes('CUSTOMER'));
+  readonly admin = computed(() => this.roles().includes('ADMIN'));
+
   logout(): void {
     this.store.dispatch(AuthActions.logout());
   }

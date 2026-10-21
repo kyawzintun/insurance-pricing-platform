@@ -222,3 +222,7 @@ valid until expiry and can still authorize Quote requests. No token revocation,
 migration, historical backfill, admin UI or Phase 22 work.
 See [API contract](../../docs/admin-customer-management.md),
 [status events](../../docs/user-status-events.md), and [validation](../../docs/phase-21-validation.md).
+
+## Phase 22 — ADMIN read API
+
+GET `/api/v1/admin/audit` and `/{id}` independently require an ADMIN JWT; all audit mutation methods remain denied. Configure the same `AUTH_JWT_SECRET`/issuer as Auth and Gateway. List uses bounded page/size (0/20 defaults, max 100), exact event/actor/entity/producer/correlation/eventId filters, and UTC `occurredAt >= from`, `< to`. Ordering is occurredAt DESC, id DESC, reusing existing indexes without schema changes. Compact list DTOs exclude metadata; detail returns the stored allowlisted JSON. Reads are transactional/read-only and responses are no-store. See [full contract](../../docs/specs/phase-22-audit-ui.md) and [validation](../../docs/phase-22-validation.md).

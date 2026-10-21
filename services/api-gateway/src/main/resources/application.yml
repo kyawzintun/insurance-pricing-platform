@@ -22,6 +22,10 @@ spring:
               uri: ${PRICING_SERVICE_URL:http://localhost:8083}
               predicates:
                 - Path=/api/v1/admin/pricing/**
+            - id: audit-admin
+              uri: ${AUDIT_SERVICE_URL:http://localhost:8085}
+              predicates:
+                - Path=/api/v1/admin/audit,/api/v1/admin/audit/**
             - id: quote-service
               uri: ${QUOTE_SERVICE_URL:http://localhost:8082}
               predicates:

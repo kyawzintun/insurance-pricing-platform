@@ -1,0 +1,5 @@
+
+auth:
+  jwt:
+    secret: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    issuer: insurance-auth-service

@@ -112,3 +112,7 @@ Gateway additionally forwards `/api/v1/vehicles/brands` and `/api/v1/vehicles/br
 `AUTH_SERVICE_URL`, preserving bearer authorization and correlation. Gateway requires
 ADMIN; Auth independently validates the JWT and CUSTOMER-only managed scope.
 See [API/security contract](../../docs/admin-customer-management.md). No Phase 22 UI.
+
+## Phase 22 — Audit routing
+
+`/api/v1/admin/audit` and `/**` route to `${AUDIT_SERVICE_URL:http://localhost:8085}` with independent ADMIN enforcement. Existing bearer, correlation and CORS handling is unchanged. Audit also validates JWT/ADMIN itself and accepts GET only. See [contract](../../docs/specs/phase-22-audit-ui.md).

@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard, guestGuard } from '@app/core/guards/auth.guard';
 import { customerGuard } from '@app/core/guards/customer.guard';
+import { adminGuard } from '@app/core/guards/admin.guard';
 
 export const routes: Routes = [
   {
@@ -42,6 +43,18 @@ export const routes: Routes = [
       import('@app/features/quotes/detail/quote-detail.component').then(
         (m) => m.QuoteDetailComponent,
       ),
+  },
+  {
+    path: 'admin/audit',
+    canActivate: [adminGuard],
+    loadComponent: () =>
+      import('@app/features/audit/audit-list.component').then((m) => m.AuditListComponent),
+  },
+  {
+    path: 'admin/audit/:id',
+    canActivate: [adminGuard],
+    loadComponent: () =>
+      import('@app/features/audit/audit-detail.component').then((m) => m.AuditDetailComponent),
   },
   { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
   { path: '**', redirectTo: 'dashboard' },

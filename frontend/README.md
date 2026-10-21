@@ -88,7 +88,7 @@ For example, `import { AuthActions } from '@app/store/auth/auth.actions';` works
 7. `app.component.*` and `features/dashboard/`: navigation and role-aware placeholder.
 8. Adjacent `*.spec.ts` files: executable examples of expected behavior.
 
-Pricing administration, audit UI, persistent login, SSR, PWA, and messaging UI are deferred. See the [Phase 10 specification](../docs/specs/phase-10-angular-foundation.md) and [validation report](../docs/phase-10-validation.md).
+Pricing administration, persistent login, SSR, PWA, and messaging UI are deferred. See the [Phase 10 specification](../docs/specs/phase-10-angular-foundation.md) and [validation report](../docs/phase-10-validation.md).
 
 ## Phase 11 — Customer quote workflow
 
@@ -125,3 +125,9 @@ Quote actions use explicit `createAction` declarations. `exhaustMap` prevents co
 History defaults to page 0, size 20; only page and size are sent. Previous/Next use backend totals and disable at boundaries. Detail renders historical names and pricing adjustments directly from the response. It does not reload current vehicle names or pricing rules. Money uses currency formatting to two decimals; factors use four decimals; timestamps display locally without altering UTC data. Birth dates remain calendar dates with no timezone shift.
 
 400/404/502/503 responses display safe messages. Protected 401 handling stays in the existing auth interceptor. No refresh tokens, edits, deletes, repricing, automatic expiration, admin UI, or Kafka events are implemented. Optional live pricing-rule mutation was unnecessary because PostgreSQL snapshot regression and frontend snapshot rendering tests cover that boundary. See [Phase 11 specification](../docs/specs/phase-11-angular-quote-flow.md) and [validation](../docs/phase-11-validation.md).
+
+## Phase 22 — ADMIN Audit UI
+
+ADMIN navigation now includes Audit: `/admin/audit` and `/admin/audit/:id`. CUSTOMER sees no link and is redirected to dashboard by the guard. Angular calls only Gateway. Reactive Forms own exact filters and UTC ranges; Signals own validation/metadata visibility; NgRx owns applied query, paginated rows, detail and request state. Query parameters preserve applied filters/page/size through detail/back navigation. All audit state resets and requests cancel on session change.
+
+Apply/Clear, Previous/Next, loading/empty/error/retry and not-found states are supported. Occurrence time is shown in UTC, newest first. Detail metadata uses text interpolation and JSON formatting, never HTML. Nothing edits or deletes audit records. Refresh still requires login; no Phase 23 refresh tokens. See [full contract](../docs/specs/phase-22-audit-ui.md) and [validation](../docs/phase-22-validation.md).

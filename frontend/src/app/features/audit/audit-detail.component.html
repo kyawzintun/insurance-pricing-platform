@@ -1,0 +1,88 @@
+<section class="quote-page audit-page">
+  <a routerLink="/admin/audit" [queryParams]="route.snapshot.queryParams">Back to audit history</a>
+  <h1>Audit record</h1>
+  @if (state().detailLoading) {
+    <p role="status">Loading audit record…</p>
+  } @else if (state().detailError) {
+    <p class="error" role="alert">{{ state().detailError }}</p>
+  } @else if (state().detail; as record) {
+    <section class="card">
+      <h2>Event</h2>
+      <dl>
+        <dt>Record ID</dt>
+        <dd>
+          <code>{{ record.id }}</code>
+        </dd>
+        <dt>Event ID</dt>
+        <dd>
+          <code>{{ record.eventId }}</code>
+        </dd>
+        <dt>Event type</dt>
+        <dd>{{ record.eventType }}</dd>
+        <dt>Producer</dt>
+        <dd>{{ record.producer || '—' }}</dd>
+        <dt>Occurred at (UTC)</dt>
+        <dd>{{ record.occurredAt | date: 'yyyy-MM-dd HH:mm:ss.SSS' : 'UTC' }}</dd>
+        <dt>Created at (UTC)</dt>
+        <dd>{{ record.createdAt | date: 'yyyy-MM-dd HH:mm:ss.SSS' : 'UTC' }}</dd>
+      </dl>
+    </section>
+    <section class="card">
+      <h2>Actor</h2>
+      <dl>
+        <dt>Actor type</dt>
+        <dd>{{ record.actorType || '—' }}</dd>
+        <dt>Actor ID</dt>
+        <dd>
+          <code>{{ record.actorId || '—' }}</code>
+        </dd>
+      </dl>
+    </section>
+    <section class="card">
+      <h2>Entity</h2>
+      <dl>
+        <dt>Entity type</dt>
+        <dd>{{ record.entityType }}</dd>
+        <dt>Entity ID</dt>
+        <dd>
+          <code>{{ record.entityId }}</code>
+        </dd>
+      </dl>
+    </section>
+    <section class="card">
+      <h2>Tracing</h2>
+      <dl>
+        <dt>Correlation ID</dt>
+        <dd>
+          <code>{{ record.correlationId || '—' }}</code>
+        </dd>
+      </dl>
+      @if (record.correlationId) {
+        <a
+          routerLink="/admin/audit"
+          [queryParams]="{ correlationId: record.correlationId, page: 0, size: 20 }"
+          >Find records with this correlation ID</a
+        >
+      }
+    </section>
+    <section class="card">
+      <h2>Metadata</h2>
+      @if (metadataEmpty()) {
+        <p>No metadata.</p>
+      } @else {
+        <button
+          type="button"
+          class="outline"
+          [attr.aria-expanded]="metadataExpanded()"
+          aria-controls="audit-metadata"
+          (click)="metadataExpanded.set(!metadataExpanded())"
+        >
+          {{ metadataExpanded() ? 'Hide' : 'Show' }} metadata
+        </button>
+        @if (metadataExpanded()) {
+          <pre id="audit-metadata">{{ record.metadata | json }}</pre>
+        }
+      }
+    </section>
+  }
+</section>

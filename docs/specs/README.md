@@ -25,3 +25,5 @@ Automatic PRICED → EXPIRED transitions use bounded PostgreSQL transactions and
 - [Phase 20 — Pricing Events](phase-20-pricing-events.md)
 
 - [Phase 21 — Admin Customer Management](phase-21-admin-customer-management.md)
+
+- [Phase 22 — Audit UI](phase-22-audit-ui.md): ADMIN-only immutable audit history, bounded exact filters and pagination, safe metadata details.

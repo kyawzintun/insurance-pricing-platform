@@ -7,6 +7,9 @@
       @if (customer()) {
         <a routerLink="/quotes/new">New Quote</a><a routerLink="/quotes">My Quotes</a>
       }
+      @if (admin()) {
+        <a routerLink="/admin/audit">Audit</a>
+      }
       <button type="button" class="outline" (click)="logout()">Logout</button>
     } @else {
       <a routerLink="/login">Sign in</a><a class="outline" routerLink="/register">Create account</a>

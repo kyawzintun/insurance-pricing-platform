@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 21 implemented; Phase 22 — Audit UI not started.
+Status: Phases 0 through 22 implemented; Phase 23 — Refresh Tokens not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -105,4 +105,8 @@ atomic UserDisabled/UserEnabled Auth outbox intents, ADMIN/User Audit processing
 intentional Notification skips. Login status is enforced; existing issued JWTs are
 not revoked. No migration or historical backfill. See [specification](specs/phase-21-admin-customer-management.md),
 [API/security contract](admin-customer-management.md), [events](user-status-events.md)
-and [validation](phase-21-validation.md). Phase 22 has not been started.
+and [validation](phase-21-validation.md). Phase 22 is documented below.
+
+## Phase 22 — Audit UI
+
+Completed. ADMIN-only Angular audit list/detail routes and navigation use Reactive Forms, local Signals and shared NgRx state. Gateway and Audit independently enforce ADMIN JWT authorization. Read-only API supports bounded server pagination, exact event/actor/entity/producer/correlation/eventId filters, UTC occurrence-time ranges and deterministic ordering. Metadata is returned only in detail and rendered as escaped JSON text. Existing indexes, consumer/event/outbox/retry behavior and immutable audit history are preserved. See [specification](specs/phase-22-audit-ui.md) and [validation](phase-22-validation.md). Phase 23 — Refresh Tokens is not started.

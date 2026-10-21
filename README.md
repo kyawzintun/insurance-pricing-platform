@@ -285,3 +285,7 @@ Notification and Audit now retry processing failures with three total attempts a
 The original key/value bytes are preserved with safe source-coordinate and consumer-identity headers. Source progress advances only after business success or acknowledged DLQ publication. If the DLQ send fails, the source remains replayable. Both groups fail independently; Quote's outbox and consumer idempotency are unchanged. No schema, topic, partition-count or business API changes.
 
 See [retry/DLQ policy](docs/retry-and-dlq.md), [specification](docs/specs/phase-17-retry-and-dlq.md), and [validation](docs/phase-17-validation.md). Phase 18 — Quote Expiration is implemented; see the [specification](docs/specs/phase-18-quote-expiration.md) and [validation](docs/phase-18-validation.md). No DLQ replay mechanism is implemented.
+
+## Phase 22 — Audit UI
+
+ADMIN users can browse `/admin/audit`, apply exact filters and UTC occurrence ranges, paginate, and inspect safe read-only JSON details. Gateway and Audit Service independently require ADMIN JWTs. No audit mutations or schema changes. See [API/UI specification](docs/specs/phase-22-audit-ui.md) and [validation/file manifest](docs/phase-22-validation.md). Phase 23 — Refresh Tokens is not started.

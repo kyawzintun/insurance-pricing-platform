@@ -105,3 +105,7 @@ backfill or token revocation: already-issued JWTs may still authorize Quote acce
 until expiry. See [API/security contract](admin-customer-management.md),
 [event contract](user-status-events.md) and [validation](phase-21-validation.md).
 Phase 22 is not implemented.
+
+## Phase 22 — Audit access
+
+Gateway and Audit independently enforce the existing HS256 JWT validation and ADMIN role on audit reads. Audit denies every mutation method. UI role guards/nav are convenience boundaries; CUSTOMER API calls receive 403 and unauthenticated calls 401. Read responses are no-store; list DTOs omit metadata. Detail returns only stored producer-allowlisted JSON, rendered as escaped text by Angular. Session changes reset audit state/cancel pending reads. No raw Kafka headers or tokens are exposed, no shared history is modified for validation, and no refresh tokens are introduced. See [contract](specs/phase-22-audit-ui.md).

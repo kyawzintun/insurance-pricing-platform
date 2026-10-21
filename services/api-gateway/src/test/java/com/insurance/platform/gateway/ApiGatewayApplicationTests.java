@@ -44,6 +44,13 @@ class ApiGatewayApplicationTests {
                 exchange.getResponseBody().write(body);
                 exchange.close();
             });
+            DOWNSTREAM.createContext("/api/v1/admin/audit", exchange -> {
+                forwardedAuthorization=exchange.getRequestHeaders().getFirst("Authorization");
+                forwardedCorrelation=exchange.getRequestHeaders().getFirst("X-Correlation-ID");
+                byte[] body="{\"auditDownstream\":true}".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type","application/json");exchange.sendResponseHeaders(200,body.length);
+                exchange.getResponseBody().write(body);exchange.close();
+            });
             DOWNSTREAM.createContext("/api/v1/admin/customers", exchange -> {
                 forwardedAuthorization=exchange.getRequestHeaders().getFirst("Authorization");
                 forwardedCorrelation=exchange.getRequestHeaders().getFirst("X-Correlation-ID");
@@ -86,6 +93,7 @@ class ApiGatewayApplicationTests {
         registry.add("auth.jwt.secret", () -> Base64.getEncoder().encodeToString(KEY));
         registry.add("QUOTE_SERVICE_URL", () -> "http://127.0.0.1:" + DOWNSTREAM.getAddress().getPort());
         registry.add("PRICING_SERVICE_URL", () -> "http://127.0.0.1:" + DOWNSTREAM.getAddress().getPort());
+        registry.add("AUDIT_SERVICE_URL", () -> "http://127.0.0.1:" + DOWNSTREAM.getAddress().getPort());
         registry.add("AUTH_SERVICE_URL", () -> "http://127.0.0.1:" + DOWNSTREAM.getAddress().getPort());
     }
 
@@ -125,6 +133,18 @@ class ApiGatewayApplicationTests {
         assertThat(response.headers().firstValue("X-Correlation-ID")).isPresent();
     }
 
+    @ParameterizedTest @ValueSource(strings={"/api/v1/admin/audit", "/api/v1/admin/audit/00000000-0000-0000-0000-000000000001"})
+    void auditRouteAndSecurity(String path) throws Exception {
+        assertUnauthorized(request("GET",path));
+        var customer = token(claims("insurance-auth-service",Instant.now().getEpochSecond()+300));
+        assertThat(request("GET",path,"Authorization","Bearer "+customer).statusCode()).isEqualTo(403);
+        var admin = token(claims("insurance-auth-service",Instant.now().getEpochSecond()+300).replace("CUSTOMER","ADMIN"));
+        var response = request("GET",path,"Authorization","Bearer "+admin,"X-Correlation-ID","phase22-audit");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("auditDownstream");
+        assertThat(forwardedAuthorization).isEqualTo("Bearer "+admin);
+        assertThat(forwardedCorrelation).isEqualTo("phase22-audit");
+    }
     @Test void registrationIsPublicAndBodyIsForwarded() throws Exception {
         assertThat(request("POST", "/api/v1/auth/register", "Content-Type", "application/json").statusCode()).isEqualTo(201);
         assertThat(forwardedBody).isEqualTo("{\"example\":true}");

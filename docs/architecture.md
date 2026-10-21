@@ -139,3 +139,7 @@ backfill or token revocation: already-issued JWTs may still authorize Quote acce
 until expiry. See [API/security contract](admin-customer-management.md),
 [event contract](user-status-events.md) and [validation](phase-21-validation.md).
 Phase 22 is not implemented.
+
+## Phase 22 — Audit reads
+
+Angular ADMIN Audit UI → Gateway → Audit Service → audit_records → server-side filters + pagination. Both services enforce ADMIN independently. The API uses existing JPA/PostgreSQL and event-time indexes, compact list DTOs and stored allowlisted JSON detail. Existing Kafka ingestion and idempotency are unchanged. See [specification](specs/phase-22-audit-ui.md).

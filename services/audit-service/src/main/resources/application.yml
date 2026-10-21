@@ -4,7 +4,7 @@ spring:
   application:
     name: audit-service
   autoconfigure:
-    # Temporary Phase 2: no generated user or password; no authentication yet.
+    # Resource-server authentication; no generated user or password.
     exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
   kafka:
     consumer:
@@ -65,3 +65,8 @@ pricing:
   events:
     topic: ${PRICING_EVENTS_TOPIC:insurance.pricing.events}
     dlq-topic: ${PRICING_EVENTS_DLQ_TOPIC:insurance.pricing.events.dlq}
+
+auth:
+  jwt:
+    secret: ${AUTH_JWT_SECRET:}
+    issuer: ${AUTH_JWT_ISSUER:insurance-auth-service}

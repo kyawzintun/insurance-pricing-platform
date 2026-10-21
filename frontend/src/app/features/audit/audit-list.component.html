@@ -1,0 +1,112 @@
+<section class="quote-page audit-page">
+  <p class="eyebrow">ADMINISTRATION</p>
+  <h1>Audit history</h1>
+  <p class="muted">Read-only event history, newest occurrence first. All times are UTC.</p>
+  <form class="card" [formGroup]="form" (ngSubmit)="apply()">
+    <h2>Filter records</h2>
+    <div class="quote-fields">
+      @for (key of fields; track key) {
+        <div>
+          <label [for]="key">{{ labels[key] }}</label>
+          <input
+            [id]="key"
+            [formControlName]="key"
+            [placeholder]="key === 'from' || key === 'to' ? '2026-10-20T00:00:00Z' : ''"
+          />
+        </div>
+      }
+      <div>
+        <label for="audit-size">Page size</label
+        ><select id="audit-size" [formControl]="size">
+          <option [ngValue]="20">20</option>
+          <option [ngValue]="50">50</option>
+          <option [ngValue]="100">100</option>
+        </select>
+      </div>
+    </div>
+    @if (validation()) {
+      <p class="error" role="alert">{{ validation() }}</p>
+    }
+    <div class="audit-actions">
+      <button class="primary" type="submit">Apply filters</button
+      ><button class="outline" type="button" (click)="clear()">Clear filters</button>
+    </div>
+  </form>
+  <div aria-live="polite">
+    @if (state().listLoading) {
+      <p role="status">Loading audit history…</p>
+    } @else if (state().listError) {
+      <p class="error" role="alert">{{ state().listError }}</p>
+      <button type="button" class="outline" (click)="retry()">Try again</button>
+    } @else {
+      <p>{{ state().result.totalElements }} records</p>
+      @if (!state().result.content.length) {
+        <p>No audit records match these filters.</p>
+      } @else {
+        <div
+          class="audit-table"
+          tabindex="0"
+          role="region"
+          aria-label="Audit records, scroll horizontally on smaller screens"
+        >
+          <table>
+            <caption class="muted">
+              Audit records ordered by occurrence time, newest first
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Time (UTC)</th>
+                <th scope="col">Event</th>
+                <th scope="col">Actor</th>
+                <th scope="col">Entity</th>
+                <th scope="col">Producer</th>
+                <th scope="col">Correlation ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of state().result.content; track row.id) {
+                <tr>
+                  <td>{{ row.occurredAt | date: 'yyyy-MM-dd HH:mm:ss' : 'UTC' }}</td>
+                  <td>
+                    <a [routerLink]="['/admin/audit', row.id]" [queryParams]="state().query">{{
+                      row.eventType
+                    }}</a>
+                  </td>
+                  <td>
+                    {{ row.actorType || '—' }}<br /><code>{{ row.actorId }}</code>
+                  </td>
+                  <td>
+                    {{ row.entityType }}<br /><code>{{ row.entityId }}</code>
+                  </td>
+                  <td>{{ row.producer || '—' }}</td>
+                  <td>
+                    <code>{{ row.correlationId || '—' }}</code>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      <nav class="pagination" aria-label="Audit pagination">
+        <button
+          type="button"
+          class="outline"
+          [disabled]="state().query.page === 0"
+          (click)="page(state().query.page - 1)"
+        >
+          Previous
+        </button>
+        <span>Page {{ state().query.page + 1 }} of {{ state().result.totalPages || 1 }}</span>
+        <button
+          type="button"
+          class="outline"
+          [disabled]="state().query.page + 1 >= state().result.totalPages"
+          (click)="page(state().query.page + 1)"
+        >
+          Next
+        </button>
+      </nav>
+    }
+  </div>
+</section>

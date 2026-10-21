@@ -164,6 +164,37 @@ class AuditPostgresIT {
             } finally { release.countDown(); }
         }
     }
+    @Autowired com.insurance.platform.audit.controller.AuditReadController reads;
+    @Autowired com.insurance.platform.audit.repository.AuditRecordRepository records;
+    @Test void auditReadFiltersPaginationAndImmutability() {
+        var actor = UUID.randomUUID().toString(); var entity = UUID.randomUUID().toString();
+        var types = java.util.List.of("QuotePriced","QuoteExpired","UserRegistered","UserDisabled","UserEnabled",
+            "PricingRuleCreated","PricingRuleUpdated","PricingRuleEnabled","PricingRuleDisabled");
+        var start = Instant.parse("2026-10-20T00:00:00Z");
+        for (int i=0;i<types.size();i++) {
+            String type=types.get(i), producer=i<2?"quote-service":i<5?"auth-service":"pricing-service";
+            String entityType=i<2?"Quote":i<5?"User":"PricingRule";
+            records.saveAndFlush(new com.insurance.platform.audit.entity.AuditRecord(new UUID(0,i+1),UUID.randomUUID(),actor,entity,
+                "trace-"+(i%2),start.plusSeconds(i/2),producer,"{\"safe\":true}",start.plusSeconds(60+i),type,i<3?"CUSTOMER":"ADMIN",entityType));
+        }
+        var before=jdbc.queryForList("SELECT * FROM audit_records ORDER BY id");
+        var page=reads.list(0,2,java.util.Map.of()).getBody();
+        assertThat(page.totalElements()).isEqualTo(9); assertThat(page.totalPages()).isEqualTo(5);
+        assertThat(page.content()).extracting(r -> r.eventType()).containsExactly("PricingRuleDisabled","PricingRuleEnabled");
+        assertThat(reads.list(1,2,java.util.Map.of()).getBody().content()).extracting(r -> r.eventType())
+            .containsExactly("PricingRuleUpdated","PricingRuleCreated");
+        for(var type:types) assertThat(reads.list(0,20,java.util.Map.of("eventType",type)).getBody().totalElements()).isEqualTo(1);
+        var cases=java.util.List.of(java.util.Map.of("actorType","ADMIN"),java.util.Map.of("entityType","PricingRule"),
+            java.util.Map.of("actorId",actor),java.util.Map.of("entityId",entity),java.util.Map.of("correlationId","trace-0"),
+            java.util.Map.of("producer","auth-service"),java.util.Map.of("from",start.plusSeconds(1).toString(),"to",start.plusSeconds(3).toString()),
+            java.util.Map.of("actorType","ADMIN","entityType","PricingRule","producer","pricing-service","correlationId","trace-0"));
+        long[] expected={6,4,9,9,5,3,4,2};
+        for(int i=0;i<cases.size();i++) assertThat(reads.list(0,20,cases.get(i)).getBody().totalElements()).as(cases.get(i).toString()).isEqualTo(expected[i]);
+        var detail=reads.detail(new UUID(0,1).toString()).getBody();
+        assertThat(detail.metadata().get("safe").asBoolean()).isTrue();
+        assertThat(reads.list(0,20,java.util.Map.of("eventId",detail.eventId().toString())).getBody().totalElements()).isEqualTo(1);
+        assertThat(jdbc.queryForList("SELECT * FROM audit_records ORDER BY id")).isEqualTo(before);
+    }
     private void assertCounts(long business, long processed) {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_records", Long.class)).isEqualTo(business);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM processed_events", Long.class)).isEqualTo(processed);
