@@ -60,13 +60,13 @@ Login calls the focused `AuthApiService`, then dispatches a password-free `login
 
 ## Authentication boundaries
 
-The access token lives only in NgRx memory. No localStorage/sessionStorage persistence exists. **Refreshing the browser logs the user out intentionally.** No refresh tokens, refresh retries/queues, or backend logout endpoint are implemented.
+The access token lives only in NgRx memory. No localStorage/sessionStorage persistence exists. Browser reload attempts one bounded refresh-cookie session restoration. Access tokens remain memory-only; refresh/logout and a single-refresh queue are implemented.
 
 Client decoding reads `sub`, `roles`, and `exp` and rejects malformed/expired payloads for UI purposes. It does not verify signatures; Gateway and services remain authoritative. The dashboard guard checks shared state and expiry for navigation convenience. Expiry is checked on navigation/protected API requests, not by a background timer.
 
-The interceptor attaches Bearer only to the configured Gateway's `/api/` requests, excluding POST login/register. Other origins and similarly prefixed paths do not receive it. A protected request's 401 clears its matching current session and navigates to login without retry. A late 401 for an older token does not discard a newer session. Public login errors remain on the login page.
+The interceptor attaches Bearer only to the configured Gateway's `/api/` requests, excluding POST login/register/refresh/logout. Other origins and similarly prefixed paths do not receive it. A protected request's 401 joins one shared refresh and retries after success; refresh failure clears local state. A late 401 for an older token does not discard a newer session. Public login errors remain on the login page.
 
-Logout clears token, user ID, roles, and authentication state and navigates to login. It is frontend-state logout only; it does not revoke an already issued JWT.
+Logout clears token, user ID, roles, and authentication state and navigates to login. It also revokes the server refresh token; an already issued JWT remains valid until expiry.
 
 ## Import aliases
 
@@ -130,4 +130,20 @@ History defaults to page 0, size 20; only page and size are sent. Previous/Next 
 
 ADMIN navigation now includes Audit: `/admin/audit` and `/admin/audit/:id`. CUSTOMER sees no link and is redirected to dashboard by the guard. Angular calls only Gateway. Reactive Forms own exact filters and UTC ranges; Signals own validation/metadata visibility; NgRx owns applied query, paginated rows, detail and request state. Query parameters preserve applied filters/page/size through detail/back navigation. All audit state resets and requests cancel on session change.
 
-Apply/Clear, Previous/Next, loading/empty/error/retry and not-found states are supported. Occurrence time is shown in UTC, newest first. Detail metadata uses text interpolation and JSON formatting, never HTML. Nothing edits or deletes audit records. Refresh still requires login; no Phase 23 refresh tokens. See [full contract](../docs/specs/phase-22-audit-ui.md) and [validation](../docs/phase-22-validation.md).
+Apply/Clear, Previous/Next, loading/empty/error/retry and not-found states are supported. Occurrence time is shown in UTC, newest first. Detail metadata uses text interpolation and JSON formatting, never HTML. Nothing edits or deletes audit records. Phase 23 restores sessions on reload. See [full contract](../docs/specs/phase-22-audit-ui.md) and [validation](../docs/phase-22-validation.md).
+
+## Phase 23 — Refresh tokens
+
+The current session flow uses short-lived access JWTs in Angular memory and rotating
+opaque refresh tokens in HttpOnly cookies, with SHA-256 digests in the existing Auth
+table. POST refresh/logout are public through Gateway. Secure defaults to true
+(local HTTP profile false); SameSite=Lax, auth-only path, TTL 7 days, all configurable.
+Gateway permits credentials only for configured exact origins. Angular restores the
+session before initial navigation and shares one refresh across concurrent 401s.
+Logout revokes the cookie; disabled-user refresh is rejected and revoked. PostgreSQL
+row locks serialize rotation, with rollback on replacement failure. Access JWTs
+remain valid until expiry. No token events or Phase 24 changes are included.
+
+See [Phase 23 specification](../docs/specs/phase-23-refresh-tokens.md) for configuration,
+CSRF assumptions, queue behavior, transaction guarantees and deferred cleanup/family tracking.
+Earlier phase descriptions below/above are historical where superseded by Phase 23.

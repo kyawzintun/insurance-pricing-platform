@@ -49,7 +49,7 @@ curl -i http://localhost:8080/actuator/health
 curl -i http://localhost:8080/actuator/info
 ```
 
-Only **POST** register/login and **GET** health/info are public. All other requests require authentication. Valid CORS preflight requests are handled before authentication.
+Only **POST** register/login/refresh/logout and **GET** health/info are public. All other requests require authentication. Valid CORS preflight requests are handled before authentication.
 
 Copy `accessToken` from login into Postman's Bearer Token field. For curl, the header syntax is `-H 'Authorization: Bearer <accessToken>'` (replace the placeholder). Missing, malformed, expired, tampered, or wrong-issuer tokens receive HTTP 401:
 
@@ -65,7 +65,7 @@ Phase 7 now adds protected ADMIN pricing-rule endpoints; see below. For a manual
 
 `config/JwtConfiguration` uses the Boot-managed Nimbus reactive decoder restricted to HS256, plus explicit issuer, expiration (zero clock skew), required expiration, nonblank subject, and nonempty string roles validation. `sub` is the principal name; roles map to `ROLE_` authorities. Phase 7 requires ROLE_ADMIN for `/api/v1/admin/pricing/**`; other authenticated requests retain the previous rules. Auth supplies `iat`; it is not an additional required claim in Gateway.
 
-`config/GatewaySecurityConfiguration` defines the public method/path combinations, stateless authentication, safe errors, and CORS. Only GET/POST/PUT/PATCH/OPTIONS and Authorization/Content-Type/X-Correlation-ID headers are allowed for configured origins under `/api/**`; credentials are disabled. Expand methods when actual later APIs need them.
+`config/GatewaySecurityConfiguration` defines the public method/path combinations, stateless authentication, safe errors, and CORS. Only GET/POST/PUT/PATCH/OPTIONS and Authorization/Content-Type/X-Correlation-ID headers are allowed for configured origins under `/api/**`; credentials are enabled for configured exact origins. Expand methods when actual later APIs need them.
 
 `filter/CorrelationIdFilter` accepts a 1–128 character identifier containing letters, digits, dots, underscores, or hyphens; absent/unsafe values become UUIDs. The same `X-Correlation-ID` is forwarded and returned, including authentication failures, and exposed to the browser. It is diagnostic data, not trusted identity. No tracing or custom user/role headers are introduced.
 
@@ -116,3 +116,19 @@ See [API/security contract](../../docs/admin-customer-management.md). No Phase 2
 ## Phase 22 — Audit routing
 
 `/api/v1/admin/audit` and `/**` route to `${AUDIT_SERVICE_URL:http://localhost:8085}` with independent ADMIN enforcement. Existing bearer, correlation and CORS handling is unchanged. Audit also validates JWT/ADMIN itself and accepts GET only. See [contract](../../docs/specs/phase-22-audit-ui.md).
+
+## Phase 23 — Refresh tokens
+
+The current session flow uses short-lived access JWTs in Angular memory and rotating
+opaque refresh tokens in HttpOnly cookies, with SHA-256 digests in the existing Auth
+table. POST refresh/logout are public through Gateway. Secure defaults to true
+(local HTTP profile false); SameSite=Lax, auth-only path, TTL 7 days, all configurable.
+Gateway permits credentials only for configured exact origins. Angular restores the
+session before initial navigation and shares one refresh across concurrent 401s.
+Logout revokes the cookie; disabled-user refresh is rejected and revoked. PostgreSQL
+row locks serialize rotation, with rollback on replacement failure. Access JWTs
+remain valid until expiry. No token events or Phase 24 changes are included.
+
+See [Phase 23 specification](../../docs/specs/phase-23-refresh-tokens.md) for configuration,
+CSRF assumptions, queue behavior, transaction guarantees and deferred cleanup/family tracking.
+Earlier phase descriptions below/above are historical where superseded by Phase 23.

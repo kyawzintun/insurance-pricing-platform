@@ -4,7 +4,7 @@ import { provideHttpClient, HttpErrorResponse } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideState, provideStore, Store } from '@ngrx/store';
 import { provideEffects } from '@ngrx/effects';
-import { BehaviorSubject, Subject, of } from 'rxjs';
+import { BehaviorSubject, Subject, of, firstValueFrom, Observable } from 'rxjs';
 import { auditFeature, AuditActions, AuditEffects, auditError } from '@app/store/audit/audit.store';
 import { authFeature } from '@app/store/auth/auth.reducer';
 import { AuthActions } from '@app/store/auth/auth.actions';
@@ -24,7 +24,7 @@ describe('Audit pages and access', () => {
   let query: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
   beforeEach(() => {
     query = new BehaviorSubject(convertToParamMap({ page: '0', size: '20', correlationId: 'trace-a' }));
-    TestBed.configureTestingModule({ providers: [provideRouter([]), provideStore(), provideState(authFeature), provideState(auditFeature),
+    TestBed.configureTestingModule({ providers: [provideRouter([]), provideStore(), provideState(authFeature), provideState(auditFeature), provideHttpClient(), provideHttpClientTesting(),
       { provide: ActivatedRoute, useValue: { queryParamMap: query, paramMap: of(convertToParamMap({ id: row.id })), snapshot: { queryParams: { correlationId: 'trace-a' } } } }] });
     store = TestBed.inject(Store);
   });
@@ -37,11 +37,13 @@ describe('Audit pages and access', () => {
     else expect(TestBed.inject(Router).serializeUrl(allowed as UrlTree)).toBe('/dashboard');
     expect(routes.filter(r => r.path?.startsWith('admin/audit')).every(r => r.canActivate?.includes(adminGuard))).toBe(true);
   });
-  it('redirects signed-out and expired sessions to login', () => {
+  it('redirects signed-out and failed expired sessions to login', async () => {
     const run=() => TestBed.runInInjectionContext(() => adminGuard({} as ActivatedRouteSnapshot,{} as RouterStateSnapshot));
     expect(TestBed.inject(Router).serializeUrl(run() as UrlTree)).toBe('/login');
     store.dispatch(AuthActions.loginSuccess({ session: { ...session(), roles: ['ADMIN'], expiresAt: 1 } }));
-    expect(TestBed.inject(Router).serializeUrl(run() as UrlTree)).toBe('/login');
+    const decision=firstValueFrom(run() as Observable<UrlTree>);
+    TestBed.inject(HttpTestingController).expectOne(r=>r.url.endsWith('/auth/refresh')).flush({}, {status:401,statusText:'Unauthorized'});
+    expect(TestBed.inject(Router).serializeUrl(await decision)).toBe('/login');
   });
   it('loads URL filters, displays loading, rows, and paginates with applied filters', () => {
     const fixture=TestBed.createComponent(AuditListComponent); fixture.detectChanges();

@@ -26,6 +26,7 @@ class CustomerAdministrationTests {
     @DynamicPropertySource static void config(DynamicPropertyRegistry r) { r.add("auth.jwt.secret",AuthAdminJwtSupport::secret); }
     @LocalServerPort int port;
     @MockitoBean UserRepository users;
+    @MockitoBean com.insurance.platform.auth.repository.RefreshTokenRepository refreshTokens;
     @MockitoBean OutboxRepository outbox;
     @MockitoBean Clock clock;
     User user;

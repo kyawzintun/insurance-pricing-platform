@@ -27,6 +27,7 @@ describe('Auth API', () => {
     );
     expect(request.request.method).toBe('POST');
     expect(request.request.body).toEqual(body);
+    if(request.request.url.endsWith('/login')) expect(request.request.withCredentials).toBe(true);
     request.flush({ accessToken: token(), tokenType: 'Bearer', expiresIn: 900 });
   });
   it('sends registration through Gateway without role fields', () => {
@@ -42,6 +43,7 @@ describe('Auth API', () => {
     );
     expect(request.request.method).toBe('POST');
     expect(request.request.body).toEqual(body);
+    if(request.request.url.endsWith('/login')) expect(request.request.withCredentials).toBe(true);
     request.flush({ id: USER_ID }, { status: 201, statusText: 'Created' });
   });
 });

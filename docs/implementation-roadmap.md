@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 22 implemented; Phase 23 — Refresh Tokens not started.
+Status: Phases 0 through 23 implemented; Phase 24 — Asymmetric JWT not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -109,4 +109,11 @@ and [validation](phase-21-validation.md). Phase 22 is documented below.
 
 ## Phase 22 — Audit UI
 
-Completed. ADMIN-only Angular audit list/detail routes and navigation use Reactive Forms, local Signals and shared NgRx state. Gateway and Audit independently enforce ADMIN JWT authorization. Read-only API supports bounded server pagination, exact event/actor/entity/producer/correlation/eventId filters, UTC occurrence-time ranges and deterministic ordering. Metadata is returned only in detail and rendered as escaped JSON text. Existing indexes, consumer/event/outbox/retry behavior and immutable audit history are preserved. See [specification](specs/phase-22-audit-ui.md) and [validation](phase-22-validation.md). Phase 23 — Refresh Tokens is not started.
+Completed. ADMIN-only Angular audit list/detail routes and navigation use Reactive Forms, local Signals and shared NgRx state. Gateway and Audit independently enforce ADMIN JWT authorization. Read-only API supports bounded server pagination, exact event/actor/entity/producer/correlation/eventId filters, UTC occurrence-time ranges and deterministic ordering. Metadata is returned only in detail and rendered as escaped JSON text. Existing indexes, consumer/event/outbox/retry behavior and immutable audit history are preserved. See [specification](specs/phase-22-audit-ui.md) and [validation](phase-22-validation.md). Phase 23 adds refresh tokens; see its specification.
+
+### Phase 23 — Refresh Tokens
+
+Implemented opaque rotating tokens, hash storage, HttpOnly cookies, idempotent logout,
+disabled-user rejection, atomic PostgreSQL concurrency, Angular restoration and shared
+refresh retries. See [specification](specs/phase-23-refresh-tokens.md) and
+[validation](phase-23-validation.md). Phase 24 remains unstarted.

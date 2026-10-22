@@ -35,12 +35,12 @@ public class AuthSecurityConfiguration {
         var authentication = new JwtAuthenticationConverter();
         authentication.setJwtGrantedAuthoritiesConverter(authorities);
         return http
-                // Stateless JSON API; no cookie/session authentication is accepted.
+                // No servlet session; cookie validation belongs to explicit refresh/logout endpoints.
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .requestCache(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(requests -> requests
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/api/v1/admin/customers", "/api/v1/admin/customers/**").hasRole("ADMIN")
                         .anyRequest().authenticated())

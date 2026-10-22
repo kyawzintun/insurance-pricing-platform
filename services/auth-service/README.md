@@ -1,6 +1,6 @@
 # Auth Service — Authentication Basics
 
-Phase 4 implements customer registration and login using the existing `auth_db.users` table. Flyway migrations are unchanged. There is no refresh-token, logout or token rotation implementation. Phase 19 adds Kafka outbox publication for new registrations. Phase 5 now routes Auth requests through Gateway.
+Phase 4 implements customer registration and login using the existing `auth_db.users` table. Flyway migrations are unchanged. Phase 23 adds refresh tokens, logout and rotation. Phase 19 adds Kafka outbox publication for new registrations. Phase 5 now routes Auth requests through Gateway.
 
 ## Run Locally
 
@@ -56,7 +56,7 @@ Login request:
 }
 ```
 
-A successful response contains `accessToken`, `tokenType` (`Bearer`), and `expiresIn` (seconds; 900 by default). Responses containing tokens use `Cache-Control: no-store`. No refresh token is issued.
+A successful response contains `accessToken`, `tokenType` (`Bearer`), and `expiresIn` (seconds; 900 by default). Responses containing tokens use `Cache-Control: no-store`. Phase 23 also sets the refresh cookie.
 
 ### Validation and Errors
 
@@ -83,7 +83,7 @@ Spring Security `BCryptPasswordEncoder` uses cost **12**, with a fresh salt per 
 
 JWT generation uses Spring Security's Boot-managed `spring-security-oauth2-jose` / Nimbus implementation, with **HS256**. Claims are limited to `sub` (user UUID), `roles` (CUSTOMER or ADMIN), `iat`, `exp`, and `iss`. No password, name, or email is embedded. The lifetime is configurable and defaults to 15 minutes. Changing the signing key changes which key a future validator needs.
 
-The API is stateless, uses no login session/cookie, and disables form login, HTTP Basic, CSRF, and logout handlers. Only the four method/path combinations listed above are public. Other requests require authentication. Phase 4 originally only issued tokens. Phase 21 now installs independent bearer-token validation for ADMIN customer-management APIs. Gateway now validates Bearer tokens in Phase 5; Phase 21 adds Auth-side JWT validation for customer administration. Disabling a user prevents subsequent login, but revoking already-issued access tokens is outside this phase.
+The API uses no servlet session, uses a Phase 23 HttpOnly refresh cookie, and disables form login, HTTP Basic, CSRF, and logout handlers. Only the four method/path combinations listed above are public. Other requests require authentication. Phase 4 originally only issued tokens. Phase 21 now installs independent bearer-token validation for ADMIN customer-management APIs. Gateway now validates Bearer tokens in Phase 5; Phase 21 adds Auth-side JWT validation for customer administration. Disabling a user prevents subsequent login, but revoking already-issued access tokens is outside this phase.
 
 ## Explicit Local ADMIN Creation
 
@@ -160,3 +160,19 @@ valid until expiry and can still authorize Quote requests. No token revocation,
 migration, historical backfill, admin UI or Phase 22 work.
 See [API contract](../../docs/admin-customer-management.md),
 [status events](../../docs/user-status-events.md), and [validation](../../docs/phase-21-validation.md).
+
+## Phase 23 — Refresh tokens
+
+The current session flow uses short-lived access JWTs in Angular memory and rotating
+opaque refresh tokens in HttpOnly cookies, with SHA-256 digests in the existing Auth
+table. POST refresh/logout are public through Gateway. Secure defaults to true
+(local HTTP profile false); SameSite=Lax, auth-only path, TTL 7 days, all configurable.
+Gateway permits credentials only for configured exact origins. Angular restores the
+session before initial navigation and shares one refresh across concurrent 401s.
+Logout revokes the cookie; disabled-user refresh is rejected and revoked. PostgreSQL
+row locks serialize rotation, with rollback on replacement failure. Access JWTs
+remain valid until expiry. No token events or Phase 24 changes are included.
+
+See [Phase 23 specification](../../docs/specs/phase-23-refresh-tokens.md) for configuration,
+CSRF assumptions, queue behavior, transaction guarantees and deferred cleanup/family tracking.
+Earlier phase descriptions below/above are historical where superseded by Phase 23.

@@ -6,6 +6,7 @@ import { authInterceptor } from '@app/core/interceptors/auth.interceptor';
 import { GATEWAY_URL } from '@app/core/auth/gateway.config';
 import { AuthActions } from '@app/store/auth/auth.actions';
 import { authFeature } from '@app/store/auth/auth.reducer';
+import { token } from '@app/testing/auth-fixtures';
 import { session } from '@app/testing/auth-fixtures';
 
 describe('Gateway auth interceptor', () => {
@@ -42,7 +43,7 @@ describe('Gateway auth interceptor', () => {
     expect(request.request.headers.has('Authorization')).toBe(false);
     request.flush({});
   });
-  it.each(['login', 'register'])('excludes POST %s and does not redirect on its 401', (path) => {
+  it.each(['login', 'register', 'refresh', 'logout'])('excludes POST %s and does not redirect on its 401', (path) => {
     store.dispatch(AuthActions.loginSuccess({ session: session() }));
     http.post(`http://localhost:8080/api/v1/auth/${path}`, {}).subscribe({ error: () => {} });
     const request = backend.expectOne(`http://localhost:8080/api/v1/auth/${path}`);
@@ -62,12 +63,13 @@ describe('Gateway auth interceptor', () => {
     expect(request.request.headers.has('Authorization')).toBe(false);
     request.flush({});
   });
-  it('clears the matching session on protected 401 without retry or refresh', () => {
+  it('clears the matching session when refresh fails', () => {
     store.dispatch(AuthActions.loginSuccess({ session: session() }));
     const dispatch = vi.spyOn(store, 'dispatch');
     http.get(url).subscribe({ error: () => {} });
     backend.expectOne(url).flush({}, { status: 401, statusText: 'Unauthorized' });
-    expect(dispatch).toHaveBeenCalledWith(AuthActions.logout());
+    backend.expectOne('http://localhost:8080/api/v1/auth/refresh').flush({}, {status:401,statusText:'Unauthorized'});
+    expect(dispatch).toHaveBeenCalledWith(AuthActions.loginFailure());
     expect(store.selectSignal(authFeature.selectIsAuthenticated)()).toBe(false);
     backend.expectNone(url);
   });
@@ -80,14 +82,32 @@ describe('Gateway auth interceptor', () => {
     );
     request.flush({}, { status: 401, statusText: 'Unauthorized' });
     expect(store.selectSignal(authFeature.selectAccessToken)()).toBe('newer-token');
+    const retry=backend.expectOne(url);
+    expect(retry.request.headers.get('Authorization')).toBe('Bearer newer-token');
+    retry.flush({});
   });
-  it('clears an expired token without attaching it', () => {
+  it('keeps refreshable expired state without attaching the expired token', () => {
     store.dispatch(AuthActions.loginSuccess({ session: { ...session(), expiresAt: 1 } }));
     http.get(url).subscribe();
     const request = backend.expectOne(url);
     expect(request.request.headers.has('Authorization')).toBe(false);
-    expect(store.selectSignal(authFeature.selectIsAuthenticated)()).toBe(false);
+    expect(store.selectSignal(authFeature.selectIsAuthenticated)()).toBe(true);
     request.flush({});
+  });
+  it('queues three 401s behind one refresh and retries each request', () => {
+    store.dispatch(AuthActions.loginSuccess({session:session()}));
+    let completed=0;
+    for(let i=0;i<3;i++) http.get(url+'?i='+i).subscribe(()=>completed++);
+    backend.match(r=>r.url.startsWith(url)).forEach(r=>r.flush({}, {status:401,statusText:'Unauthorized'}));
+    const refresh=backend.expectOne('http://localhost:8080/api/v1/auth/refresh');
+    expect(refresh.request.withCredentials).toBe(true);
+    const accessToken=token({sub:session().userId,roles:['ADMIN'],exp:Math.floor(Date.now()/1000)+900});
+    refresh.flush({accessToken,tokenType:'Bearer',expiresIn:900});
+    const retries=backend.match(r=>r.url.startsWith(url));
+    expect(retries.length).toBe(3);
+    retries.forEach(r=>{expect(r.request.headers.get('Authorization')).toBe(`Bearer ${accessToken}`);r.flush({});});
+    expect(completed).toBe(3);
+    expect(store.selectSignal(authFeature.selectRoles)()).toEqual(['ADMIN']);
   });
   it('does not log out on 403', () => {
     store.dispatch(AuthActions.loginSuccess({ session: session() }));

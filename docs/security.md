@@ -20,7 +20,7 @@ Gateway has no business routes, login, or JWT behavior. All six local profiles b
 
 ## Phase 4 — Auth Service Only
 
-Auth's temporary Phase 2 chain is replaced. Only POST registration/login and GET health/info are public. Other requests require authentication; bearer-token validation is not installed yet. The API is stateless with no session/cookie authentication, form login, HTTP Basic, or logout handler. CSRF is disabled for this JSON API; it must be reconsidered if browser cookie authentication is introduced.
+Auth's temporary Phase 2 chain is replaced. Only POST registration/login and GET health/info are public. Other requests require authentication; bearer-token validation is not installed yet. The API is stateless with no session/cookie authentication, form login, HTTP Basic, or logout handler. CSRF is disabled; Phase 23 uses SameSite cookies, POST-only refresh/logout and constrained credentialed Gateway CORS.
 
 Registration strips/lowercases email with Locale.ROOT and always persists ACTIVE CUSTOMER. Unknown properties, including role/status, are rejected. Repository checks ignore email case; canonical stored values and the existing unique constraint protect duplicate races. Passwords use BCrypt cost 12, require at least 12 characters for registration, and are capped at 72 UTF-8 bytes without trimming/truncation. Login returns identical 401 errors for missing, incorrect-password, and disabled accounts, with a dummy BCrypt check for missing accounts.
 
@@ -58,7 +58,7 @@ Pagination defaults to page 0 / size 20 (maximum 100), fixed creation-descending
 
 Standalone Angular provides registration/login and a protected dashboard placeholder. Reactive Forms own values and validation; component Signals own loading, safe errors, and password visibility; NgRx Store owns token, user ID, roles, expiry, and authentication state. Effects navigate after login/logout. Credentials never enter NgRx actions/state.
 
-All HTTP goes through the configurable Gateway base URL. Bearer attachment is limited to its API paths and excludes login/register. Protected-request 401 clears the matching current session without refresh/retry. Guards and decoded JWT claims support UI only; backend authorization remains authoritative. Logout clears frontend memory without revoking tokens. Browser reload intentionally logs out. No signing secrets or token persistence are included. Quote UI and refresh tokens are deferred. Backend production code, schemas, and infrastructure remain unchanged. See [frontend guide](../frontend/README.md) and [validation](phase-10-validation.md).
+All HTTP goes through the configurable Gateway base URL. Bearer attachment is limited to its API paths and excludes login/register. Protected-request 401 now uses the Phase 23 shared refresh and retry flow. Guards and decoded JWT claims support UI only; backend authorization remains authoritative. Logout clears memory and revokes the refresh cookie. Browser reload attempts session restoration. No signing secrets or token persistence are included. Refresh sessions are implemented in Phase 23. Backend production code, schemas, and infrastructure remain unchanged. See [frontend guide](../frontend/README.md) and [validation](phase-10-validation.md).
 
 ## Phase 11 — Customer Quote Frontend
 
@@ -109,3 +109,19 @@ Phase 22 is not implemented.
 ## Phase 22 — Audit access
 
 Gateway and Audit independently enforce the existing HS256 JWT validation and ADMIN role on audit reads. Audit denies every mutation method. UI role guards/nav are convenience boundaries; CUSTOMER API calls receive 403 and unauthenticated calls 401. Read responses are no-store; list DTOs omit metadata. Detail returns only stored producer-allowlisted JSON, rendered as escaped text by Angular. Session changes reset audit state/cancel pending reads. No raw Kafka headers or tokens are exposed, no shared history is modified for validation, and no refresh tokens are introduced. See [contract](specs/phase-22-audit-ui.md).
+
+## Phase 23 — Refresh tokens
+
+The current session flow uses short-lived access JWTs in Angular memory and rotating
+opaque refresh tokens in HttpOnly cookies, with SHA-256 digests in the existing Auth
+table. POST refresh/logout are public through Gateway. Secure defaults to true
+(local HTTP profile false); SameSite=Lax, auth-only path, TTL 7 days, all configurable.
+Gateway permits credentials only for configured exact origins. Angular restores the
+session before initial navigation and shares one refresh across concurrent 401s.
+Logout revokes the cookie; disabled-user refresh is rejected and revoked. PostgreSQL
+row locks serialize rotation, with rollback on replacement failure. Access JWTs
+remain valid until expiry. No token events or Phase 24 changes are included.
+
+See [Phase 23 specification](specs/phase-23-refresh-tokens.md) for configuration,
+CSRF assumptions, queue behavior, transaction guarantees and deferred cleanup/family tracking.
+Earlier phase descriptions below/above are historical where superseded by Phase 23.

@@ -26,6 +26,7 @@ class AuthPostgresIT {
         r.add("spring.datasource.password", DATABASE::getPassword);
         r.add("auth.jwt.secret", () -> java.util.Base64.getEncoder().encodeToString(new byte[32]));
     }
+    @Autowired com.insurance.platform.auth.service.RefreshSessionService sessions;
     @Autowired AuthService service;
     @Autowired com.insurance.platform.auth.service.CustomerAdminService customers;
     @Autowired com.insurance.platform.auth.repository.UserRepository users;
@@ -37,11 +38,47 @@ class AuthPostgresIT {
     static final Instant NOW = Instant.parse("2026-10-17T00:00:00Z");
     static RegisterRequest request(String email) { return new RegisterRequest(email, "Test-password-42!", "Test", "Customer"); }
     @BeforeEach void reset() {
-        jdbc.update("delete from outbox_events"); jdbc.update("delete from users"); when(clock.instant()).thenReturn(NOW);
+        jdbc.update("delete from refresh_tokens"); jdbc.update("delete from outbox_events"); jdbc.update("delete from users"); when(clock.instant()).thenReturn(NOW);
     }
     void counts(int users, int events) {
         assertThat(jdbc.queryForObject("select count(*) from users", Integer.class)).isEqualTo(users);
         assertThat(jdbc.queryForObject("select count(*) from outbox_events", Integer.class)).isEqualTo(events);
+    }
+    @Test void refreshRotationLogoutExpiryDisabledAndRollback() {
+        var user=service.register(request("session@example.com"));
+        var login=sessions.login(new com.insurance.platform.auth.dto.LoginRequest("session@example.com","Test-password-42!"));
+        assertThat(login.cookieToken).matches("[A-Za-z0-9_-]{43}");
+        assertThat(jdbc.queryForObject("select token_hash from refresh_tokens",String.class)).hasSize(64).isNotEqualTo(login.cookieToken);
+        var next=sessions.refresh(login.cookieToken);
+        assertThat(next.cookieToken).isNotEqualTo(login.cookieToken);
+        assertThat(jdbc.queryForObject("select expires_at from refresh_tokens where revoked_at is null",java.time.OffsetDateTime.class).toInstant())
+            .isEqualTo(NOW.plus(Duration.ofDays(7)));
+        assertThat(jdbc.queryForObject("select count(*) from refresh_tokens where revoked_at is not null",Integer.class)).isEqualTo(1);
+        assertThatThrownBy(()->sessions.refresh(login.cookieToken)).isInstanceOf(com.insurance.platform.auth.exception.AuthException.class);
+        jdbc.execute("alter table refresh_tokens add constraint phase23_failure check (revoked_at is not null) not valid");
+        try { assertThatThrownBy(()->sessions.refresh(next.cookieToken)).isInstanceOf(RuntimeException.class); }
+        finally {jdbc.execute("alter table refresh_tokens drop constraint phase23_failure");}
+        var recovered=sessions.refresh(next.cookieToken);
+        sessions.logout(recovered.cookieToken); sessions.logout(recovered.cookieToken);sessions.logout(null);sessions.logout("invalid");
+        assertThatThrownBy(()->sessions.refresh(recovered.cookieToken)).isInstanceOf(com.insurance.platform.auth.exception.AuthException.class);
+        var expiring=sessions.login(new com.insurance.platform.auth.dto.LoginRequest("session@example.com","Test-password-42!"));
+        jdbc.update("update refresh_tokens set expires_at=?",java.sql.Timestamp.from(NOW.minusSeconds(1)));
+        assertThatThrownBy(()->sessions.refresh(expiring.cookieToken)).isInstanceOf(com.insurance.platform.auth.exception.AuthException.class);
+        var disabled=sessions.login(new com.insurance.platform.auth.dto.LoginRequest("session@example.com","Test-password-42!"));
+        jdbc.update("update users set status='DISABLED' where id=?",user.id());
+        assertThatThrownBy(()->sessions.refresh(disabled.cookieToken)).isInstanceOf(com.insurance.platform.auth.exception.AuthException.class);
+        jdbc.update("update users set status='ACTIVE' where id=?",user.id());
+        assertThatThrownBy(()->sessions.refresh(disabled.cookieToken)).isInstanceOf(com.insurance.platform.auth.exception.AuthException.class);
+    }
+    @Test void concurrentRefreshHasOneWinner() throws Exception {
+        service.register(request("race-session@example.com"));
+        var login=sessions.login(new com.insurance.platform.auth.dto.LoginRequest("race-session@example.com","Test-password-42!"));
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+          java.util.concurrent.Callable<Boolean> attempt=()->{start.await();try{sessions.refresh(login.cookieToken);return true;}catch(com.insurance.platform.auth.exception.AuthException e){return false;}};
+          var a=pool.submit(attempt);var b=pool.submit(attempt);start.countDown();
+          assertThat(java.util.List.of(a.get(),b.get())).containsExactlyInAnyOrder(true,false);
+        }
     }
     @Test void registrationIsAtomicAndSensitiveFieldsAreExcluded() {
         var attributes = new org.springframework.mock.web.MockHttpServletRequest();

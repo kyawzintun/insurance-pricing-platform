@@ -49,9 +49,26 @@ class AuthServiceApplicationTests {
 
     @MockitoBean com.insurance.platform.auth.repository.OutboxRepository outbox;
     @MockitoBean UserRepository users;
+    @MockitoBean com.insurance.platform.auth.repository.RefreshTokenRepository refreshTokens;
     @Autowired PasswordEncoder passwords;
     @Autowired ObjectMapper mapper;
     @LocalServerPort int port;
+
+    @Test
+    void refreshFailuresAreSafeAndLogoutAlwaysClearsCookie() throws Exception {
+        for(var raw:List.of("malformed", "A".repeat(43))) {
+          var request=HttpRequest.newBuilder(URI.create("http://localhost:"+port+"/api/v1/auth/refresh"))
+            .header("Cookie","refresh_token="+raw).POST(HttpRequest.BodyPublishers.noBody()).build();
+          var response=HttpClient.newHttpClient().send(request,HttpResponse.BodyHandlers.ofString());
+          assertError(response,401,"INVALID_REFRESH_TOKEN");assertThat(response.body()).doesNotContain(raw);
+        }
+        for(int i=0;i<2;i++) {
+          var response=post("logout",Map.of());
+          assertThat(response.statusCode()).isEqualTo(204);
+          assertThat(response.headers().firstValue("Set-Cookie")).get().asString()
+            .contains("Max-Age=0","Path=/api/v1/auth","HttpOnly","Secure","SameSite=Lax");
+        }
+    }
 
     @Test
     void contextStartsAndHealthIsAvailable() throws Exception {
@@ -130,6 +147,13 @@ class AuthServiceApplicationTests {
         var user = user(Role.CUSTOMER, UserStatus.ACTIVE);
         when(users.findByEmailIgnoreCase("customer@example.com")).thenReturn(Optional.of(user));
         var response = post("login", Map.of("email", " CUSTOMER@EXAMPLE.COM ", "password", PASSWORD));
+        var cookie=response.headers().firstValue("Set-Cookie").orElseThrow();
+        assertThat(cookie).contains("HttpOnly","Secure","SameSite=Lax","Path=/api/v1/auth","Max-Age=604800");
+        var raw=cookie.split(";",2)[0].split("=",2)[1];
+        var captured=ArgumentCaptor.forClass(com.insurance.platform.auth.entity.RefreshToken.class);
+        verify(refreshTokens).saveAndFlush(captured.capture());
+        assertThat(captured.getValue().getTokenHash()).hasSize(64).isNotEqualTo(raw);
+        assertThat(response.body()).doesNotContain(raw,"refreshToken");
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("Cache-Control")).contains("no-store");
         var body = mapper.readTree(response.body());

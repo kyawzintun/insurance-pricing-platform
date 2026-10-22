@@ -4,26 +4,26 @@ import com.insurance.platform.auth.dto.LoginRequest;
 import com.insurance.platform.auth.dto.RegisterRequest;
 import com.insurance.platform.auth.dto.TokenResponse;
 import com.insurance.platform.auth.dto.UserResponse;
+import com.insurance.platform.auth.entity.OutboxEvent;
 import com.insurance.platform.auth.entity.User;
 import com.insurance.platform.auth.enums.Role;
 import com.insurance.platform.auth.enums.UserStatus;
-import com.insurance.platform.auth.exception.AuthException;
-import com.insurance.platform.auth.repository.UserRepository;
-
-import com.insurance.platform.auth.repository.OutboxRepository;
 import com.insurance.platform.auth.event.AuthCorrelationId;
-import tools.jackson.databind.json.JsonMapper;
 import com.insurance.platform.auth.event.EventEnvelope;
 import com.insurance.platform.auth.event.UserRegisteredData;
-import com.insurance.platform.auth.entity.OutboxEvent;
-import java.time.Clock;
-import java.util.Locale;
-import java.util.UUID;
+import com.insurance.platform.auth.exception.AuthException;
+import com.insurance.platform.auth.repository.OutboxRepository;
+import com.insurance.platform.auth.repository.UserRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
+
+import java.time.Clock;
+import java.util.Locale;
+import java.util.UUID;
 
 @Service
 public class AuthService {
@@ -35,7 +35,6 @@ public class AuthService {
     private final OutboxRepository outbox;
     private final AuthCorrelationId correlation;
     private final JsonMapper mapper;
-
 
     public AuthService(
             UserRepository users,
@@ -58,7 +57,9 @@ public class AuthService {
     @Transactional
     public UserResponse register(RegisterRequest request) {
         var email = normalize(request.email());
-        if (users.existsByEmailIgnoreCase(email)) { throw duplicateEmail(); }
+        if (users.existsByEmailIgnoreCase(email)) {
+            throw duplicateEmail();
+        }
         var user = new User(
                 UUID.randomUUID(),
                 email,
@@ -113,7 +114,9 @@ public class AuthService {
         return tokens.issue(user.get());
     }
 
-    private static String normalize(String email) { return email.strip().toLowerCase(Locale.ROOT); }
+    private static String normalize(String email) {
+        return email.strip().toLowerCase(Locale.ROOT);
+    }
 
     private static AuthException duplicateEmail() {
         return new AuthException(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS", "Email is already registered");

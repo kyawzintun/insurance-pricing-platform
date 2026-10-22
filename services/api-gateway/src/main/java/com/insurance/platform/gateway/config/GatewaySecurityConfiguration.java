@@ -38,7 +38,7 @@ public class GatewaySecurityConfiguration {
                 .requestCache(cache -> cache.requestCache(NoOpServerRequestCache.getInstance()))
                 .cors(config -> config.configurationSource(cors))
                 .authorizeExchange(exchanges -> exchanges
-                        .pathMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
                         .pathMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
                         .pathMatchers("/api/v1/admin/audit", "/api/v1/admin/audit/**").hasRole("ADMIN")
                         .pathMatchers("/api/v1/admin/pricing/**").hasRole("ADMIN")
@@ -63,7 +63,7 @@ public class GatewaySecurityConfiguration {
         cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "OPTIONS"));
         cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-ID"));
         cors.setExposedHeaders(List.of("X-Correlation-ID"));
-        cors.setAllowCredentials(false);
+        cors.setAllowCredentials(true);
         cors.setMaxAge(3600L);
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", cors);

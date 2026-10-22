@@ -3,9 +3,11 @@ import { AuthSession } from '@app/core/auth/auth.models';
 
 // Passwords are never dispatched. Form credentials go directly to AuthApiService.
 export const AuthActions = createActionGroup({
-  source: 'Auth', events: {
+  source: 'Auth',
+  events: {
+    'Session Restored': props<{ session: AuthSession }>(),
     'Login Success': props<{ session: AuthSession }>(),
     'Login Failure': emptyProps(),
-    'Logout': emptyProps(),
+    Logout: emptyProps(),
   },
 });

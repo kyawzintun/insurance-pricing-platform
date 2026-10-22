@@ -16,3 +16,6 @@ auth:
 outbox:
   publisher:
     enabled: ${AUTH_OUTBOX_PUBLISHER_ENABLED:true}
+
+# Plain HTTP localhost only.
+auth.refresh.secure: ${AUTH_REFRESH_COOKIE_SECURE:false}

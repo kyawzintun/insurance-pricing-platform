@@ -37,6 +37,8 @@ class ApiGatewayApplicationTests {
             DOWNSTREAM.createContext("/api/v1/auth/", exchange -> {
                 forwardedAuthorization = exchange.getRequestHeaders().getFirst("Authorization");
                 forwardedCorrelation = exchange.getRequestHeaders().getFirst("X-Correlation-ID");
+                forwardedCookie = exchange.getRequestHeaders().getFirst("Cookie");
+                exchange.getResponseHeaders().add("Set-Cookie", "refresh_token=opaque-test; Path=/api/v1/auth; HttpOnly; SameSite=Lax; Secure");
                 forwardedBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 byte[] body = "{\"downstream\":true}".getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -86,6 +88,17 @@ class ApiGatewayApplicationTests {
             });
             DOWNSTREAM.start();
         } catch (Exception ex) { throw new ExceptionInInitializerError(ex); }
+    }
+
+    static volatile String forwardedCookie;
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings={"refresh","logout"})
+    void cookieEndpointsArePublicAndForwardCookies(String endpoint) throws Exception {
+      var response=request("POST","/api/v1/auth/"+endpoint,"Cookie","refresh_token=opaque-test","X-Correlation-ID","phase23-cookie");
+      assertThat(response.statusCode()).isEqualTo(200);
+      assertThat(forwardedCookie).isEqualTo("refresh_token=opaque-test");
+      assertThat(response.headers().firstValue("Set-Cookie")).get().asString().contains("HttpOnly","SameSite=Lax","Secure");
+      assertThat(response.headers().firstValue("X-Correlation-ID")).contains("phase23-cookie");
     }
 
     @DynamicPropertySource
@@ -205,7 +218,7 @@ class ApiGatewayApplicationTests {
                 "Access-Control-Request-Method", "POST", "Access-Control-Request-Headers", "authorization,content-type");
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("Access-Control-Allow-Origin")).contains("http://localhost:4200");
-        assertThat(response.headers().firstValue("Access-Control-Allow-Credentials")).isEmpty();
+        assertThat(response.headers().firstValue("Access-Control-Allow-Credentials")).contains("true");
     }
     @Test void unapprovedCorsOriginIsRejected() throws Exception {
         assertThat(request("OPTIONS", "/api/v1/auth/login", "Origin", "http://unapproved.example",
