@@ -9,7 +9,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 final class PricingTestIdentity {
     static final java.util.UUID ADMIN = java.util.UUID.fromString("00000000-0000-0000-0000-000000000001");
     static void authenticate() {
-        var jwt = Jwt.withTokenValue("test-only-redacted-token").header("alg", "HS256").subject(ADMIN.toString()).build();
+        var jwt = Jwt.withTokenValue("test-only-redacted-token").header("alg", "RS256").subject(ADMIN.toString()).build();
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
     }
 }

@@ -24,7 +24,7 @@ class AuthPostgresIT {
         r.add("spring.datasource.url", DATABASE::getJdbcUrl);
         r.add("spring.datasource.username", DATABASE::getUsername);
         r.add("spring.datasource.password", DATABASE::getPassword);
-        r.add("auth.jwt.secret", () -> java.util.Base64.getEncoder().encodeToString(new byte[32]));
+
     }
     @Autowired com.insurance.platform.auth.service.RefreshSessionService sessions;
     @Autowired AuthService service;
@@ -50,6 +50,15 @@ class AuthPostgresIT {
         assertThat(login.cookieToken).matches("[A-Za-z0-9_-]{43}");
         assertThat(jdbc.queryForObject("select token_hash from refresh_tokens",String.class)).hasSize(64).isNotEqualTo(login.cookieToken);
         var next=sessions.refresh(login.cookieToken);
+        for (var access : java.util.List.of(login.access, next.access)) {
+            try {
+                var signed = com.nimbusds.jwt.SignedJWT.parse(access.accessToken());
+                assertThat(signed.getHeader().getAlgorithm().getName()).isEqualTo("RS256");
+                assertThat(signed.verify(new com.nimbusds.jose.crypto.RSASSAVerifier(
+                    com.insurance.platform.auth.config.RsaKeys.publicKey(new org.springframework.core.io.ClassPathResource("keys/dev-jwt-public.pem")))))
+                    .isTrue();
+            } catch (Exception ex) { throw new AssertionError("RSA token verification failed", ex); }
+        }
         assertThat(next.cookieToken).isNotEqualTo(login.cookieToken);
         assertThat(jdbc.queryForObject("select expires_at from refresh_tokens where revoked_at is null",java.time.OffsetDateTime.class).toInstant())
             .isEqualTo(NOW.plus(Duration.ofDays(7)));

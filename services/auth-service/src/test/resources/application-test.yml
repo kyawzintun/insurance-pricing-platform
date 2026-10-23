@@ -7,3 +7,9 @@ spring:
       - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
       - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
       - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
+
+# Deterministic, public development fixtures; never deployment keys.
+auth:
+  jwt:
+    public-key: classpath:keys/dev-jwt-public.pem
+    private-key: classpath:keys/dev-jwt-private.pem

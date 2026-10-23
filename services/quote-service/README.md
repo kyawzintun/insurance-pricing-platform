@@ -1,5 +1,27 @@
 # Quote Service — Creation, Retrieval, and Ownership
 
+## Phase 24 — RS256 access JWTs
+
+Auth now signs access JWTs with a private RSA key using **RS256 only**. Auth's admin
+APIs, Gateway, Quote, Pricing and Audit independently verify with the public key;
+verifier services receive no private-key configuration. Existing role/ownership,
+issuer, expiry, subject, error and correlation behavior remains unchanged. Opaque
+Phase 23 refresh cookies and rotation are unchanged. Old HS256 access tokens are
+rejected; refresh/login obtains RS256 tokens. No JWKS, key rotation or Phase 25 work.
+
+Configure `AUTH_JWT_PUBLIC_KEY=file:/path/jwt-public-key.pem` in all five services and
+`AUTH_JWT_PRIVATE_KEY=file:/path/jwt-private-key.pem` **only in Auth**. Keys are RSA PEM
+(at least 2048 bits), PKCS#8 private and X.509 SubjectPublicKeyInfo public. Non-local
+profiles require external files. Default `local` uses publicly known **development-only**
+fixtures, never suitable for production. `AUTH_JWT_ISSUER` and `AUTH_JWT_ACCESS_TOKEN_TTL`
+retain existing defaults. `AUTH_JWT_SECRET` is no longer supported.
+
+See [Phase 24 specification](../../docs/specs/phase-24-asymmetric-jwt.md) and [validation](../../docs/phase-24-validation.md) for setup,
+startup checks, private-key isolation, rollout and validation evidence.
+
+> Earlier phase sections below record historical behavior; Phase 24 configuration above supersedes symmetric-key instructions.
+
+
 Creates completed car-insurance quotes using quote_db vehicle reference data and a synchronous call to Pricing Service. It stores historical driver, vehicle, and pricing snapshots atomically. Pricing values are educational, not actuarial.
 
 ## Local startup
@@ -23,9 +45,9 @@ These are separate foreground commands; Ctrl+C stops each application. Quote def
 | `PRICING_CONNECT_TIMEOUT` | `2s` |
 | `PRICING_READ_TIMEOUT` | `5s` |
 | `AUTH_JWT_ISSUER` | `insurance-auth-service` |
-| `AUTH_JWT_SECRET` | Shared public development-only local key; required outside local |
+| `AUTH_JWT_PUBLIC_KEY` | RSA public PEM resource location; required outside local |
 
-Quote independently validates HS256 signature, expiration (zero skew), issuer, UUID subject, and roles. CUSTOMER is required for creation; ADMIN-only receives 403. Missing/invalid token returns 401. Auth/Gateway/Quote must share the key/issuer. Gateway checks authentication and forwards the original Bearer token. Quote derives customer_id only from JWT sub; custom identity headers and request fields are not trusted.
+Quote independently validates RS256 signature, expiration (zero skew), issuer, UUID subject, and roles. CUSTOMER is required for creation; ADMIN-only receives 403. Missing/invalid token returns 401. Auth/Gateway/Quote must share the public key/issuer. Gateway checks authentication and forwards the original Bearer token. Quote derives customer_id only from JWT sub; custom identity headers and request fields are not trusted.
 
 ## Create a quote
 

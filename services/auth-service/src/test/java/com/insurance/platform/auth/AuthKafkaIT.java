@@ -27,7 +27,7 @@ class AuthKafkaIT {
     @DynamicPropertySource static void properties(DynamicPropertyRegistry r) {
         r.add("spring.datasource.url", DATABASE::getJdbcUrl); r.add("spring.datasource.username", DATABASE::getUsername);
         r.add("spring.datasource.password", DATABASE::getPassword);
-        r.add("auth.jwt.secret", () -> Base64.getEncoder().encodeToString(new byte[32]));
+
         r.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
     }
     @Autowired AuthService service;

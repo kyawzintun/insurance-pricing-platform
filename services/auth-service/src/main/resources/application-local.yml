@@ -10,8 +10,9 @@ spring:
 
 auth:
   jwt:
-    # PUBLIC DEVELOPMENT-ONLY KEY. Never reuse outside this learning project.
-    secret: ${AUTH_JWT_SECRET:VnczjVEg+Q2DUmsGnX7ZtEAeji5U42s55cOsNvTc3aY=}
+    # PUBLICLY KNOWN DEVELOPMENT-ONLY KEY PAIR. Never reuse outside this learning project.
+    private-key: ${AUTH_JWT_PRIVATE_KEY:classpath:keys/dev-jwt-private.pem}
+    public-key: ${AUTH_JWT_PUBLIC_KEY:classpath:keys/dev-jwt-public.pem}
 
 outbox:
   publisher:

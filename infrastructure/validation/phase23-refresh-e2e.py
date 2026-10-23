@@ -18,8 +18,10 @@ try:
   if subprocess.run(['docker','exec',cid,'pg_isready','-U','phase23'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0:break
   time.sleep(.5)
  key=base64.b64encode(secrets.token_bytes(32)).decode()
- env=os.environ.copy();env.update(AUTH_JWT_SECRET=key,AUTH_JWT_ACCESS_TOKEN_TTL='2s',AUTH_REFRESH_TOKEN_TTL='1h',AUTH_REFRESH_COOKIE_SECURE='false',AUTH_OUTBOX_PUBLISHER_ENABLED='false',SPRING_PROFILES_ACTIVE='validation',SPRING_DATASOURCE_URL=f'jdbc:postgresql://localhost:{dbport}/auth_db',SPRING_DATASOURCE_USERNAME='phase23',SPRING_DATASOURCE_PASSWORD='disposable-only',AUTH_SERVICE_URL=f'http://127.0.0.1:{ap}')
+ env=os.environ.copy();env.update(AUTH_JWT_PUBLIC_KEY="file:"+str(root/"services/auth-service/src/main/resources/keys/dev-jwt-public.pem"),AUTH_JWT_ACCESS_TOKEN_TTL='2s',AUTH_REFRESH_TOKEN_TTL='1h',AUTH_REFRESH_COOKIE_SECURE='false',AUTH_OUTBOX_PUBLISHER_ENABLED='false',SPRING_PROFILES_ACTIVE='validation',SPRING_DATASOURCE_URL=f'jdbc:postgresql://localhost:{dbport}/auth_db',SPRING_DATASOURCE_USERNAME='phase23',SPRING_DATASOURCE_PASSWORD='disposable-only',AUTH_SERVICE_URL=f'http://127.0.0.1:{ap}')
  for service,p in [('auth-service',ap),('api-gateway',gp)]:
+  env.pop('AUTH_JWT_PRIVATE_KEY',None)
+  if service=='auth-service':env['AUTH_JWT_PRIVATE_KEY']='file:'+str(root/'services/auth-service/src/main/resources/keys/dev-jwt-private.pem')
   f=open('/tmp/phase23-e2e-'+service+'.log','w');logs.append(f)
   procs.append(subprocess.Popen(['java','-jar',str(root/'services'/service/'target'/f'{service}-0.0.1-SNAPSHOT.jar'),f'--server.port={p}'],env=env,stdout=f,stderr=subprocess.STDOUT))
  for _ in range(100):

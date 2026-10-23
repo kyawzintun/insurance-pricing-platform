@@ -33,7 +33,7 @@ class PricingRulePostgresIT {
         properties.add("spring.datasource.url", DATABASE::getJdbcUrl);
         properties.add("spring.datasource.username", DATABASE::getUsername);
         properties.add("spring.datasource.password", DATABASE::getPassword);
-        properties.add("auth.jwt.secret", AdminJwtSupport::secret);
+
     }
     @Autowired PricingRuleAdminService admin;
     @Autowired PricingService pricing;

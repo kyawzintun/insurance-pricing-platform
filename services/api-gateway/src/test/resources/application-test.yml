@@ -1,0 +1,5 @@
+
+# Deterministic, public development fixtures; never deployment keys.
+auth:
+  jwt:
+    public-key: classpath:keys/dev-jwt-public.pem

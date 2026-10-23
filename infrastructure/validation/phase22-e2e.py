@@ -54,7 +54,7 @@ def kafka_cmd(tool, *args, data=None):
     return cmd('docker','exec','-i',kafka,'/opt/kafka/bin/'+tool,'--bootstrap-server','localhost:19092',*args,data=data)
 
 def start(service, publish=False):
-    env = dict(os.environ, SERVER_PORT=str(ports[service]), AUTH_JWT_SECRET=secret,
+    env = dict(os.environ, SERVER_PORT=str(ports[service]), AUTH_JWT_PUBLIC_KEY="file:"+str(ROOT/"services/auth-service/src/main/resources/keys/dev-jwt-public.pem"),
                AUTH_SERVICE_URL='http://localhost:'+str(ports['auth']),
                PRICING_SERVICE_URL='http://localhost:'+str(ports['pricing']),
                SPRING_KAFKA_BOOTSTRAP_SERVERS='localhost:'+str(kport),
@@ -64,6 +64,8 @@ def start(service, publish=False):
                QUOTE_EXPIRATION_POLL_INTERVAL='500', OUTBOX_PUBLISHER_ENABLED='true',
                PRICING_OUTBOX_PUBLISHER_ENABLED=str(publish).lower(), PRICING_OUTBOX_POLL_INTERVAL='200',
                SPRING_DATASOURCE_USERNAME='test', SPRING_DATASOURCE_PASSWORD='phase22-disposable')
+    env.pop('AUTH_JWT_PRIVATE_KEY',None)
+    if service == 'auth':env['AUTH_JWT_PRIVATE_KEY']='file:'+str(ROOT/'services/auth-service/src/main/resources/keys/dev-jwt-private.pem')
     if service != 'api-gateway':
         env['SPRING_DATASOURCE_URL']=f'jdbc:postgresql://localhost:{pgport}/{service}_db'
     jar = ROOT / 'services' / (service+'-service' if service != 'api-gateway' else service) / 'target' / (service+'-service-0.0.1-SNAPSHOT.jar' if service != 'api-gateway' else service+'-0.0.1-SNAPSHOT.jar')

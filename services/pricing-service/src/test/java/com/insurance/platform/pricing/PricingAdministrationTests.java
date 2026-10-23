@@ -31,9 +31,6 @@ class PricingAdministrationTests {
              "comparisonValueTo":null,"factor":1.30,"fixedAmount":null,
              "effectiveFrom":"2026-11-01T00:00:00Z","enabled":true,"description":"Test rule"}
             """;
-    @DynamicPropertySource static void jwt(DynamicPropertyRegistry properties) {
-        properties.add("auth.jwt.secret", AdminJwtSupport::secret);
-    }
     @LocalServerPort int port;
     @MockitoBean com.insurance.platform.pricing.repository.OutboxRepository outbox;
     @MockitoBean PricingRuleRepository repository;
@@ -220,4 +217,12 @@ class PricingAdministrationTests {
         error(admin("PUT",PATH+"/"+ID,VALID.replace("}",",\"version\":0}")),409,"PRICING_RULE_VERSION_CONFLICT");
         verifyNoInteractions(outbox);
     }
+    @Test void rejectsLegacyUnsignedWrongRsaAndMalformedTokensOverHttp() throws Exception {
+        for (String rejected : RsaTestTokens.rejectedTokens()) {
+            var response = request("GET",PATH,null,rejected);
+            assertThat(response.statusCode()).isEqualTo(401);
+            assertThat(response.body()).doesNotContain(rejected, "Exception", "PRIVATE KEY");
+        }
+    }
+
 }

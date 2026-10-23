@@ -33,7 +33,7 @@ class QuotePostgresIT {
         registry.add("spring.datasource.url",DATABASE::getJdbcUrl);
         registry.add("spring.datasource.username",DATABASE::getUsername);
         registry.add("spring.datasource.password",DATABASE::getPassword);
-        registry.add("auth.jwt.secret",QuoteJwtSupport::secret);
+
         registry.add("outbox.publisher.enabled", () -> "false");
         registry.add("spring.jpa.properties.hibernate.generate_statistics", () -> "true");
         registry.add("spring.jpa.properties.hibernate.query.fail_on_pagination_over_collection_fetch", () -> "true");

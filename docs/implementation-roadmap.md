@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 23 implemented; Phase 24 — Asymmetric JWT not started.
+Status: Phases 0 through 24 implemented and validated; Phase 25 — Service-to-Service Authentication not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -116,4 +116,16 @@ Completed. ADMIN-only Angular audit list/detail routes and navigation use Reacti
 Implemented opaque rotating tokens, hash storage, HttpOnly cookies, idempotent logout,
 disabled-user rejection, atomic PostgreSQL concurrency, Angular restoration and shared
 refresh retries. See [specification](specs/phase-23-refresh-tokens.md) and
-[validation](phase-23-validation.md). Phase 24 remains unstarted.
+[validation](phase-23-validation.md). Phase 24 replaces symmetric access JWTs; refresh behavior is unchanged.
+
+### Phase 24 — Asymmetric JWT
+
+Completed. Auth signs RS256; Gateway/Auth/Quote/Pricing/Audit independently verify
+using only public keys. Explicit PEM resources, startup pair checks, deterministic
+DEV/test fixtures, algorithm-confusion rejection and disposable cross-service validation.
+No migration or refresh redesign. See [specification](specs/phase-24-asymmetric-jwt.md)
+and [validation](phase-24-validation.md).
+
+### Phase 25 — Service-to-Service Authentication
+
+Not started. Existing internal service authentication remains deferred.

@@ -1,5 +1,3 @@
-
 auth:
   jwt:
-    secret: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-    issuer: insurance-auth-service
+    public-key: classpath:keys/dev-jwt-public.pem

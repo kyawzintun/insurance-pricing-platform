@@ -1,5 +1,27 @@
 # Backend Services
 
+## Phase 24 — RS256 access JWTs
+
+Auth now signs access JWTs with a private RSA key using **RS256 only**. Auth's admin
+APIs, Gateway, Quote, Pricing and Audit independently verify with the public key;
+verifier services receive no private-key configuration. Existing role/ownership,
+issuer, expiry, subject, error and correlation behavior remains unchanged. Opaque
+Phase 23 refresh cookies and rotation are unchanged. Old HS256 access tokens are
+rejected; refresh/login obtains RS256 tokens. No JWKS, key rotation or Phase 25 work.
+
+Configure `AUTH_JWT_PUBLIC_KEY=file:/path/jwt-public-key.pem` in all five services and
+`AUTH_JWT_PRIVATE_KEY=file:/path/jwt-private-key.pem` **only in Auth**. Keys are RSA PEM
+(at least 2048 bits), PKCS#8 private and X.509 SubjectPublicKeyInfo public. Non-local
+profiles require external files. Default `local` uses publicly known **development-only**
+fixtures, never suitable for production. `AUTH_JWT_ISSUER` and `AUTH_JWT_ACCESS_TOKEN_TTL`
+retain existing defaults. `AUTH_JWT_SECRET` is no longer supported.
+
+See [Phase 24 specification](../docs/specs/phase-24-asymmetric-jwt.md) and [validation](../docs/phase-24-validation.md) for setup,
+startup checks, private-key isolation, rollout and validation evidence.
+
+> Earlier phase sections below record historical behavior; Phase 24 configuration above supersedes symmetric-key instructions.
+
+
 Phase 2 supplied six independently runnable applications. Phase 3 adds service-owned Flyway migrations and educational seeds; Phase 4 now adds registration/login and the User entity in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal Pricing calculation; Phase 7 adds ADMIN pricing-rule APIs with independent JWT validation. Phase 8 adds CUSTOMER quote creation with synchronous Pricing integration and atomic snapshots. Phase 9 adds CUSTOMER-owned and ADMIN quote retrieval; Kafka message handlers remain deferred.
 
 ## Build Baseline
@@ -129,7 +151,7 @@ Flyway recreates Quote's schema and seeds from its migrations. Do not recreate t
 
 ## Phase 4 — Auth Service
 
-Auth adds registration/login, BCrypt password storage, and HS256 access-token generation. Its local profile provides a public development key, overridable via `AUTH_JWT_SECRET` (Base64, at least 32 bytes), with `AUTH_JWT_ACCESS_TOKEN_TTL=15m` and optional issuer configuration. Other services remain unchanged. See the [Auth README](auth-service/README.md) for endpoint contracts, environment setup, generic errors, and manual local ADMIN provisioning. Phase 5 adds Gateway routing and JWT validation; downstream validation remains deferred; no refresh-token functionality exists.
+Current key configuration is described in the Phase 24 section above: Auth receives private and public RSA PEM resources; verifiers receive the public resource only. The earlier symmetric shared-secret setup has been removed.
 
 ## Phase 5 — Gateway
 

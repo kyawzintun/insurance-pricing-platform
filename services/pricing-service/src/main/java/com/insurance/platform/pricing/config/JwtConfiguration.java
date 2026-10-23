@@ -1,32 +1,25 @@
 package com.insurance.platform.pricing.config;
 
 import java.time.Duration;
-import java.util.Base64;
+
 import java.util.Collection;
-import javax.crypto.spec.SecretKeySpec;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+import org.springframework.core.io.Resource;
 import org.springframework.security.oauth2.jwt.*;
 
 @Configuration(proxyBeanMethods = false)
 public class JwtConfiguration {
     @Bean
-    JwtDecoder jwtDecoder(@Value("${auth.jwt.secret}") String encodedSecret,
+    JwtDecoder jwtDecoder(@Value("${auth.jwt.public-key}") Resource publicKey,
                                   @Value("${auth.jwt.issuer}") String issuer) {
-        byte[] key;
-        try {
-            key = Base64.getDecoder().decode(encodedSecret);
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalStateException("AUTH_JWT_SECRET must be Base64 encoding at least 32 bytes");
-        }
-        if (key.length < 32 || issuer.isBlank()) {
-            throw new IllegalStateException("A signing key of at least 32 bytes and a nonblank JWT issuer are required");
-        }
-        var decoder = NimbusJwtDecoder.withSecretKey(new SecretKeySpec(key, "HmacSHA256"))
-                .macAlgorithm(MacAlgorithm.HS256).build();
+        if (issuer.isBlank()) throw new IllegalStateException("JWT issuer must be nonblank");
+        var decoder = NimbusJwtDecoder.withPublicKey(RsaKeys.publicKey(publicKey))
+                .signatureAlgorithm(SignatureAlgorithm.RS256).build();
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 // Strict local expiry: no acceptance window after exp.
                 new JwtTimestampValidator(Duration.ZERO),

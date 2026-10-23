@@ -4,11 +4,8 @@ import com.insurance.platform.audit.entity.AuditRecord;
 import com.insurance.platform.audit.repository.*;
 import java.net.*;
 import java.net.http.*;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -37,10 +34,9 @@ class AuditReadTests {
     private String token(String role) throws Exception {
         var e = Base64.getUrlEncoder().withoutPadding();
         String claims = "{\"sub\":\"admin\",\"roles\":[\""+role+"\"],\"iss\":\"insurance-auth-service\",\"exp\":"+(Instant.now().getEpochSecond()+300)+"}";
-        String data=e.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8))+"."+e.encodeToString(claims.getBytes(StandardCharsets.UTF_8));
-        var mac=Mac.getInstance("HmacSHA256");mac.init(new SecretKeySpec(new byte[32],"HmacSHA256"));
-        return data+"."+e.encodeToString(mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
+        return RsaTestTokens.sign(claims);
     }
+
     private HttpResponse<String> request(String method,String path,String role) throws Exception {
         try(var client=HttpClient.newHttpClient()) {
             var b=HttpRequest.newBuilder(URI.create("http://localhost:"+port+"/api/v1/admin/audit"+path)).method(method,HttpRequest.BodyPublishers.noBody());
@@ -82,4 +78,13 @@ class AuditReadTests {
         for(String method:List.of("POST","PUT","PATCH","DELETE")) assertThat(request(method,"/"+ID,"ADMIN").statusCode()).isEqualTo(403);
         verify(repository,never()).save(any());verify(repository,never()).deleteById(any());
     }
+    @Test void rejectsLegacyUnsignedWrongRsaAndMalformedTokensOverHttp() throws Exception {
+        for (String rejected : RsaTestTokens.rejectedTokens()) {
+            var response = HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create("http://localhost:"+port+"/api/v1/admin/audit"))
+                        .header("Authorization","Bearer "+rejected).GET().build(),HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).isEqualTo(401);
+            assertThat(response.body()).doesNotContain(rejected, "Exception", "PRIVATE KEY");
+        }
+    }
+
 }

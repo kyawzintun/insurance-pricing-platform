@@ -13,7 +13,7 @@ spring:
 auth:
   jwt:
     # Same PUBLIC DEVELOPMENT-ONLY KEY as Auth/Gateway. Never reuse outside local learning.
-    secret: ${AUTH_JWT_SECRET:VnczjVEg+Q2DUmsGnX7ZtEAeji5U42s55cOsNvTc3aY=}
+    public-key: ${AUTH_JWT_PUBLIC_KEY:classpath:keys/dev-jwt-public.pem}
 
 outbox:
   publisher:

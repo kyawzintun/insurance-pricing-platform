@@ -45,7 +45,8 @@ auth:
     secure: ${AUTH_REFRESH_COOKIE_SECURE:true}
     same-site: ${AUTH_REFRESH_COOKIE_SAME_SITE:Lax}
   jwt:
-    secret: ${AUTH_JWT_SECRET:}
+    private-key: ${AUTH_JWT_PRIVATE_KEY:}
+    public-key: ${AUTH_JWT_PUBLIC_KEY:}
     access-token-ttl: ${AUTH_JWT_ACCESS_TOKEN_TTL:15m}
     issuer: ${AUTH_JWT_ISSUER:insurance-auth-service}
 

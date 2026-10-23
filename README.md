@@ -1,5 +1,27 @@
 # Insurance Pricing Platform
 
+## Phase 24 — RS256 access JWTs
+
+Auth now signs access JWTs with a private RSA key using **RS256 only**. Auth's admin
+APIs, Gateway, Quote, Pricing and Audit independently verify with the public key;
+verifier services receive no private-key configuration. Existing role/ownership,
+issuer, expiry, subject, error and correlation behavior remains unchanged. Opaque
+Phase 23 refresh cookies and rotation are unchanged. Old HS256 access tokens are
+rejected; refresh/login obtains RS256 tokens. No JWKS, key rotation or Phase 25 work.
+
+Configure `AUTH_JWT_PUBLIC_KEY=file:/path/jwt-public-key.pem` in all five services and
+`AUTH_JWT_PRIVATE_KEY=file:/path/jwt-private-key.pem` **only in Auth**. Keys are RSA PEM
+(at least 2048 bits), PKCS#8 private and X.509 SubjectPublicKeyInfo public. Non-local
+profiles require external files. Default `local` uses publicly known **development-only**
+fixtures, never suitable for production. `AUTH_JWT_ISSUER` and `AUTH_JWT_ACCESS_TOKEN_TTL`
+retain existing defaults. `AUTH_JWT_SECRET` is no longer supported.
+
+See [Phase 24 specification](docs/specs/phase-24-asymmetric-jwt.md) and [validation](docs/phase-24-validation.md) for setup,
+startup checks, private-key isolation, rollout and validation evidence.
+
+> Earlier phase sections below record historical behavior; Phase 24 configuration above supersedes symmetric-key instructions.
+
+
 A learning project for practicing Angular + NgRx, Spring Boot 4, Spring Security, Kafka, PostgreSQL, Docker, microservices, and specification-first AI-assisted SDLC.
 
 The project focuses on a simple car-insurance pricing platform. It is not intended to implement realistic actuarial insurance pricing. The main learning targets are Spring Boot/microservices, Kafka, Angular + NgRx, PostgreSQL, and specification-first AI-assisted development.
@@ -168,7 +190,7 @@ See [database design](docs/database-design.md), [validation results](docs/phase-
 
 Auth Service now provides `POST /api/v1/auth/register` (201) and `POST /api/v1/auth/login` (200). Registration canonicalizes email, hashes passwords with BCrypt cost 12, and always creates an ACTIVE CUSTOMER. Client-supplied role/status fields are rejected. Login rejects unknown accounts, incorrect passwords, and disabled accounts with the same 401 error.
 
-Login issues an HS256 JWT access token with a 15-minute default lifetime, configurable through `AUTH_JWT_ACCESS_TOKEN_TTL`. The local profile includes a public development-only signing key. `AUTH_JWT_SECRET` can override it and must be supplied outside the local profile; never reuse the local key outside this learning project. No refresh tokens are implemented.
+Current key configuration is described in the Phase 24 section above: Auth receives private and public RSA PEM resources; verifiers receive the public resource only. The earlier symmetric shared-secret setup has been removed.
 
 See [Auth Service documentation](services/auth-service/README.md) for request/response details, required environment values, and explicit local ADMIN creation through registration followed by a manual database promotion. See [Phase 4 validation](docs/phase-4-validation.md) for test and live-database evidence. Phase 5 is documented below.
 
@@ -182,7 +204,7 @@ Run Auth as above, then in a second terminal run:
 
 Normal API calls now use `POST http://localhost:8080/api/v1/auth/register` and `POST http://localhost:8080/api/v1/auth/login`. Gateway forwards `/api/v1/auth/**` to `AUTH_SERVICE_URL` (default `http://localhost:8081`). Only those two POST endpoints and GET health/info are public; other requests require a valid HS256 Bearer token with the expected issuer. Missing/invalid/expired tokens receive safe JSON 401 responses. Phase 7 adds protected ADMIN pricing-rule routes below.
 
-Auth and Gateway share the public local development key; outside local supply the same `AUTH_JWT_SECRET` securely. CORS allows configurable `GATEWAY_CORS_ALLOWED_ORIGINS` (default `http://localhost:4200`) without credentials. Gateway forwards and returns a bounded `X-Correlation-ID`, generating one when needed.
+Current key configuration is described in the Phase 24 section above: Auth receives private and public RSA PEM resources; verifiers receive the public resource only. The earlier symmetric shared-secret setup has been removed.
 
 See [Gateway commands, curl examples, configuration, and limitations](services/api-gateway/README.md) and [Phase 5 validation](docs/phase-5-validation.md). Phase 6 is documented below.
 

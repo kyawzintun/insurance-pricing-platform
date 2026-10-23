@@ -42,7 +42,7 @@ class QuoteKafkaIT {
         registry.add("spring.datasource.url", DATABASE::getJdbcUrl);
         registry.add("spring.datasource.username", DATABASE::getUsername);
         registry.add("spring.datasource.password", DATABASE::getPassword);
-        registry.add("auth.jwt.secret", QuoteJwtSupport::secret);
+
         registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
         registry.add("outbox.publisher.enabled", () -> "true");
         registry.add("outbox.publisher.poll-interval", () -> "200");

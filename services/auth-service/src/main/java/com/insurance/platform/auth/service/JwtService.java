@@ -7,7 +7,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Service;
 
@@ -35,7 +35,7 @@ public class JwtService {
         var claims = JwtClaimsSet.builder().issuer(issuer).subject(user.getId().toString())
                 .issuedAt(now).expiresAt(now.plus(lifetime))
                 .claim("roles", List.of(user.getRole().name())).build();
-        var header = JwsHeader.with(MacAlgorithm.HS256).type("JWT").build();
+        var header = JwsHeader.with(SignatureAlgorithm.RS256).type("JWT").build();
         var token = encoder.encode(JwtEncoderParameters.from(header, claims));
         return new TokenResponse(token.getTokenValue(), "Bearer", lifetime.getSeconds());
     }

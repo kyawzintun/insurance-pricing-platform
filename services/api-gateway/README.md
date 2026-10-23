@@ -1,5 +1,27 @@
 # API Gateway — Auth, Pricing Administration, and Quotes
 
+## Phase 24 — RS256 access JWTs
+
+Auth now signs access JWTs with a private RSA key using **RS256 only**. Auth's admin
+APIs, Gateway, Quote, Pricing and Audit independently verify with the public key;
+verifier services receive no private-key configuration. Existing role/ownership,
+issuer, expiry, subject, error and correlation behavior remains unchanged. Opaque
+Phase 23 refresh cookies and rotation are unchanged. Old HS256 access tokens are
+rejected; refresh/login obtains RS256 tokens. No JWKS, key rotation or Phase 25 work.
+
+Configure `AUTH_JWT_PUBLIC_KEY=file:/path/jwt-public-key.pem` in all five services and
+`AUTH_JWT_PRIVATE_KEY=file:/path/jwt-private-key.pem` **only in Auth**. Keys are RSA PEM
+(at least 2048 bits), PKCS#8 private and X.509 SubjectPublicKeyInfo public. Non-local
+profiles require external files. Default `local` uses publicly known **development-only**
+fixtures, never suitable for production. `AUTH_JWT_ISSUER` and `AUTH_JWT_ACCESS_TOKEN_TTL`
+retain existing defaults. `AUTH_JWT_SECRET` is no longer supported.
+
+See [Phase 24 specification](../../docs/specs/phase-24-asymmetric-jwt.md) and [validation](../../docs/phase-24-validation.md) for setup,
+startup checks, private-key isolation, rollout and validation evidence.
+
+> Earlier phase sections below record historical behavior; Phase 24 configuration above supersedes symmetric-key instructions.
+
+
 Gateway runs on **8080**, using Spring Cloud Gateway WebFlux and reactive Spring Security. Its downstream routes are `/api/v1/auth/**` → Auth Service and `/api/v1/admin/pricing/**` → Pricing Service, plus `/api/v1/quotes` and `/api/v1/quotes/**` → Quote Service, with the original path and Authorization header preserved. It has no database or business endpoints.
 
 ## Run locally
@@ -26,11 +48,11 @@ Both applications default to `local`. No launcher or environment exports are nee
 | `QUOTE_SERVICE_URL` | `http://localhost:8082`; Quote route |
 | `PRICING_SERVICE_URL` | `http://localhost:8083`; admin Pricing route only |
 | `GATEWAY_CORS_ALLOWED_ORIGINS` | `http://localhost:4200`; comma-separated exact origins |
-| `AUTH_JWT_SECRET` | Same Base64 key as Auth; at least 32 bytes |
+| `AUTH_JWT_PUBLIC_KEY` | RSA public PEM resource location; required outside local |
 | `AUTH_JWT_ISSUER` | `insurance-auth-service`; must match Auth |
 | `SERVER_ADDRESS` | `127.0.0.1` in local profile |
 
-Local YAML reuses Auth's **public development-only key**, also used by Pricing and Quote. Explicitly selecting another profile removes this fallback; supply `AUTH_JWT_SECRET` securely to Auth, Gateway, Pricing, and Quote. A missing, invalid Base64, or short key prevents startup. Environment variables override YAML; Maven does not automatically load `.env`. Gateway has no issuer-discovery network call.
+Current key configuration is described in the Phase 24 section above: Auth receives private and public RSA PEM resources; verifiers receive the public resource only. The earlier symmetric shared-secret setup has been removed.
 
 ## Requests
 
@@ -63,7 +85,7 @@ Phase 7 now adds protected ADMIN pricing-rule endpoints; see below. For a manual
 
 ## Validation and propagation
 
-`config/JwtConfiguration` uses the Boot-managed Nimbus reactive decoder restricted to HS256, plus explicit issuer, expiration (zero clock skew), required expiration, nonblank subject, and nonempty string roles validation. `sub` is the principal name; roles map to `ROLE_` authorities. Phase 7 requires ROLE_ADMIN for `/api/v1/admin/pricing/**`; other authenticated requests retain the previous rules. Auth supplies `iat`; it is not an additional required claim in Gateway.
+`config/JwtConfiguration` uses the Boot-managed Nimbus reactive decoder restricted to RS256, plus explicit issuer, expiration (zero clock skew), required expiration, nonblank subject, and nonempty string roles validation. `sub` is the principal name; roles map to `ROLE_` authorities. Phase 7 requires ROLE_ADMIN for `/api/v1/admin/pricing/**`; other authenticated requests retain the previous rules. Auth supplies `iat`; it is not an additional required claim in Gateway.
 
 `config/GatewaySecurityConfiguration` defines the public method/path combinations, stateless authentication, safe errors, and CORS. Only GET/POST/PUT/PATCH/OPTIONS and Authorization/Content-Type/X-Correlation-ID headers are allowed for configured origins under `/api/**`; credentials are enabled for configured exact origins. Expand methods when actual later APIs need them.
 

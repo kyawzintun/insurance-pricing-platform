@@ -30,7 +30,7 @@ class PricingKafkaIT {
     @Container static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.1.2").withEnv("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "false");
     @DynamicPropertySource static void properties(DynamicPropertyRegistry r) {
         r.add("spring.datasource.url", DATABASE::getJdbcUrl);r.add("spring.datasource.username", DATABASE::getUsername);
-        r.add("spring.datasource.password", DATABASE::getPassword);r.add("auth.jwt.secret",AdminJwtSupport::secret);
+        r.add("spring.datasource.password", DATABASE::getPassword);
         r.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
     }
     @Autowired PricingRuleAdminService service;

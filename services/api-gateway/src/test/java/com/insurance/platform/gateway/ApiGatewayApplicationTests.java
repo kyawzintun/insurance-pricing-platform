@@ -5,11 +5,8 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.*;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.*;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -24,14 +21,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class ApiGatewayApplicationTests {
-    private static final byte[] KEY = new byte[32];
     private static final HttpServer DOWNSTREAM;
     private static volatile String forwardedAuthorization;
     private static volatile String forwardedCorrelation;
     private static volatile String forwardedBody;
     private static volatile String forwardedQuoteUri;
     static {
-        new SecureRandom().nextBytes(KEY);
         try {
             DOWNSTREAM = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             DOWNSTREAM.createContext("/api/v1/auth/", exchange -> {
@@ -103,7 +98,7 @@ class ApiGatewayApplicationTests {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        registry.add("auth.jwt.secret", () -> Base64.getEncoder().encodeToString(KEY));
+
         registry.add("QUOTE_SERVICE_URL", () -> "http://127.0.0.1:" + DOWNSTREAM.getAddress().getPort());
         registry.add("PRICING_SERVICE_URL", () -> "http://127.0.0.1:" + DOWNSTREAM.getAddress().getPort());
         registry.add("AUDIT_SERVICE_URL", () -> "http://127.0.0.1:" + DOWNSTREAM.getAddress().getPort());
@@ -126,12 +121,7 @@ class ApiGatewayApplicationTests {
     }
 
     private String token(String claims) throws Exception {
-        var encoder = Base64.getUrlEncoder().withoutPadding();
-        String data = encoder.encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8))
-                + "." + encoder.encodeToString(claims.getBytes(StandardCharsets.UTF_8));
-        var mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(KEY, "HmacSHA256"));
-        return data + "." + encoder.encodeToString(mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
+        return RsaTestTokens.sign(claims);
     }
 
     private String claims(String issuer, long expiry) {
@@ -310,4 +300,12 @@ class ApiGatewayApplicationTests {
             assertThat(forwardedAuthorization).isEqualTo("Bearer "+admin);assertThat(forwardedCorrelation).isEqualTo("admin-customers-test");
         }
     }
+    @Test void rejectsLegacyUnsignedWrongRsaAndMalformedTokensOverHttp() throws Exception {
+        for (String rejected : RsaTestTokens.rejectedTokens()) {
+            var response = request("GET","/api/v1/quotes","Authorization","Bearer "+rejected);
+            assertThat(response.statusCode()).isEqualTo(401);
+            assertThat(response.body()).doesNotContain(rejected, "Exception", "PRIVATE KEY");
+        }
+    }
+
 }

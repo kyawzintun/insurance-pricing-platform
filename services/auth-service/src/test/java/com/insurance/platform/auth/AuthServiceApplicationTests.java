@@ -8,11 +8,9 @@ import com.insurance.platform.auth.repository.UserRepository;
 import java.net.URI;
 import java.net.http.*;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
 import java.sql.SQLException;
 import java.time.*;
 import java.util.*;
-import javax.crypto.spec.SecretKeySpec;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -25,11 +23,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.ObjectMapper;
-
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -39,13 +34,6 @@ import static org.mockito.Mockito.*;
 @ActiveProfiles("test")
 class AuthServiceApplicationTests {
     private static final String PASSWORD = "Test-only-password-42!";
-    private static final byte[] KEY = new byte[32];
-    static { new SecureRandom().nextBytes(KEY); }
-
-    @DynamicPropertySource
-    static void jwtSettings(DynamicPropertyRegistry registry) {
-        registry.add("auth.jwt.secret", () -> Base64.getEncoder().encodeToString(KEY));
-    }
 
     @MockitoBean com.insurance.platform.auth.repository.OutboxRepository outbox;
     @MockitoBean UserRepository users;
@@ -159,7 +147,7 @@ class AuthServiceApplicationTests {
         var body = mapper.readTree(response.body());
         assertThat(body.get("tokenType").asText()).isEqualTo("Bearer");
         assertThat(body.get("expiresIn").asLong()).isEqualTo(900);
-        var decoder = NimbusJwtDecoder.withSecretKey(new SecretKeySpec(KEY, "HmacSHA256")).build();
+        var decoder = NimbusJwtDecoder.withPublicKey(com.insurance.platform.auth.config.RsaKeys.publicKey(new org.springframework.core.io.ClassPathResource("keys/dev-jwt-public.pem"))).build();
         var jwt = decoder.decode(body.get("accessToken").asText());
         assertThat(jwt.getSubject()).isEqualTo(user.getId().toString());
         assertThat(jwt.getClaimAsStringList("roles")).containsExactly("CUSTOMER");

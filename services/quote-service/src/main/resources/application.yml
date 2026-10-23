@@ -46,7 +46,7 @@ management:
 
 auth:
   jwt:
-    secret: ${AUTH_JWT_SECRET:}
+    public-key: ${AUTH_JWT_PUBLIC_KEY:}
     issuer: ${AUTH_JWT_ISSUER:insurance-auth-service}
 pricing:
   service:

@@ -52,7 +52,7 @@ class QuoteServiceApplicationTests {
         } catch(Exception ex) { throw new ExceptionInInitializerError(ex); }
     }
     @DynamicPropertySource static void properties(DynamicPropertyRegistry registry) {
-        registry.add("auth.jwt.secret",QuoteJwtSupport::secret);
+
         registry.add("pricing.service.url",() -> "http://127.0.0.1:"+PRICING.getAddress().getPort());
         registry.add("pricing.service.read-timeout",() -> "500ms");
     }

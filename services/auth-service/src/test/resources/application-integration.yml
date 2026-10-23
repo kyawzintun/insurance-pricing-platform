@@ -1,0 +1,4 @@
+auth:
+  jwt:
+    public-key: classpath:keys/dev-jwt-public.pem
+    private-key: classpath:keys/dev-jwt-private.pem

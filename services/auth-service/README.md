@@ -1,5 +1,27 @@
 # Auth Service — Authentication Basics
 
+## Phase 24 — RS256 access JWTs
+
+Auth now signs access JWTs with a private RSA key using **RS256 only**. Auth's admin
+APIs, Gateway, Quote, Pricing and Audit independently verify with the public key;
+verifier services receive no private-key configuration. Existing role/ownership,
+issuer, expiry, subject, error and correlation behavior remains unchanged. Opaque
+Phase 23 refresh cookies and rotation are unchanged. Old HS256 access tokens are
+rejected; refresh/login obtains RS256 tokens. No JWKS, key rotation or Phase 25 work.
+
+Configure `AUTH_JWT_PUBLIC_KEY=file:/path/jwt-public-key.pem` in all five services and
+`AUTH_JWT_PRIVATE_KEY=file:/path/jwt-private-key.pem` **only in Auth**. Keys are RSA PEM
+(at least 2048 bits), PKCS#8 private and X.509 SubjectPublicKeyInfo public. Non-local
+profiles require external files. Default `local` uses publicly known **development-only**
+fixtures, never suitable for production. `AUTH_JWT_ISSUER` and `AUTH_JWT_ACCESS_TOKEN_TTL`
+retain existing defaults. `AUTH_JWT_SECRET` is no longer supported.
+
+See [Phase 24 specification](../../docs/specs/phase-24-asymmetric-jwt.md) and [validation](../../docs/phase-24-validation.md) for setup,
+startup checks, private-key isolation, rollout and validation evidence.
+
+> Earlier phase sections below record historical behavior; Phase 24 configuration above supersedes symmetric-key instructions.
+
+
 Phase 4 implements customer registration and login using the existing `auth_db.users` table. Flyway migrations are unchanged. Phase 23 adds refresh tokens, logout and rotation. Phase 19 adds Kafka outbox publication for new registrations. Phase 5 now routes Auth requests through Gateway.
 
 ## Run Locally
@@ -17,7 +39,8 @@ From `services/auth-service/`, the equivalent command is `../../mvnw spring-boot
 
 | Variable | Meaning / default |
 | --- | --- |
-| `AUTH_JWT_SECRET` | Optional local override of the public development key; required outside the local profile. Must encode at least 32 bytes. Invalid keys prevent startup. |
+| `AUTH_JWT_PRIVATE_KEY` | Auth-only PKCS#8 RSA private PEM resource location; required outside local. |
+| `AUTH_JWT_PUBLIC_KEY` | X.509 RSA public PEM resource location; required outside local. |
 | `AUTH_JWT_ACCESS_TOKEN_TTL` | Access-token lifetime; default `15m`. Must resolve to a positive whole number of seconds. |
 | `AUTH_JWT_ISSUER` | Issuer string; default `insurance-auth-service`. |
 | `AUTH_SERVICE_PORT` | Default `8081`; standard `SERVER_PORT` can also override it. |
@@ -81,7 +104,7 @@ Registration intentionally reports duplicate email as requested. Login uses a du
 
 Spring Security `BCryptPasswordEncoder` uses cost **12**, with a fresh salt per password. Passwords, hashes, tokens, and authorization headers are never logged by Auth code. Request/token DTO string representations redact their contents; validation errors do not echo rejected values. User entities are never serialized as API responses.
 
-JWT generation uses Spring Security's Boot-managed `spring-security-oauth2-jose` / Nimbus implementation, with **HS256**. Claims are limited to `sub` (user UUID), `roles` (CUSTOMER or ADMIN), `iat`, `exp`, and `iss`. No password, name, or email is embedded. The lifetime is configurable and defaults to 15 minutes. Changing the signing key changes which key a future validator needs.
+JWT generation uses Spring Security's Boot-managed `spring-security-oauth2-jose` / Nimbus implementation, with **RS256**. Claims are limited to `sub` (user UUID), `roles` (CUSTOMER or ADMIN), `iat`, `exp`, and `iss`. No password, name, or email is embedded. The lifetime is configurable and defaults to 15 minutes. Changing the signing key changes which key a future validator needs.
 
 The API uses no servlet session, uses a Phase 23 HttpOnly refresh cookie, and disables form login, HTTP Basic, CSRF, and logout handlers. Only the four method/path combinations listed above are public. Other requests require authentication. Phase 4 originally only issued tokens. Phase 21 now installs independent bearer-token validation for ADMIN customer-management APIs. Gateway now validates Bearer tokens in Phase 5; Phase 21 adds Auth-side JWT validation for customer administration. Disabling a user prevents subsequent login, but revoking already-issued access tokens is outside this phase.
 

@@ -23,7 +23,6 @@ class CustomerAdministrationTests {
     static final String PATH="/api/v1/admin/customers";
     static final UUID ID=UUID.fromString("00000000-0000-0000-0000-000000000002");
     static final Instant NOW=Instant.parse("2026-10-19T01:02:03Z");
-    @DynamicPropertySource static void config(DynamicPropertyRegistry r) { r.add("auth.jwt.secret",AuthAdminJwtSupport::secret); }
     @LocalServerPort int port;
     @MockitoBean UserRepository users;
     @MockitoBean com.insurance.platform.auth.repository.RefreshTokenRepository refreshTokens;
@@ -112,4 +111,12 @@ class CustomerAdministrationTests {
         var response=admin("PATCH","/"+ID+"/disable",null);safe(response,500);
         assertThat(response.body()).doesNotContain("private SQL payload");verifyNoInteractions(outbox);
     }
+    @Test void rejectsLegacyUnsignedWrongRsaAndMalformedTokensOverHttp() throws Exception {
+        for (String rejected : RsaTestTokens.rejectedTokens()) {
+            var response = call("GET",PATH,null,rejected);
+            assertThat(response.statusCode()).isEqualTo(401);
+            assertThat(response.body()).doesNotContain(rejected, "Exception", "PRIVATE KEY");
+        }
+    }
+
 }

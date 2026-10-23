@@ -31,3 +31,13 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Python validation artifacts
+__pycache__/
+*.pyc
+
+# Publicly known Phase 24 DEV/test fixtures only; deployment keys stay ignored.
+!services/*/src/main/resources/keys/dev-jwt-public.pem
+!services/auth-service/src/main/resources/keys/dev-jwt-private.pem
+!services/*/src/test/resources/keys/dev-jwt-public.pem
+!services/*/src/test/resources/keys/dev-jwt-private.pem

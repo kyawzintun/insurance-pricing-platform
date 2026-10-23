@@ -25,9 +25,6 @@ import static org.mockito.Mockito.*;
 @ActiveProfiles("test")
 class QuoteRetrievalTests {
     @MockitoBean org.springframework.jdbc.core.JdbcTemplate expirationJdbc;
-    @DynamicPropertySource static void properties(DynamicPropertyRegistry registry) {
-        registry.add("auth.jwt.secret", QuoteJwtSupport::secret);
-    }
     @LocalServerPort int port;
     @org.springframework.test.context.bean.override.mockito.MockitoSpyBean com.insurance.platform.quote.event.QuotePricedEventFactory eventFactory;
     @MockitoBean QuoteRepository quotes;
@@ -169,4 +166,12 @@ class QuoteRetrievalTests {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("\"status\":\""+status+"\"", "\"driver\":null", "\"pricing\":null");
     }
+    @Test void rejectsLegacyUnsignedWrongRsaAndMalformedTokensOverHttp() throws Exception {
+        for (String rejected : RsaTestTokens.rejectedTokens()) {
+            var response = get("",rejected);
+            assertThat(response.statusCode()).isEqualTo(401);
+            assertThat(response.body()).doesNotContain(rejected, "Exception", "PRIVATE KEY");
+        }
+    }
+
 }

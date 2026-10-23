@@ -1,5 +1,27 @@
 # Pricing Service — Calculation and Administration
 
+## Phase 24 — RS256 access JWTs
+
+Auth now signs access JWTs with a private RSA key using **RS256 only**. Auth's admin
+APIs, Gateway, Quote, Pricing and Audit independently verify with the public key;
+verifier services receive no private-key configuration. Existing role/ownership,
+issuer, expiry, subject, error and correlation behavior remains unchanged. Opaque
+Phase 23 refresh cookies and rotation are unchanged. Old HS256 access tokens are
+rejected; refresh/login obtains RS256 tokens. No JWKS, key rotation or Phase 25 work.
+
+Configure `AUTH_JWT_PUBLIC_KEY=file:/path/jwt-public-key.pem` in all five services and
+`AUTH_JWT_PRIVATE_KEY=file:/path/jwt-private-key.pem` **only in Auth**. Keys are RSA PEM
+(at least 2048 bits), PKCS#8 private and X.509 SubjectPublicKeyInfo public. Non-local
+profiles require external files. Default `local` uses publicly known **development-only**
+fixtures, never suitable for production. `AUTH_JWT_ISSUER` and `AUTH_JWT_ACCESS_TOKEN_TTL`
+retain existing defaults. `AUTH_JWT_SECRET` is no longer supported.
+
+See [Phase 24 specification](../../docs/specs/phase-24-asymmetric-jwt.md) and [validation](../../docs/phase-24-validation.md) for setup,
+startup checks, private-key isolation, rollout and validation evidence.
+
+> Earlier phase sections below record historical behavior; Phase 24 configuration above supersedes symmetric-key instructions.
+
+
 Calculates an educational THB car-insurance premium from active rules in `pricing_db`. These values are **not actuarial pricing**. Calculation is read-only: no result, quote, outbox event, or Kafka message is persisted/published.
 
 ## Run locally
@@ -116,7 +138,7 @@ Phase 6 adds no migrations, seed edits, admin CRUD, Gateway route, Quote integra
 
 Start Auth, Pricing, and Gateway in separate terminals using their existing Maven commands. Normal admin API calls use **Gateway port 8080**. Gateway forwards `/api/v1/admin/pricing/**` to `PRICING_SERVICE_URL` (default `http://localhost:8083`).
 
-Both Gateway and Pricing independently validate HS256 Bearer tokens, including signature, expiration (zero skew), issuer, nonblank subject, and string roles. Both require `ADMIN`. Missing/invalid JWT receives safe JSON 401; a valid CUSTOMER receives 403. Pricing does not trust custom user/role headers. The local key/issuer match Auth/Gateway; outside local supply the same `AUTH_JWT_SECRET` (Base64, at least 32 bytes) and `AUTH_JWT_ISSUER` to all three. No default admin account is created. Use [Auth's explicit local ADMIN provisioning procedure](../auth-service/README.md#explicit-local-admin-creation), then log in through Gateway to obtain an ADMIN token. Existing CUSTOMER tokens do not gain the role after database promotion; log in again.
+Current key configuration is described in the Phase 24 section above: Auth receives private and public RSA PEM resources; verifiers receive the public resource only. The earlier symmetric shared-secret setup has been removed.
 
 | Method | Path | Success |
 | --- | --- | --- |
