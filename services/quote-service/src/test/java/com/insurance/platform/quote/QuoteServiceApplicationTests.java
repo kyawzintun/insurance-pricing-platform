@@ -59,12 +59,14 @@ class QuoteServiceApplicationTests {
     @AfterAll static void stop() { PRICING.stop(0); EXECUTOR.shutdownNow(); }
     @LocalServerPort int port;
     @org.springframework.test.context.bean.override.mockito.MockitoSpyBean com.insurance.platform.quote.event.QuotePricedEventFactory eventFactory;
+    @MockitoBean com.insurance.platform.quote.client.ServiceTokenClient serviceTokens;
     @MockitoBean VehicleBrandRepository brands;
     @MockitoBean VehicleModelRepository models;
     @MockitoBean QuoteRepository quotes;
     @MockitoBean OutboxRepository outbox;
     @MockitoBean Clock clock;
     @BeforeEach void setup() {
+        when(serviceTokens.token(anyString())).thenReturn("test-service-token");
         downstreamBody=null; downstreamAuthorization=null; downstreamStatus=200; downstreamResponse=PRICE; delay=0;
         when(clock.instant()).thenReturn(NOW);
         when(brands.findById(BRAND)).thenReturn(Optional.of(new VehicleBrand(BRAND,"Toyota from database",true,NOW)));
@@ -85,6 +87,12 @@ class QuoteServiceApplicationTests {
         assertThat(response.body()).contains("\"code\":\""+code+"\"").doesNotContain("Exception","localhost","SQL","private downstream");
         verifyNoInteractions(quotes);
         verifyNoInteractions(eventFactory);
+    }
+    @Test void authAcquisitionFailureDoesNotCallPricingOrPersist() throws Exception {
+        when(serviceTokens.token(anyString())).thenThrow(com.insurance.platform.quote.exception.QuoteException.pricingUnavailable());
+        error(post(INPUT),503,"PRICING_SERVICE_UNAVAILABLE");
+        assertThat(downstreamBody).isNull();
+        verifyNoInteractions(outbox);
     }
     @Test void healthIsPublic() throws Exception {
         assertThat(request("GET","/actuator/health",null,null).statusCode()).isEqualTo(200);
@@ -128,7 +136,7 @@ class QuoteServiceApplicationTests {
         assertThat(downstreamBody).contains("\"dateOfBirth\":\"1995-04-20\"","\"drivingExperienceYears\":8",
                 "\"vehicleManufacturingYear\":2021","\"vehicleValue\":700000.00","\"engineSizeCc\":1500","\"previousClaimsCount\":1","\"coverageType\":\"COMPREHENSIVE\"")
                 .doesNotContain("customerId","vehicleBrandId","vehicleModelId","quoteId");
-        assertThat(downstreamAuthorization).isNull();
+        assertThat(downstreamAuthorization).isEqualTo("Bearer test-service-token");
     }
     @ParameterizedTest @ValueSource(strings={"\"dateOfBirth\":null","\"dateOfBirth\":\"2026-10-08\"","\"dateOfBirth\":\"2027-01-01\"",
             "\"drivingExperienceYears\":-1","\"drivingExperienceYears\":1.5","\"previousClaimsCount\":-1",

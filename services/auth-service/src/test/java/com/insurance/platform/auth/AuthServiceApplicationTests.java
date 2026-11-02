@@ -30,8 +30,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {"auth.service-client.secret=test-machine-secret", "auth.service-client.token-ttl=45s"})
 @ActiveProfiles("test")
+@org.junit.jupiter.api.extension.ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
 class AuthServiceApplicationTests {
     private static final String PASSWORD = "Test-only-password-42!";
 
@@ -41,6 +42,44 @@ class AuthServiceApplicationTests {
     @Autowired PasswordEncoder passwords;
     @Autowired ObjectMapper mapper;
     @LocalServerPort int port;
+
+    @Test void serviceCredentialsIssueIndependentShortLivedRs256Token(org.springframework.boot.test.system.CapturedOutput output) throws Exception {
+        try (var client = HttpClient.newHttpClient()) {
+            String basic = Base64.getEncoder().encodeToString("quote-service:test-machine-secret".getBytes(StandardCharsets.UTF_8));
+            var request = HttpRequest.newBuilder(URI.create("http://localhost:"+port+"/api/v1/auth/service-token"))
+                    .header("Authorization", "Basic "+basic).header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString("grant_type=client_credentials")).build();
+            var response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.headers().allValues("Set-Cookie")).isEmpty();
+            assertThat(response.headers().firstValue("Cache-Control")).contains("no-store");
+            var json = mapper.readTree(response.body());
+            assertThat(json.get("expires_in").asLong()).isEqualTo(45);
+            var key = org.springframework.security.converter.RsaKeyConverters.x509().convert(new org.springframework.core.io.ClassPathResource("keys/dev-jwt-public.pem").getInputStream());
+            var decoder = NimbusJwtDecoder.withPublicKey(key).signatureAlgorithm(org.springframework.security.oauth2.jose.jws.SignatureAlgorithm.RS256).build();
+            var jwt = decoder.decode(json.get("access_token").asText());
+            assertThat(jwt.getSubject()).isEqualTo("quote-service");
+            assertThat(jwt.getClaimAsStringList("scope")).containsExactly("pricing:calculate");
+            assertThat(jwt.getClaimAsString("token_use")).isEqualTo("service");
+            assertThat(jwt.getAudience()).containsExactly("pricing-service");
+            assertThat(jwt.getClaims()).doesNotContainKeys("roles", "client_secret", "refresh_token");
+            assertThat(Duration.between(jwt.getIssuedAt(), jwt.getExpiresAt())).isEqualTo(Duration.ofSeconds(45));
+            var unsupported = client.send(HttpRequest.newBuilder(request.uri()).headers("Authorization","Basic "+basic,"Content-Type","application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString("grant_type=password")).build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(unsupported.statusCode()).isEqualTo(400);
+            for (String credentials : List.of("wrong:test-machine-secret", "quote-service:wrong", "", "malformed")) {
+                var failure = client.send(HttpRequest.newBuilder(request.uri()).headers("Authorization","Basic "+Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8)),"Content-Type","application/x-www-form-urlencoded")
+                        .POST(HttpRequest.BodyPublishers.ofString("grant_type=client_credentials")).build(), HttpResponse.BodyHandlers.ofString());
+                assertThat(failure.statusCode()).isEqualTo(401);
+                assertThat(failure.body()).isEqualTo("{\"error\":\"invalid_client\"}");
+            }
+            var missing = client.send(HttpRequest.newBuilder(request.uri()).header("Content-Type","application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString("grant_type=client_credentials")).build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(missing.statusCode()).isEqualTo(401);
+            verifyNoInteractions(refreshTokens, users, outbox);
+            assertThat(output.getAll()).doesNotContain("test-machine-secret", basic, json.get("access_token").asText());
+        }
+    }
 
     @Test
     void refreshFailuresAreSafeAndLogoutAlwaysClearsCookie() throws Exception {
@@ -147,7 +186,7 @@ class AuthServiceApplicationTests {
         var body = mapper.readTree(response.body());
         assertThat(body.get("tokenType").asText()).isEqualTo("Bearer");
         assertThat(body.get("expiresIn").asLong()).isEqualTo(900);
-        var decoder = NimbusJwtDecoder.withPublicKey(com.insurance.platform.auth.config.RsaKeys.publicKey(new org.springframework.core.io.ClassPathResource("keys/dev-jwt-public.pem"))).build();
+        var decoder = NimbusJwtDecoder.withPublicKey(org.springframework.security.converter.RsaKeyConverters.x509().convert(new org.springframework.core.io.ClassPathResource("keys/dev-jwt-public.pem").getInputStream())).build();
         var jwt = decoder.decode(body.get("accessToken").asText());
         assertThat(jwt.getSubject()).isEqualTo(user.getId().toString());
         assertThat(jwt.getClaimAsStringList("roles")).containsExactly("CUSTOMER");

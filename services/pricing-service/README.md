@@ -1,5 +1,20 @@
 # Pricing Service — Calculation and Administration
 
+## Phase 25 — Service authentication
+
+Quote obtains short-lived RS256 service tokens directly from Auth with its external
+`QUOTE_SERVICE_CLIENT_ID` and `QUOTE_SERVICE_CLIENT_SECRET`. Auth exposes POST
+`/api/v1/auth/service-token` (Basic credentials, form `grant_type=client_credentials`).
+Quote caches tokens in memory with single-flight acquisition and early expiry, forwards
+the request correlation ID, and retries Pricing once after 401. Pricing calculation
+requires `token_use=service`, `sub=quote-service`, scope `pricing:calculate`, audience
+`pricing-service`; user tokens are denied. Pricing admin still requires ADMIN user JWT.
+Only Auth has the RSA private key; only Auth/Quote receive the client secret. There
+are no service refresh tokens, schema or event changes. Local credentials are DEV-only.
+See the [Phase 25 specification](../../docs/specs/phase-25-service-authentication.md)
+and [validation](../../docs/phase-25-validation.md). Earlier sections describe history.
+
+
 ## Phase 24 — RS256 access JWTs
 
 Auth now signs access JWTs with a private RSA key using **RS256 only**. Auth's admin

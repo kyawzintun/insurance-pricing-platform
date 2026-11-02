@@ -37,11 +37,38 @@ class PricingServiceApplicationTests {
                 new PricingRule(new UUID(0,1),RuleType.BASE_PREMIUM,RuleOperator.EQUALS,null,null,null,new BigDecimal("8000"),NOW,true,"base"),
                 new PricingRule(new UUID(0,2),RuleType.COVERAGE_TYPE,RuleOperator.EQUALS,"COMPREHENSIVE",null,new BigDecimal("1.4"),null,NOW,true,"coverage")));
     }
+    private String serviceToken(String sub, String scope, String audience, long expiry) throws Exception {
+        return RsaTestTokens.sign("{\"sub\":\""+sub+"\",\"iss\":\"insurance-auth-service\",\"token_use\":\"service\",\"scope\":[\""+scope+"\"],\"aud\":[\""+audience+"\"],\"exp\":"+expiry+"}");
+    }
     private HttpResponse<String> post(String body) throws Exception {
+        return postToken(serviceToken("quote-service", "pricing:calculate", "pricing-service", Instant.now().getEpochSecond()+300), body);
+    }
+    private HttpResponse<String> postToken(String token, String body) throws Exception {
         try(var client=HttpClient.newHttpClient()) {
             return client.send(HttpRequest.newBuilder(URI.create("http://localhost:"+port+"/internal/v1/pricing/calculate"))
+                    .header("Authorization", token == null ? "Basic ignored" : "Bearer "+token)
                     .header("Content-Type","application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build(),HttpResponse.BodyHandlers.ofString());
         }
+    }
+    @Test void serviceIdentityScopeAudienceAndUserSeparation() throws Exception {
+        long exp = Instant.now().getEpochSecond()+300;
+        assertThat(postToken(null, VALID).statusCode()).isEqualTo(401);
+        for (String[] claims : List.of(new String[]{"other", "pricing:calculate", "pricing-service"},
+                new String[]{"quote-service", "other", "pricing-service"}, new String[]{"quote-service", "pricing:calculate", "other"})) {
+            assertThat(postToken(serviceToken(claims[0],claims[1],claims[2],exp), VALID).statusCode()).isEqualTo(403);
+        }
+        for (String role : List.of("ADMIN", "CUSTOMER")) {
+            String user = RsaTestTokens.sign("{\"sub\":\"00000000-0000-0000-0000-000000000001\",\"roles\":[\""+role+"\"],\"iss\":\"insurance-auth-service\",\"exp\":"+exp+"}");
+            assertThat(postToken(user, VALID).statusCode()).isEqualTo(403);
+        }
+        assertThat(postToken(serviceToken("quote-service","pricing:calculate","pricing-service",1), VALID).statusCode()).isEqualTo(401);
+        for (String token : RsaTestTokens.rejectedTokens()) assertThat(postToken(token, VALID).statusCode()).isEqualTo(401);
+        try (var client = HttpClient.newHttpClient()) {
+            var response = client.send(HttpRequest.newBuilder(URI.create("http://localhost:"+port+"/api/v1/admin/pricing/rules"))
+                    .header("Authorization", "Bearer "+serviceToken("quote-service","pricing:calculate","pricing-service",exp)).GET().build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).isEqualTo(403);
+        }
+        verifyNoInteractions(repository);
     }
     @Test void healthRemainsPublic() throws Exception {
         try(var client=HttpClient.newHttpClient()) {
@@ -50,7 +77,7 @@ class PricingServiceApplicationTests {
             assertThat(response.body()).contains("\"status\":\"UP\"");
         }
     }
-    @Test void internalCalculationIsTemporarilyPublicAndReturnsBreakdown() throws Exception {
+    @Test void serviceAuthenticatedCalculationReturnsBreakdown() throws Exception {
         var response=post(VALID);
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("\"finalPremium\":11200.00","\"currency\":\"THB\"",

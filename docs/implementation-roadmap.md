@@ -1,6 +1,20 @@
 # Implementation Roadmap
 
-Status: Phases 0 through 24 implemented and validated; Phase 25 — Service-to-Service Authentication not started.
+## Phase 25 — Service-to-Service Authentication
+
+Quote -> Pricing uses direct HTTP with a short-lived Auth-issued RS256 service JWT.
+Quote authenticates to Auth with configured client credentials, caches tokens in
+memory with single-flight acquisition, and retries once after Pricing 401. Pricing
+requires quote-service identity, pricing:calculate scope and pricing-service audience;
+CUSTOMER/ADMIN user tokens cannot call internal calculation, and service tokens cannot
+use admin APIs. Secret distribution is limited to Auth/Quote; RSA private signing
+remains Auth-only. User refresh, events and transaction semantics remain unchanged.
+See [specification](specs/phase-25-service-authentication.md) and
+[validation](phase-25-validation.md). Phase 26 remains unstarted. Earlier sections
+record historical phase behavior and are superseded by this Phase 25 boundary.
+
+
+Status: Phases 0 through 25 implemented and validated; Phase 26 — Observability and Resilience not started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -128,4 +142,4 @@ and [validation](phase-24-validation.md).
 
 ### Phase 25 — Service-to-Service Authentication
 
-Not started. Existing internal service authentication remains deferred.
+Completed. Auth machine credentials issue RS256 service tokens; Quote caches and forwards them directly to Pricing. Service identity, scope and audience enforcement, single-flight acquisition, controlled 401 retry, outage safety, PostgreSQL regressions and disposable E2E are validated. See [specification](specs/phase-25-service-authentication.md) and [validation](phase-25-validation.md).

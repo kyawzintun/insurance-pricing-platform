@@ -1,5 +1,15 @@
 # Insurance Pricing Platform
 
+## Phase 25 — Service-to-Service Authentication
+
+Quote obtains/caches short-lived RS256 service tokens from Auth and authenticates
+directly to Pricing. Internal calculation requires quote-service + pricing:calculate
+scope + pricing-service audience. User and service credentials remain separate.
+See [configuration and architecture](docs/specs/phase-25-service-authentication.md)
+and [validation](docs/phase-25-validation.md). Phase 26 is not started. Earlier phase
+sections below record historical behavior.
+
+
 ## Phase 24 — RS256 access JWTs
 
 Auth now signs access JWTs with a private RSA key using **RS256 only**. Auth's admin

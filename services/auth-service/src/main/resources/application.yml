@@ -58,3 +58,7 @@ outbox:
     enabled: ${AUTH_OUTBOX_PUBLISHER_ENABLED:false}
     poll-interval: ${AUTH_OUTBOX_POLL_INTERVAL:2000}
     batch-size: ${AUTH_OUTBOX_BATCH_SIZE:50}
+
+auth.service-client.id: ${QUOTE_SERVICE_CLIENT_ID:quote-service}
+auth.service-client.secret: ${QUOTE_SERVICE_CLIENT_SECRET:}
+auth.service-client.token-ttl: ${SERVICE_TOKEN_TTL:5m}

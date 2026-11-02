@@ -18,3 +18,6 @@ auth:
 outbox:
   publisher:
     enabled: ${OUTBOX_PUBLISHER_ENABLED:true}
+
+# PUBLIC DEV-ONLY credential; unsafe for production.
+service-auth.client-secret: ${QUOTE_SERVICE_CLIENT_SECRET:local-dev-only-service-secret}

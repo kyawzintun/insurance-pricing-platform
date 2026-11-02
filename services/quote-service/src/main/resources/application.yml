@@ -68,3 +68,8 @@ outbox:
     enabled: ${OUTBOX_PUBLISHER_ENABLED:false}
     poll-interval: ${OUTBOX_POLL_INTERVAL:2000}
     batch-size: ${OUTBOX_BATCH_SIZE:50}
+
+service-auth.client-id: ${QUOTE_SERVICE_CLIENT_ID:quote-service}
+service-auth.client-secret: ${QUOTE_SERVICE_CLIENT_SECRET:}
+service-auth.token-url: ${SERVICE_TOKEN_URL:http://localhost:8081/api/v1/auth/service-token}
+service-auth.expiry-margin: ${SERVICE_TOKEN_EXPIRY_MARGIN:30s}

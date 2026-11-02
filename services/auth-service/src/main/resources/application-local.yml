@@ -20,3 +20,6 @@ outbox:
 
 # Plain HTTP localhost only.
 auth.refresh.secure: ${AUTH_REFRESH_COOKIE_SECURE:false}
+
+# PUBLIC DEV-ONLY credential; unsafe for production.
+auth.service-client.secret: ${QUOTE_SERVICE_CLIENT_SECRET:local-dev-only-service-secret}

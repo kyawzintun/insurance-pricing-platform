@@ -13,7 +13,7 @@ class PricingClientTests {
         int unusedPort;
         try(var socket=new ServerSocket(0)) { unusedPort=socket.getLocalPort(); }
         try(var validators=Validation.buildDefaultValidatorFactory()) {
-            try (var client=new PricingClient("http://127.0.0.1:"+unusedPort,Duration.ofMillis(200),Duration.ofMillis(200),validators.getValidator())) {
+            try (var client=new PricingClient("http://127.0.0.1:"+unusedPort,Duration.ofMillis(200),Duration.ofMillis(200),validators.getValidator(), org.mockito.Mockito.mock(com.insurance.platform.quote.client.ServiceTokenClient.class))) {
             assertThatThrownBy(() -> client.calculate(QuoteFixtures.request())).isInstanceOfSatisfying(QuoteException.class,
                     ex -> { assertThat(ex.code()).isEqualTo("PRICING_SERVICE_UNAVAILABLE"); assertThat(ex.getMessage()).doesNotContain("localhost",Integer.toString(unusedPort)); });
             }

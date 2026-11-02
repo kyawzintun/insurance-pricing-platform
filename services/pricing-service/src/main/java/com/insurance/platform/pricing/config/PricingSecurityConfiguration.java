@@ -12,7 +12,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
-/** Admin JWT authorization is independent of Gateway. Internal service authentication remains deferred. */
+/** Admin JWT authorization is independent of Gateway. Internal calculation requires a distinct service identity. */
 @Configuration(proxyBeanMethods = false)
 public class PricingSecurityConfiguration {
     @Bean
@@ -21,14 +21,24 @@ public class PricingSecurityConfiguration {
         authorities.setAuthoritiesClaimName("roles");
         authorities.setAuthorityPrefix("ROLE_");
         var authentication = new JwtAuthenticationConverter();
-        authentication.setJwtGrantedAuthoritiesConverter(authorities);
+        authentication.setJwtGrantedAuthoritiesConverter(jwt -> "service".equals(jwt.getClaimAsString("token_use"))
+                ? java.util.List.of() : authorities.convert(jwt));
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .requestCache(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers("/api/v1/admin/pricing/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/internal/v1/pricing/calculate").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/internal/v1/pricing/calculate").access((auth, context) -> {
+                            var principal = auth.get().getPrincipal();
+                            boolean allowed = principal instanceof org.springframework.security.oauth2.jwt.Jwt jwt
+                                    && "service".equals(jwt.getClaimAsString("token_use"))
+                                    && "quote-service".equals(jwt.getSubject())
+                                    && jwt.getAudience().contains("pricing-service")
+                                    && jwt.getClaims().get("scope") instanceof java.util.Collection<?> scopes
+                                    && scopes.contains("pricing:calculate");
+                            return new org.springframework.security.authorization.AuthorizationDecision(allowed);
+                        })
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
                         .anyRequest().denyAll())
                 .httpBasic(AbstractHttpConfigurer::disable)

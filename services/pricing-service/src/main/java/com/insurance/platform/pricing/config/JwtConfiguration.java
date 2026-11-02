@@ -26,9 +26,15 @@ public class JwtConfiguration {
                 new JwtIssuerValidator(issuer),
                 new JwtClaimValidator<Object>("exp", value -> value != null),
                 new JwtClaimValidator<String>("sub", value -> value != null && !value.isBlank()),
-                new JwtClaimValidator<Object>("roles", value -> value instanceof Collection<?> roles
-                        && !roles.isEmpty() && roles.stream().allMatch(
-                                role -> role instanceof String text && !text.isBlank()))));
+                jwt -> {
+                    Object value = jwt.getClaims().get("roles");
+                    boolean valid = "service".equals(jwt.getClaimAsString("token_use"))
+                            || value instanceof Collection<?> roles && !roles.isEmpty()
+                            && roles.stream().allMatch(role -> role instanceof String text && !text.isBlank());
+                    return valid ? org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.success()
+                            : org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.failure(
+                                new org.springframework.security.oauth2.core.OAuth2Error("invalid_token"));
+                }));
         return decoder;
     }
 }
