@@ -1,10 +1,14 @@
 package com.insurance.platform.quote.dto;
 
 import com.insurance.platform.quote.entity.Quote;
-import com.insurance.platform.quote.enums.*;
+import com.insurance.platform.quote.enums.CoverageType;
+import com.insurance.platform.quote.enums.PricingRuleType;
+import com.insurance.platform.quote.enums.QuoteStatus;
 import java.math.BigDecimal;
-import java.time.*;
-import java.util.*;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
 
 public record QuoteResponse(UUID id, String quoteReference, QuoteStatus status, CoverageType coverageType,
         Driver driver, VehicleSnapshot vehicle, Pricing pricing, Instant createdAt, Instant pricedAt, Instant expiresAt) {

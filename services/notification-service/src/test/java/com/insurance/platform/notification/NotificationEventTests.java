@@ -1,44 +1,65 @@
 package com.insurance.platform.notification;
 
-import com.insurance.platform.notification.event.*;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.insurance.platform.notification.entity.Notification;
+import com.insurance.platform.notification.event.QuoteEventDecoder;
+import com.insurance.platform.notification.event.QuoteEventListener;
 import com.insurance.platform.notification.exception.InvalidQuoteEventException;
 import com.insurance.platform.notification.repository.NotificationRepository;
+import com.insurance.platform.notification.repository.ProcessedEventRepository;
 import com.insurance.platform.notification.service.NotificationService;
-import java.time.*;
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.util.stream.Stream;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
-import static com.insurance.platform.notification.NotificationFixtures.*;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.slf4j.LoggerFactory;
+
+import static com.insurance.platform.notification.NotificationFixtures.CUSTOMER;
+import static com.insurance.platform.notification.NotificationFixtures.EVENT;
+import static com.insurance.platform.notification.NotificationFixtures.NOW;
+import static com.insurance.platform.notification.NotificationFixtures.QUOTE;
+import static com.insurance.platform.notification.NotificationFixtures.expiredJson;
+import static com.insurance.platform.notification.NotificationFixtures.json;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 class NotificationEventTests {
     final QuoteEventDecoder decoder = new QuoteEventDecoder();
 
     @Test void expiredContractMappingAndDuplicateUseExistingWorkflow() {
         var event = decoder.decode(expiredJson()).orElseThrow();
-        var repository = mock(com.insurance.platform.notification.repository.NotificationRepository.class);
-        var markers = mock(com.insurance.platform.notification.repository.ProcessedEventRepository.class);
+        var repository = mock(NotificationRepository.class);
+        var markers = mock(ProcessedEventRepository.class);
         when(markers.tryMarkProcessed(EVENT, NotificationService.CONSUMER_NAME, NOW)).thenReturn(true, false);
         var service = new NotificationService(repository, Clock.fixed(NOW, ZoneOffset.UTC), markers);
         assertThat(service.create(event).name()).isEqualTo("PROCESSED");
         assertThat(service.create(event).name()).isEqualTo("DUPLICATE");
-        var row = org.mockito.ArgumentCaptor.forClass(com.insurance.platform.notification.entity.Notification.class);
+        var row = ArgumentCaptor.forClass(Notification.class);
         verify(repository).saveAndFlush(row.capture());
         assertThat(row.getValue().getType()).isEqualTo("QUOTE_EXPIRED");
         assertThat(row.getValue().getStatus()).isEqualTo("CREATED");
         assertThat(row.getValue().getMessage()).isEqualTo("Your quote Q-TEST-123 has expired.");
         assertThatThrownBy(() -> decoder.decode(expiredJson().replace("\"eventVersion\":1", "\"eventVersion\":2")))
-                .isInstanceOf(com.insurance.platform.notification.exception.InvalidQuoteEventException.class);
+                .isInstanceOf(InvalidQuoteEventException.class);
     }
     @Test void mapsContractAndPersistsExpectedFieldsUsingClock() {
         var event = decoder.decode(json()).orElseThrow();
         var repository = mock(NotificationRepository.class);
-        var markers = mock(com.insurance.platform.notification.repository.ProcessedEventRepository.class);
+        var markers = mock(ProcessedEventRepository.class);
         when(markers.tryMarkProcessed(EVENT, NotificationService.CONSUMER_NAME, NOW)).thenReturn(true);
         new NotificationService(repository, Clock.fixed(NOW, ZoneOffset.UTC), markers).create(event);
         verify(markers).tryMarkProcessed(EVENT, NotificationService.CONSUMER_NAME, NOW);
@@ -93,8 +114,8 @@ class NotificationEventTests {
     @Test void databaseFailurePropagatesSafelyAndDoesNotLogExceptionPayload() {
         var service = mock(NotificationService.class);
         doThrow(new IllegalStateException("secret-payload-marker")).when(service).create(any());
-        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(QuoteEventListener.class);
-        var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        var logger = (Logger) LoggerFactory.getLogger(QuoteEventListener.class);
+        var appender = new ListAppender<ILoggingEvent>();
         appender.start(); logger.addAppender(appender);
         try {
             assertThatThrownBy(() -> new QuoteEventListener(decoder, service).receive(record(json())))
@@ -107,10 +128,10 @@ class NotificationEventTests {
     }
     @Test void keyMismatchIsDiagnosticAndDoesNotPreventValidEventProcessing() {
         var service = mock(NotificationService.class);
-        new QuoteEventListener(decoder, service).receive(new ConsumerRecord<>("insurance.quote.events", 1, 2, "wrong-key".getBytes(java.nio.charset.StandardCharsets.UTF_8), json().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        new QuoteEventListener(decoder, service).receive(new ConsumerRecord<>("insurance.quote.events", 1, 2, "wrong-key".getBytes(StandardCharsets.UTF_8), json().getBytes(StandardCharsets.UTF_8)));
         verify(service).create(decoder.decode(json()).orElseThrow());
     }
     private ConsumerRecord<byte[], byte[]> record(String json) {
-        return new ConsumerRecord<>("insurance.quote.events", 1, 2, QUOTE.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8), json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return new ConsumerRecord<>("insurance.quote.events", 1, 2, QUOTE.toString().getBytes(StandardCharsets.UTF_8), json.getBytes(StandardCharsets.UTF_8));
     }
 }

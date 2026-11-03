@@ -1,10 +1,13 @@
 package com.insurance.platform.auth.service;
 
 import com.insurance.platform.auth.repository.OutboxPollingRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -36,10 +39,10 @@ public class AuthOutboxPublisher {
         this.batchSize = batchSize;
     }
 
-    private io.micrometer.core.instrument.MeterRegistry meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+    private MeterRegistry meters = new SimpleMeterRegistry();
 
-    @org.springframework.beans.factory.annotation.Autowired
-    public void configureMetrics(io.micrometer.core.instrument.MeterRegistry meters) { this.meters = meters; }
+    @Autowired
+    public void configureMetrics(MeterRegistry meters) { this.meters = meters; }
 
     @Scheduled(fixedDelayString = "${outbox.publisher.poll-interval:2000}", initialDelayString = "${outbox.publisher.poll-interval:2000}")
     public void poll() {

@@ -1,7 +1,6 @@
 package com.insurance.platform.audit.dto;
 
 import com.insurance.platform.audit.entity.AuditRecord;
-
 import java.time.Instant;
 import java.util.UUID;
 

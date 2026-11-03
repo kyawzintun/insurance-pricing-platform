@@ -3,6 +3,8 @@ package com.insurance.platform.notification.event;
 import com.insurance.platform.notification.exception.InvalidQuoteEventException;
 import com.insurance.platform.notification.exception.InvalidUserEventException;
 import com.insurance.platform.notification.exception.QuoteProcessingException;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.Set;
@@ -43,8 +45,8 @@ public class QuoteDeadLetterRecoverer implements ConsumerRecordRecoverer, RetryL
         this.userDlqTopic = userDlqTopic;
     }
 
-    private io.micrometer.core.instrument.MeterRegistry meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
-    public void configureMetrics(io.micrometer.core.instrument.MeterRegistry meters) { this.meters = meters; }
+    private MeterRegistry meters = new SimpleMeterRegistry();
+    public void configureMetrics(MeterRegistry meters) { this.meters = meters; }
 
     @Override
     public void failedDelivery(ConsumerRecord<?, ?> record, Exception failure, int attempt) {

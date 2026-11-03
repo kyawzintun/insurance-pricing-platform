@@ -1,9 +1,8 @@
 package com.insurance.platform.auth.config;
 
+import java.security.interfaces.RSAPublicKey;
 import org.springframework.core.io.Resource;
 import org.springframework.security.converter.RsaKeyConverters;
-
-import java.security.interfaces.RSAPublicKey;
 
 /**
  * Reads X.509 SubjectPublicKeyInfo PEM without exposing rejected key material.

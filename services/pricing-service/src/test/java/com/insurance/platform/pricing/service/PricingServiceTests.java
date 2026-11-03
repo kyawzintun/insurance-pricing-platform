@@ -2,19 +2,36 @@ package com.insurance.platform.pricing.service;
 
 import com.insurance.platform.pricing.dto.PricingRequest;
 import com.insurance.platform.pricing.entity.PricingRule;
-import com.insurance.platform.pricing.enums.*;
-import com.insurance.platform.pricing.exception.*;
+import com.insurance.platform.pricing.enums.CoverageType;
+import com.insurance.platform.pricing.enums.RuleOperator;
+import com.insurance.platform.pricing.enums.RuleType;
+import com.insurance.platform.pricing.exception.InvalidPricingRequestException;
+import com.insurance.platform.pricing.exception.PricingConfigurationException;
 import com.insurance.platform.pricing.repository.PricingRuleRepository;
 import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
 import java.math.BigDecimal;
-import java.time.*;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 class PricingServiceTests {
     private static final Instant NOW = Instant.parse("2026-10-07T10:00:00Z");
@@ -121,7 +138,7 @@ class PricingServiceTests {
         assertThat(service.calculate(standard()).adjustments()).singleElement().satisfies(a -> assertThat(a.pricingRuleId()).isEqualTo(winner.getId()));
     }
     @Test void missingBaseFails() { rules(); assertThatThrownBy(() -> service.calculate(standard())).isInstanceOf(PricingConfigurationException.class); }
-    @ParameterizedTest @org.junit.jupiter.params.provider.ValueSource(strings={"invalid","1e999999999","NaN","","1.12345"})
+    @ParameterizedTest @ValueSource(strings={"invalid","1e999999999","NaN","","1.12345"})
     void invalidComparisonFailsEvenWhenRuleWouldNotApply(String operand) {
         rules(base(),rule(RuleType.DRIVER_AGE,RuleOperator.LESS_THAN,operand,null,"1.25"));
         assertThatThrownBy(() -> service.calculate(standard())).isInstanceOf(PricingConfigurationException.class).hasMessage("Pricing configuration is unavailable or invalid");
@@ -156,7 +173,7 @@ class PricingServiceTests {
         rules(base(),rule(RuleType.DRIVER_AGE,RuleOperator.LESS_THAN,"25",null,null));
         assertThatThrownBy(() -> service.calculate(standard())).isInstanceOf(PricingConfigurationException.class);
     }
-    @ParameterizedTest @org.junit.jupiter.params.provider.ValueSource(strings={"0", "-1"})
+    @ParameterizedTest @ValueSource(strings={"0", "-1"})
     void nonpositiveBaseFails(String amount) {
         rules(new PricingRule(UUID.randomUUID(),RuleType.BASE_PREMIUM,RuleOperator.EQUALS,null,null,null,
                 new BigDecimal(amount),NOW,true,"invalid base"));

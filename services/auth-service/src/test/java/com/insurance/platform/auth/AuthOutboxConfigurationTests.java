@@ -1,18 +1,33 @@
 package com.insurance.platform.auth;
 
 import com.insurance.platform.auth.config.OutboxSchedulingConfiguration;
-import com.insurance.platform.auth.service.AuthOutboxPublisher;
+import com.insurance.platform.auth.event.AuthCorrelationId;
 import com.insurance.platform.auth.repository.OutboxPollingRepository;
+import com.insurance.platform.auth.service.AuthOutboxPublisher;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.kafka.core.KafkaTemplate;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class AuthOutboxConfigurationTests {
     private final ApplicationContextRunner context = new ApplicationContextRunner()
-            .withBean(io.micrometer.core.instrument.MeterRegistry.class, io.micrometer.core.instrument.simple.SimpleMeterRegistry::new)
+            .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
             .withUserConfiguration(OutboxSchedulingConfiguration.class, AuthOutboxPublisher.class)
             .withBean(OutboxPollingRepository.class, () -> mock(OutboxPollingRepository.class))
             .withBean(KafkaTemplate.class, () -> mock(KafkaTemplate.class))
@@ -33,27 +48,27 @@ class AuthOutboxConfigurationTests {
     }
 
     @Test void correlationFallbackIsSafeAndExistingHeaderIsPreserved() {
-        var correlation = new com.insurance.platform.auth.event.AuthCorrelationId();
-        assertThat(java.util.UUID.fromString(correlation.current())).isNotNull();
-        var request = new org.springframework.mock.web.MockHttpServletRequest();
+        var correlation = new AuthCorrelationId();
+        assertThat(UUID.fromString(correlation.current())).isNotNull();
+        var request = new MockHttpServletRequest();
         request.addHeader("X-Correlation-ID", "x".repeat(128));
-        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
-                new org.springframework.web.context.request.ServletRequestAttributes(request));
+        RequestContextHolder.setRequestAttributes(
+                new ServletRequestAttributes(request));
         try { assertThat(correlation.current()).isEqualTo("x".repeat(128)); }
-        finally { org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes(); }
+        finally { RequestContextHolder.resetRequestAttributes(); }
     }
     @Test void publisherUsesConfiguredUserTopic() {
         context.withPropertyValues("outbox.publisher.enabled=true", "outbox.publisher.poll-interval=600000",
                 "user.events.topic=custom.user.events").run(c -> {
             var repository = c.getBean(OutboxPollingRepository.class);
             var batch = mock(OutboxPollingRepository.Batch.class);
-            var event = new OutboxPollingRepository.PendingEvent(java.util.UUID.randomUUID(), java.util.UUID.randomUUID(),
-                    java.util.UUID.randomUUID().toString(), "UserRegistered", "{}", "test", 0);
-            when(repository.claim(50)).thenReturn(java.util.Optional.of(batch));
-            when(batch.events()).thenReturn(java.util.List.of(event));
+            var event = new OutboxPollingRepository.PendingEvent(UUID.randomUUID(), UUID.randomUUID(),
+                    UUID.randomUUID().toString(), "UserRegistered", "{}", "test", 0);
+            when(repository.claim(50)).thenReturn(Optional.of(batch));
+            when(batch.events()).thenReturn(List.of(event));
             @SuppressWarnings("unchecked") KafkaTemplate<String,String> kafka = c.getBean(KafkaTemplate.class);
             when(kafka.send("custom.user.events", event.aggregateId(), event.payload()))
-                    .thenReturn(java.util.concurrent.CompletableFuture.completedFuture(null));
+                    .thenReturn(CompletableFuture.completedFuture(null));
             c.getBean(AuthOutboxPublisher.class).poll();
             verify(kafka).send("custom.user.events", event.aggregateId(), event.payload());
             verify(batch).published(eq(event.id()), any());

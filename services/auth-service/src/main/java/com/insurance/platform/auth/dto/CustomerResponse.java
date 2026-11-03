@@ -3,7 +3,6 @@ package com.insurance.platform.auth.dto;
 import com.insurance.platform.auth.entity.User;
 import com.insurance.platform.auth.enums.Role;
 import com.insurance.platform.auth.enums.UserStatus;
-
 import java.time.Instant;
 import java.util.UUID;
 

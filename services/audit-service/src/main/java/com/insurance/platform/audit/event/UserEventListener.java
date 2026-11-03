@@ -2,13 +2,17 @@ package com.insurance.platform.audit.event;
 
 import com.insurance.platform.audit.exception.QuoteProcessingException;
 import com.insurance.platform.audit.service.AuditService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 @Component
 public class UserEventListener {
-    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(UserEventListener.class);
+    private static final Logger LOG = LoggerFactory.getLogger(UserEventListener.class);
     private final UserEventDecoder decoder;
     private final AuditService service;
     private final UserStatusEventDecoder statusDecoder;
@@ -19,8 +23,8 @@ public class UserEventListener {
         this.service = service;
     }
 
-    private EventObservation observation = new EventObservation(new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
-    @org.springframework.beans.factory.annotation.Autowired
+    private EventObservation observation = new EventObservation(new SimpleMeterRegistry());
+    @Autowired
     public void configureObservation(EventObservation observation) { this.observation = observation; }
 
     @KafkaListener(id = "user-audit", idIsGroup = false, topics = "${user.events.topic:insurance.user.events}")

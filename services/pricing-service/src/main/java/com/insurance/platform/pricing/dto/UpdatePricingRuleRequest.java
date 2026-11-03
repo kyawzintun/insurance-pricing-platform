@@ -1,8 +1,12 @@
 package com.insurance.platform.pricing.dto;
 
-import com.insurance.platform.pricing.enums.RuleType;
 import com.insurance.platform.pricing.enums.RuleOperator;
-import jakarta.validation.constraints.*;
+import com.insurance.platform.pricing.enums.RuleType;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 

@@ -7,11 +7,6 @@ import com.insurance.platform.auth.enums.UserStatus;
 import com.insurance.platform.auth.exception.AuthException;
 import com.insurance.platform.auth.repository.RefreshTokenRepository;
 import com.insurance.platform.auth.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -22,6 +17,10 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class RefreshSessionService {

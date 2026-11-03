@@ -1,15 +1,13 @@
 package com.insurance.platform.audit.exception;
 
 import com.insurance.platform.audit.controller.AuditReadController;
-
+import java.util.Map;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
-
-import java.util.Map;
 
 @RestControllerAdvice(assignableTypes = AuditReadController.class)
 public class AuditReadErrors {

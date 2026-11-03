@@ -1,32 +1,59 @@
 package com.insurance.platform.notification;
 
-import com.insurance.platform.notification.event.*;
+import com.insurance.platform.notification.event.QuoteDeadLetterRecoverer;
+import com.insurance.platform.notification.event.QuoteEventListener;
 import java.nio.charset.StandardCharsets;
-import java.time.*;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import org.apache.kafka.clients.admin.*;
-import org.apache.kafka.clients.producer.*;
-import org.apache.kafka.clients.consumer.*;
+import java.sql.Timestamp;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
-import org.springframework.kafka.listener.*;
-import org.springframework.test.context.*;
-import org.springframework.test.context.bean.override.mockito.*;
-import org.testcontainers.junit.jupiter.*;
+import org.springframework.kafka.listener.AbstractMessageListenerContainer;
+import org.springframework.kafka.listener.CommonContainerStoppingErrorHandler;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import static com.insurance.platform.notification.NotificationFixtures.*;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+
+import static com.insurance.platform.notification.NotificationFixtures.CUSTOMER;
+import static com.insurance.platform.notification.NotificationFixtures.EVENT;
+import static com.insurance.platform.notification.NotificationFixtures.NOW;
+import static com.insurance.platform.notification.NotificationFixtures.QUOTE;
+import static com.insurance.platform.notification.NotificationFixtures.expiredJson;
+import static com.insurance.platform.notification.NotificationFixtures.json;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(properties = {"spring.kafka.listener.auto-startup=false", "kafka.consumer.backoff-ms=100"})
 @ActiveProfiles("integration")
@@ -118,8 +145,8 @@ class NotificationKafkaIT {
             assertThat(row.get("type")).isEqualTo("QUOTE_PRICED");
             assertThat(row.get("status")).isEqualTo("CREATED");
             assertThat(row.get("message")).isEqualTo("Your quote Q-TEST-123 is ready. Premium: 11200.00 THB.");
-            assertThat(((java.sql.Timestamp) row.get("created_at")).toInstant()).isEqualTo(NOW);
-            assertThat(((java.sql.Timestamp) row.get("processed_at")).toInstant()).isEqualTo(NOW);
+            assertThat(((Timestamp) row.get("created_at")).toInstant()).isEqualTo(NOW);
+            assertThat(((Timestamp) row.get("processed_at")).toInstant()).isEqualTo(NOW);
 
             send(producer, bytes(QUOTE.toString()), bytes(json()));
             awaitOffset(admin, partition, 2);
@@ -191,7 +218,7 @@ class NotificationKafkaIT {
             assertThat(end(admin, dlqPartition)).isEqualTo(1);
             assertCounts(3, 3);
             assertThat(end(admin, partition)).isEqualTo(11);
-            var expiration = expiredJson().replace(EVENT.toString(), java.util.UUID.randomUUID().toString());
+            var expiration = expiredJson().replace(EVENT.toString(), UUID.randomUUID().toString());
             send(producer, bytes(QUOTE.toString()), bytes(expiration));
             send(producer, bytes(QUOTE.toString()), bytes(expiration));
             awaitOffset(admin, partition, 13);

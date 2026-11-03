@@ -1,27 +1,52 @@
 package com.insurance.platform.pricing;
 
-import com.insurance.platform.pricing.dto.*;
-import com.insurance.platform.pricing.enums.*;
+import com.insurance.platform.pricing.dto.CreatePricingRuleRequest;
+import com.insurance.platform.pricing.dto.PricingRequest;
+import com.insurance.platform.pricing.dto.PricingRuleResponse;
+import com.insurance.platform.pricing.dto.PricingRuleVersionRequest;
+import com.insurance.platform.pricing.dto.UpdatePricingRuleRequest;
+import com.insurance.platform.pricing.enums.CoverageType;
+import com.insurance.platform.pricing.enums.RuleOperator;
+import com.insurance.platform.pricing.enums.RuleType;
 import com.insurance.platform.pricing.exception.PricingRuleException;
+import com.insurance.platform.pricing.repository.OutboxPollingRepository;
 import com.insurance.platform.pricing.repository.PricingRuleRepository;
 import com.insurance.platform.pricing.service.PricingRuleAdminService;
 import com.insurance.platform.pricing.service.PricingService;
 import java.math.BigDecimal;
-import java.time.*;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Year;
+import java.time.ZoneOffset;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.*;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import static org.assertj.core.api.Assertions.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Opt-in: ./mvnw -pl services/pricing-service -am -Ppostgres-it verify */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -41,14 +66,14 @@ class PricingRulePostgresIT {
     @Autowired PlatformTransactionManager transactions;
     @Autowired JdbcTemplate jdbc;
 
-    @org.junit.jupiter.api.BeforeEach void identity() {
+    @BeforeEach void identity() {
         PricingTestIdentity.authenticate();
-        var request=new org.springframework.mock.web.MockHttpServletRequest();request.addHeader("X-Correlation-ID","x".repeat(128));
-        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(new org.springframework.web.context.request.ServletRequestAttributes(request));
+        var request=new MockHttpServletRequest();request.addHeader("X-Correlation-ID","x".repeat(128));
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }
-    @org.junit.jupiter.api.AfterEach void clearIdentity() {
-        org.springframework.security.core.context.SecurityContextHolder.clearContext();
-        org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+    @AfterEach void clearIdentity() {
+        SecurityContextHolder.clearContext();
+        RequestContextHolder.resetRequestAttributes();
     }
 
     private CreatePricingRuleRequest createRequest(Instant effectiveFrom, boolean enabled) {
@@ -107,7 +132,7 @@ class PricingRulePostgresIT {
                 });
                 return "updated";
             } catch(OptimisticLockingFailureException ex) { return "conflict"; }
-            finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+            finally { SecurityContextHolder.clearContext(); }
         };
         try(var executor=Executors.newFixedThreadPool(2)) {
             var first=executor.submit(update); var second=executor.submit(update);
@@ -132,7 +157,7 @@ class PricingRulePostgresIT {
             assertThat(jdbc.queryForMap("select * from pricing_rules where id=?",rule.id())).isEqualTo(before);
             assertThat(jdbc.queryForObject("select count(*) from outbox_events",Integer.class)).isEqualTo(count);
         } finally { jdbc.execute("alter table outbox_events drop constraint phase20_failure"); }
-        var id=new java.util.concurrent.atomic.AtomicReference<java.util.UUID>();
+        var id=new AtomicReference<UUID>();
         new TransactionTemplate(transactions).executeWithoutResult(tx->{id.set(admin.create(createRequest(Instant.now(),false)).id());tx.setRollbackOnly();});
         assertThat(repository.findById(id.get())).isEmpty();
         assertThat(jdbc.queryForObject("select count(*) from outbox_events where aggregate_id=?",Integer.class,id.get().toString())).isZero();
@@ -141,7 +166,7 @@ class PricingRulePostgresIT {
     @Test void pendingBatchesAreBoundedOrderedLockedAndImmutable() throws Exception {
         admin.create(createRequest(Instant.now().plusSeconds(3600),false));
         admin.create(createRequest(Instant.now().plusSeconds(3600),false));
-        var poller=new com.insurance.platform.pricing.repository.OutboxPollingRepository(jdbc.getDataSource());
+        var poller=new OutboxPollingRepository(jdbc.getDataSource());
         try(var batch=poller.claim(1).orElseThrow()) {
             assertThat(batch.events()).hasSize(1);
             var row=batch.events().getFirst();
@@ -149,7 +174,7 @@ class PricingRulePostgresIT {
             assertThat(poller.claim(1)).isEmpty();
             batch.failed(row.id());batch.published(row.id(),Instant.now());
             assertThat(jdbc.queryForObject("select payload::text from outbox_events where id=?",String.class,row.id())).isEqualTo(row.payload());
-            assertThat(jdbc.queryForObject("select event_id from outbox_events where id=?",java.util.UUID.class,row.id())).isEqualTo(row.eventId());
+            assertThat(jdbc.queryForObject("select event_id from outbox_events where id=?",UUID.class,row.id())).isEqualTo(row.eventId());
             assertThat(jdbc.queryForObject("select retry_count from outbox_events where id=?",Integer.class,row.id())).isEqualTo(1);
         }
     }

@@ -1,6 +1,7 @@
 package com.insurance.platform.auth.event;
 
 import java.util.UUID;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -8,7 +9,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @Component
 public class AuthCorrelationId {
     public String current() {
-        String context = org.slf4j.MDC.get("correlationId");
+        String context = MDC.get("correlationId");
         if (context != null) return context;
         var attributes = RequestContextHolder.getRequestAttributes();
         var incoming = attributes instanceof ServletRequestAttributes servlet

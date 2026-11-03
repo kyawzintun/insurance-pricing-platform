@@ -1,21 +1,44 @@
 package com.insurance.platform.auth;
 
-import com.insurance.platform.auth.entity.*;
-import com.insurance.platform.auth.enums.*;
-import com.insurance.platform.auth.repository.*;
+import com.insurance.platform.auth.entity.OutboxEvent;
+import com.insurance.platform.auth.entity.User;
+import com.insurance.platform.auth.enums.Role;
+import com.insurance.platform.auth.enums.UserStatus;
+import com.insurance.platform.auth.repository.OutboxRepository;
+import com.insurance.platform.auth.repository.RefreshTokenRepository;
+import com.insurance.platform.auth.repository.UserRepository;
 import java.net.URI;
-import java.net.http.*;
-import java.time.*;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.data.domain.*;
-import org.springframework.test.context.*;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.json.JsonMapper;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -25,7 +48,7 @@ class CustomerAdministrationTests {
     static final Instant NOW=Instant.parse("2026-10-19T01:02:03Z");
     @LocalServerPort int port;
     @MockitoBean UserRepository users;
-    @MockitoBean com.insurance.platform.auth.repository.RefreshTokenRepository refreshTokens;
+    @MockitoBean RefreshTokenRepository refreshTokens;
     @MockitoBean OutboxRepository outbox;
     @MockitoBean Clock clock;
     User user;
@@ -58,7 +81,7 @@ class CustomerAdministrationTests {
     @Test void safeListDetailPaginationAndReadOnlyBehavior() throws Exception {
         var response=admin("GET","",null);safe(response,200);
         assertThat(mapper.readTree(response.body()).path("size").asInt()).isEqualTo(20);
-        var page=org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        var page=ArgumentCaptor.forClass(Pageable.class);
         verify(users).findByRole(eq(Role.CUSTOMER),page.capture());
         assertThat(page.getValue().getSort()).containsExactly(Sort.Order.desc("createdAt"),Sort.Order.desc("id"));
         var detail=admin("GET","/"+ID,null);safe(detail,200);assertThat(mapper.readTree(detail.body()).size()).isEqualTo(6);
@@ -70,7 +93,7 @@ class CustomerAdministrationTests {
         safe(admin("PATCH","/"+ID+"/disable","{}"),200);
         safe(admin("PATCH","/"+ID+"/enable",null),200);
         safe(admin("PATCH","/"+ID+"/enable",null),200);
-        var captured=org.mockito.ArgumentCaptor.forClass(OutboxEvent.class);verify(outbox,times(2)).saveAndFlush(captured.capture());verify(users,times(2)).flush();
+        var captured=ArgumentCaptor.forClass(OutboxEvent.class);verify(outbox,times(2)).saveAndFlush(captured.capture());verify(users,times(2)).flush();
         var events=captured.getAllValues();var ids=new HashSet<String>();
         for(int i=0;i<2;i++) {
             var event=mapper.readTree(events.get(i).getPayload());var d=event.path("data");
@@ -107,7 +130,7 @@ class CustomerAdministrationTests {
     }
 
     @Test void failedStatusWriteCreatesNoEventAndLeaksNoDatabaseDetails() throws Exception {
-        doThrow(new org.springframework.dao.DataIntegrityViolationException("private SQL payload")).when(users).flush();
+        doThrow(new DataIntegrityViolationException("private SQL payload")).when(users).flush();
         var response=admin("PATCH","/"+ID+"/disable",null);safe(response,500);
         assertThat(response.body()).doesNotContain("private SQL payload");verifyNoInteractions(outbox);
     }

@@ -1,19 +1,27 @@
 package com.insurance.platform.auth;
-import com.insurance.platform.auth.service.*;
-import com.insurance.platform.auth.repository.*;
-import com.insurance.platform.auth.event.*;
-import com.insurance.platform.auth.entity.OutboxEvent;
 import com.insurance.platform.auth.dto.RegisterRequest;
-import java.time.*;
+import com.insurance.platform.auth.entity.OutboxEvent;
+import com.insurance.platform.auth.event.AuthCorrelationId;
+import com.insurance.platform.auth.repository.OutboxRepository;
+import com.insurance.platform.auth.repository.UserRepository;
+import com.insurance.platform.auth.service.AuthService;
+import com.insurance.platform.auth.service.JwtService;
+import java.time.Clock;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.json.JsonMapper;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 class AuthRegistrationEventTests {
     @Test void registrationBuildsOneSafeEnvelopeFromCanonicalUserAndSingleClockInstant() {
         var users=mock(UserRepository.class);var outbox=mock(OutboxRepository.class);
-        var passwords=mock(org.springframework.security.crypto.password.PasswordEncoder.class);
+        var passwords=mock(PasswordEncoder.class);
         when(passwords.encode(any())).thenReturn("$2a$12$secretHash");
         var clock=mock(Clock.class);var now=Instant.parse("2026-10-17T01:02:03Z");when(clock.instant()).thenReturn(now);
         var correlation=mock(AuthCorrelationId.class);when(correlation.current()).thenReturn("gateway-correlation");

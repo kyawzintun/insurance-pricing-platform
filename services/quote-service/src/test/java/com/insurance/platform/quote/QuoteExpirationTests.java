@@ -1,11 +1,17 @@
 package com.insurance.platform.quote;
 
-import com.insurance.platform.quote.service.*;
+import com.insurance.platform.quote.service.QuoteExpirationScheduler;
+import com.insurance.platform.quote.service.QuoteExpirationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class QuoteExpirationTests {
     @Test

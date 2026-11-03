@@ -1,23 +1,38 @@
 package com.insurance.platform.auth;
-import com.insurance.platform.auth.service.*;
 import com.insurance.platform.auth.repository.OutboxPollingRepository;
-import java.time.*;
-import java.util.*;
+import com.insurance.platform.auth.service.AuthOutboxPublisher;
+import com.insurance.platform.auth.service.AuthService;
+import com.insurance.platform.auth.service.CustomerAdminService;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import org.apache.kafka.clients.admin.*;
-import org.apache.kafka.clients.consumer.*;
+import javax.sql.DataSource;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.test.context.*;
-import org.testcontainers.junit.jupiter.*;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import static org.assertj.core.api.Assertions.*;
+import tools.jackson.databind.json.JsonMapper;
+
+import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("integration")
 @Testcontainers
@@ -31,9 +46,9 @@ class AuthKafkaIT {
         r.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
     }
     @Autowired AuthService service;
-    @Autowired com.insurance.platform.auth.service.CustomerAdminService customers;
+    @Autowired CustomerAdminService customers;
     @Autowired JdbcTemplate jdbc;
-    @Autowired javax.sql.DataSource datasource;
+    @Autowired DataSource datasource;
     @Autowired KafkaTemplate<String,String> kafka;
     @Test void registrationOutageRecoveryAndExactStoredEventPublication() throws Exception {
         String topic="insurance.user.events";
@@ -45,7 +60,7 @@ class AuthKafkaIT {
         var docker=KAFKA.getDockerClient();
         docker.pauseContainerCmd(KAFKA.getContainerId()).exec();
         String payload;
-        java.util.UUID user;
+        UUID user;
         try {
             user=service.register(AuthPostgresIT.request("kafka@example.com")).id();
             payload=jdbc.queryForObject("select payload::text from outbox_events",String.class);
@@ -88,10 +103,10 @@ class AuthKafkaIT {
                 assertThat(enableRecord.key()).isEqualTo(user.toString());assertThat(enableRecord.value()).isEqualTo(enabled);
                 assertThat(enableRecord.partition()).isEqualTo(firstDisable.partition()).isEqualTo(records.getFirst().partition());
                 assertThat(enableRecord.offset()).isGreaterThan(repeatedDisable.offset());
-                var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
+                var mapper=JsonMapper.builder().build();
                 assertThat(mapper.readTree(enabled).path("eventId").asText()).isNotEqualTo(mapper.readTree(disabled).path("eventId").asText());
                 assertThat(jdbc.queryForObject("select count(*) from outbox_events where status='PUBLISHED'",Integer.class)).isEqualTo(3);
-            } finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+            } finally { SecurityContextHolder.clearContext(); }
 
         }
     }

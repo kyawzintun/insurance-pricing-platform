@@ -1,5 +1,6 @@
 package com.insurance.platform.quote.config;
 
+import com.insurance.platform.quote.RsaTestTokens;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
@@ -7,10 +8,10 @@ import java.util.List;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.ByteArrayResource;
-import com.insurance.platform.quote.RsaTestTokens;
-import static org.assertj.core.api.Assertions.*;
+import org.springframework.core.io.ClassPathResource;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RsaJwtConfigurationTests {
     private final ClassPathResource publicKey = new ClassPathResource("keys/dev-jwt-public.pem");

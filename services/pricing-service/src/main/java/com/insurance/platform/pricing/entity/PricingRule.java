@@ -1,8 +1,14 @@
 package com.insurance.platform.pricing.entity;
 
-import com.insurance.platform.pricing.enums.RuleType;
 import com.insurance.platform.pricing.enums.RuleOperator;
-import jakarta.persistence.*;
+import com.insurance.platform.pricing.enums.RuleType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;

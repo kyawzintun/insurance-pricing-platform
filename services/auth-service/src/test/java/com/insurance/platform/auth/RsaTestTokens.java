@@ -1,8 +1,14 @@
 package com.insurance.platform.auth;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.Signature;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.List;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.converter.RsaKeyConverters;
 
@@ -20,14 +26,14 @@ public final class RsaTestTokens {
         signer.update(data.getBytes(StandardCharsets.UTF_8));
         return data + "." + e.encodeToString(signer.sign());
     }
-    public static java.util.List<String> rejectedTokens() throws Exception {
+    public static List<String> rejectedTokens() throws Exception {
         String claims = "{\"sub\":\"00000000-0000-0000-0000-000000000001\",\"roles\":[\"ADMIN\",\"CUSTOMER\"],\"iss\":\"insurance-auth-service\",\"exp\":"
-                + (java.time.Instant.now().getEpochSecond()+300) + "}";
+                + (Instant.now().getEpochSecond()+300) + "}";
         var e = Base64.getUrlEncoder().withoutPadding();
         String payload = e.encodeToString(claims.getBytes(StandardCharsets.UTF_8));
         String hs = e.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8))+"."+payload;
-        var mac = javax.crypto.Mac.getInstance("HmacSHA256");
-        mac.init(new javax.crypto.spec.SecretKeySpec(new ClassPathResource("keys/dev-jwt-public.pem").getContentAsByteArray(), "HmacSHA256"));
+        var mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(new ClassPathResource("keys/dev-jwt-public.pem").getContentAsByteArray(), "HmacSHA256"));
         String none = e.encodeToString("{\"alg\":\"none\"}".getBytes(StandardCharsets.UTF_8))+"."+payload+".";
         var pair = UnrelatedKey.PAIR;
         String rsa = sign(claims); String data = rsa.substring(0, rsa.lastIndexOf('.'));
@@ -40,12 +46,12 @@ public final class RsaTestTokens {
         }
         rs512Signer.update(rs512Data.getBytes(StandardCharsets.UTF_8));
         String rs512 = rs512Data+"."+e.encodeToString(rs512Signer.sign());
-        return java.util.List.of(rs512, hs+"."+e.encodeToString(mac.doFinal(hs.getBytes(StandardCharsets.UTF_8))), none, wrongRsa, "malformed");
+        return List.of(rs512, hs+"."+e.encodeToString(mac.doFinal(hs.getBytes(StandardCharsets.UTF_8))), none, wrongRsa, "malformed");
     }
     // One unrelated pair per test JVM, used solely to prove wrong-key rejection.
     private static final class UnrelatedKey {
-        static final java.security.KeyPair PAIR;
-        static { try { var generator = java.security.KeyPairGenerator.getInstance("RSA"); generator.initialize(2048); PAIR = generator.generateKeyPair(); }
+        static final KeyPair PAIR;
+        static { try { var generator = KeyPairGenerator.getInstance("RSA"); generator.initialize(2048); PAIR = generator.generateKeyPair(); }
                  catch (Exception ex) { throw new ExceptionInInitializerError(ex); } }
     }
 

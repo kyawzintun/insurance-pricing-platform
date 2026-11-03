@@ -13,16 +13,15 @@ import com.insurance.platform.auth.event.UserStatusEventData;
 import com.insurance.platform.auth.exception.AuthException;
 import com.insurance.platform.auth.repository.OutboxRepository;
 import com.insurance.platform.auth.repository.UserRepository;
+import java.time.Clock;
+import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
-
-import java.time.Clock;
-import java.time.temporal.ChronoUnit;
-import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)

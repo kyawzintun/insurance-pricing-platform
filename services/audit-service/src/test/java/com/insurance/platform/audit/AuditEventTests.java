@@ -1,45 +1,68 @@
 package com.insurance.platform.audit;
 
-import com.insurance.platform.audit.event.*;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.insurance.platform.audit.entity.AuditRecord;
+import com.insurance.platform.audit.event.QuoteAuditListener;
+import com.insurance.platform.audit.event.QuoteEventDecoder;
 import com.insurance.platform.audit.exception.InvalidQuoteEventException;
 import com.insurance.platform.audit.repository.AuditRecordRepository;
+import com.insurance.platform.audit.repository.ProcessedEventRepository;
 import com.insurance.platform.audit.service.AuditService;
-import java.time.*;
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.stream.Stream;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
-import static com.insurance.platform.audit.AuditFixtures.*;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.slf4j.LoggerFactory;
+import tools.jackson.databind.json.JsonMapper;
+
+import static com.insurance.platform.audit.AuditFixtures.CUSTOMER;
+import static com.insurance.platform.audit.AuditFixtures.EVENT;
+import static com.insurance.platform.audit.AuditFixtures.NOW;
+import static com.insurance.platform.audit.AuditFixtures.QUOTE;
+import static com.insurance.platform.audit.AuditFixtures.expiredJson;
+import static com.insurance.platform.audit.AuditFixtures.json;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 class AuditEventTests {
     final QuoteEventDecoder decoder = new QuoteEventDecoder();
 
     @Test void expiredContractMappingAndDuplicateUseExistingWorkflow() {
         var event = decoder.decode(expiredJson()).orElseThrow();
-        var repository = mock(com.insurance.platform.audit.repository.AuditRecordRepository.class);
-        var markers = mock(com.insurance.platform.audit.repository.ProcessedEventRepository.class);
+        var repository = mock(AuditRecordRepository.class);
+        var markers = mock(ProcessedEventRepository.class);
         when(markers.tryMarkProcessed(EVENT, AuditService.CONSUMER_NAME, NOW)).thenReturn(true, false);
         var service = new AuditService(repository, Clock.fixed(NOW, ZoneOffset.UTC), markers);
         assertThat(service.create(event).name()).isEqualTo("PROCESSED");
         assertThat(service.create(event).name()).isEqualTo("DUPLICATE");
-        var row = org.mockito.ArgumentCaptor.forClass(com.insurance.platform.audit.entity.AuditRecord.class);
+        var row = ArgumentCaptor.forClass(AuditRecord.class);
         verify(repository).saveAndFlush(row.capture());
         assertThat(row.getValue().getEventType()).isEqualTo("QuoteExpired");
         assertThat(row.getValue().getActorType()).isEqualTo("SYSTEM");
         assertThat(row.getValue().getActorId()).isNull();
         assertThat(row.getValue().getMetadata()).contains("originalExpiresAt", "expiredAt").doesNotContain("customerId");
         assertThatThrownBy(() -> decoder.decode(expiredJson().replace("\"eventVersion\":1", "\"eventVersion\":2")))
-                .isInstanceOf(com.insurance.platform.audit.exception.InvalidQuoteEventException.class);
+                .isInstanceOf(InvalidQuoteEventException.class);
     }
     @Test void mapsContractAndPersistsExpectedFieldsUsingClock() {
         var event = decoder.decode(json()).orElseThrow();
         var repository = mock(AuditRecordRepository.class);
-        var markers = mock(com.insurance.platform.audit.repository.ProcessedEventRepository.class);
+        var markers = mock(ProcessedEventRepository.class);
         when(markers.tryMarkProcessed(EVENT, AuditService.CONSUMER_NAME, NOW)).thenReturn(true);
         new AuditService(repository, Clock.fixed(NOW, ZoneOffset.UTC), markers).create(event);
         verify(markers).tryMarkProcessed(EVENT, AuditService.CONSUMER_NAME, NOW);
@@ -100,8 +123,8 @@ class AuditEventTests {
     @Test void databaseFailurePropagatesSafelyAndDoesNotLogExceptionPayload() {
         var service = mock(AuditService.class);
         doThrow(new IllegalStateException("secret-payload-marker")).when(service).create(any());
-        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(QuoteAuditListener.class);
-        var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        var logger = (Logger) LoggerFactory.getLogger(QuoteAuditListener.class);
+        var appender = new ListAppender<ILoggingEvent>();
         appender.start(); logger.addAppender(appender);
         try {
             assertThatThrownBy(() -> new QuoteAuditListener(decoder, service).receive(record(json())))
@@ -114,11 +137,11 @@ class AuditEventTests {
     }
     @Test void keyMismatchIsDiagnosticAndDoesNotPreventValidEventProcessing() {
         var service = mock(AuditService.class);
-        new QuoteAuditListener(decoder, service).receive(new ConsumerRecord<>("insurance.quote.events", 1, 2, "wrong-key".getBytes(java.nio.charset.StandardCharsets.UTF_8), json().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        new QuoteAuditListener(decoder, service).receive(new ConsumerRecord<>("insurance.quote.events", 1, 2, "wrong-key".getBytes(StandardCharsets.UTF_8), json().getBytes(StandardCharsets.UTF_8)));
         verify(service).create(decoder.decode(json()).orElseThrow());
     }
     static void assertMetadata(String value) {
-        var data = tools.jackson.databind.json.JsonMapper.builder().build().readTree(value);
+        var data = JsonMapper.builder().build().readTree(value);
         assertThat(data.size()).isEqualTo(7);
         assertThat(data.path("quoteReference").asText()).isEqualTo("Q-TEST-123");
         assertThat(data.path("status").asText()).isEqualTo("PRICED");
@@ -131,6 +154,6 @@ class AuditEventTests {
         assertThat(value).doesNotContain("password", "Authorization", "JWT", "dateOfBirth", "customerId", "secret");
     }
     private ConsumerRecord<byte[], byte[]> record(String json) {
-        return new ConsumerRecord<>("insurance.quote.events", 1, 2, QUOTE.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8), json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return new ConsumerRecord<>("insurance.quote.events", 1, 2, QUOTE.toString().getBytes(StandardCharsets.UTF_8), json.getBytes(StandardCharsets.UTF_8));
     }
 }

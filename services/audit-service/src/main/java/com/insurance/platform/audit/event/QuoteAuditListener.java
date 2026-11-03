@@ -4,9 +4,13 @@ import com.insurance.platform.audit.exception.InvalidQuoteEventException;
 import com.insurance.platform.audit.exception.QuoteProcessingException;
 import com.insurance.platform.audit.service.AuditService;
 import com.insurance.platform.audit.service.ProcessResult;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -21,8 +25,8 @@ public class QuoteAuditListener {
         this.service = service;
     }
 
-    private EventObservation observation = new EventObservation(new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
-    @org.springframework.beans.factory.annotation.Autowired
+    private EventObservation observation = new EventObservation(new SimpleMeterRegistry());
+    @Autowired
     public void configureObservation(EventObservation observation) { this.observation = observation; }
 
     @KafkaListener(id = "quote-audit", idIsGroup = false,
@@ -42,7 +46,7 @@ public class QuoteAuditListener {
             throw failure;
         }
 
-        if (!java.util.Arrays.equals(event.data().quoteId().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8), record.key())) {
+        if (!Arrays.equals(event.data().quoteId().toString().getBytes(StandardCharsets.UTF_8), record.key())) {
             // The event body is authoritative. Do not echo an untrusted key.
             LOG.warn("Quote event key mismatch eventId={} quoteId={} topic={} partition={} offset={}",
                     event.eventId(), event.aggregateId(), record.topic(), record.partition(), record.offset());

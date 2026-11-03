@@ -1,14 +1,35 @@
 package com.insurance.platform.audit;
 
-import com.insurance.platform.audit.event.*;
-import com.insurance.platform.audit.repository.*;
-import com.insurance.platform.audit.service.*;
-import java.time.*;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import com.insurance.platform.audit.event.QuoteAuditListener;
+import com.insurance.platform.audit.event.QuoteEventDecoder;
+import com.insurance.platform.audit.event.QuotePricedEnvelope;
+import com.insurance.platform.audit.repository.AuditRecordRepository;
+import com.insurance.platform.audit.repository.ProcessedEventRepository;
+import com.insurance.platform.audit.service.AuditService;
+import com.insurance.platform.audit.service.ProcessResult;
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
-import static com.insurance.platform.audit.AuditFixtures.*;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.slf4j.LoggerFactory;
+
+import static com.insurance.platform.audit.AuditFixtures.EVENT;
+import static com.insurance.platform.audit.AuditFixtures.NOW;
+import static com.insurance.platform.audit.AuditFixtures.QUOTE;
+import static com.insurance.platform.audit.AuditFixtures.json;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 class AuditIdempotencyTests {
     final AuditRecordRepository business = mock(AuditRecordRepository.class);
@@ -48,11 +69,11 @@ class AuditIdempotencyTests {
     @Test void listenerTreatsDuplicateAsSuccessAndLogsOnlyMetadata() {
         var processing = mock(AuditService.class);
         when(processing.create(any())).thenReturn(ProcessResult.DUPLICATE);
-        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(QuoteAuditListener.class);
-        var logs = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        var logger = (Logger) LoggerFactory.getLogger(QuoteAuditListener.class);
+        var logs = new ListAppender<ILoggingEvent>();
         logs.start(); logger.addAppender(logs);
         try {
-            new QuoteAuditListener(new QuoteEventDecoder(), processing).receive(new ConsumerRecord<>("insurance.quote.events", 1, 4, QUOTE.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8), json().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            new QuoteAuditListener(new QuoteEventDecoder(), processing).receive(new ConsumerRecord<>("insurance.quote.events", 1, 4, QUOTE.toString().getBytes(StandardCharsets.UTF_8), json().getBytes(StandardCharsets.UTF_8)));
             assertThat(logs.list).anySatisfy(log -> assertThat(log.getFormattedMessage())
                     .contains("DUPLICATE", EVENT.toString(), "consumerName=audit-service", "partition=1", "offset=4")
                     .doesNotContain("11200", "Q-TEST-123"));

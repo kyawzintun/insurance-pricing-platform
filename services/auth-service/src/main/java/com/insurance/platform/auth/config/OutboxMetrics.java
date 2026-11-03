@@ -2,6 +2,8 @@ package com.insurance.platform.auth.config;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.atomic.AtomicLong;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -11,10 +13,10 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(name = "outbox.publisher.enabled", havingValue = "true")
 public class OutboxMetrics {
-    private final org.springframework.beans.factory.ObjectProvider<JdbcTemplate> jdbc;
+    private final ObjectProvider<JdbcTemplate> jdbc;
     private final AtomicLong pending = new AtomicLong(-1);
     private final AtomicLong oldest = new AtomicLong(-1);
-    public OutboxMetrics(org.springframework.beans.factory.ObjectProvider<JdbcTemplate> jdbc, MeterRegistry meters) {
+    public OutboxMetrics(ObjectProvider<JdbcTemplate> jdbc, MeterRegistry meters) {
         this.jdbc = jdbc;
         meters.gauge("insurance.outbox.pending", pending);
         meters.gauge("insurance.outbox.oldest.pending.seconds", oldest);
@@ -28,7 +30,7 @@ public class OutboxMetrics {
             });
         } catch (RuntimeException failure) {
             pending.set(-1); oldest.set(-1);
-            org.slf4j.LoggerFactory.getLogger(getClass()).warn("action=outbox-metrics result=failure failureType={}", failure.getClass().getSimpleName());
+            LoggerFactory.getLogger(getClass()).warn("action=outbox-metrics result=failure failureType={}", failure.getClass().getSimpleName());
         }
     }
 }

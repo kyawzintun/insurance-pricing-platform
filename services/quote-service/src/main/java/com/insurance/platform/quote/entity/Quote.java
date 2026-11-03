@@ -1,7 +1,15 @@
 package com.insurance.platform.quote.entity;
 
-import com.insurance.platform.quote.enums.*;
-import jakarta.persistence.*;
+import com.insurance.platform.quote.enums.CoverageType;
+import com.insurance.platform.quote.enums.QuoteStatus;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;

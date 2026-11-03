@@ -3,8 +3,10 @@ package com.insurance.platform.notification.config;
 import com.insurance.platform.notification.event.QuoteDeadLetterRecoverer;
 import com.insurance.platform.notification.exception.InvalidQuoteEventException;
 import com.insurance.platform.notification.exception.InvalidUserEventException;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,8 +18,8 @@ import org.springframework.util.backoff.FixedBackOff;
 
 @Configuration(proxyBeanMethods = false)
 public class NotificationKafkaConfiguration {
-    @org.springframework.beans.factory.annotation.Autowired
-    private io.micrometer.core.instrument.MeterRegistry meters;
+    @Autowired
+    private MeterRegistry meters;
 
     @Bean
     Clock notificationClock() { return Clock.systemUTC(); }

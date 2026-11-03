@@ -1,8 +1,8 @@
 package com.insurance.platform.pricing.dto;
 
 import com.insurance.platform.pricing.entity.PricingRule;
-import com.insurance.platform.pricing.enums.RuleType;
 import com.insurance.platform.pricing.enums.RuleOperator;
+import com.insurance.platform.pricing.enums.RuleType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;

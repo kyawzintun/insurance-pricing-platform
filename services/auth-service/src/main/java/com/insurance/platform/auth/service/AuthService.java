@@ -14,16 +14,17 @@ import com.insurance.platform.auth.event.UserRegisteredData;
 import com.insurance.platform.auth.exception.AuthException;
 import com.insurance.platform.auth.repository.OutboxRepository;
 import com.insurance.platform.auth.repository.UserRepository;
+import java.time.Clock;
+import java.time.temporal.ChronoUnit;
+import java.util.Locale;
+import java.util.UUID;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
-
-import java.time.Clock;
-import java.util.Locale;
-import java.util.UUID;
 
 @Service
 public class AuthService {
@@ -68,14 +69,14 @@ public class AuthService {
                 request.lastName().strip(),
                 Role.CUSTOMER,
                 UserStatus.ACTIVE,
-                clock.instant().truncatedTo(java.time.temporal.ChronoUnit.MICROS)
+                clock.instant().truncatedTo(ChronoUnit.MICROS)
         );
         try {
             // Flush inside the transaction so concurrent duplicate registrations become a 409.
             users.saveAndFlush(user);
         } catch (DataIntegrityViolationException ex) {
             for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
-                if (cause instanceof org.hibernate.exception.ConstraintViolationException violation
+                if (cause instanceof ConstraintViolationException violation
                         && "users_email_key".equals(violation.getConstraintName())) {
                     throw duplicateEmail();
                 }

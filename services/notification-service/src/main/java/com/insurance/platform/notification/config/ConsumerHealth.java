@@ -1,6 +1,8 @@
 package com.insurance.platform.notification.config;
 
-import org.springframework.boot.health.contributor.*;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.stereotype.Component;
 
@@ -8,7 +10,7 @@ import org.springframework.stereotype.Component;
 @Component("kafkaConsumer")
 public class ConsumerHealth implements HealthIndicator {
     private final KafkaListenerEndpointRegistry containers;
-    @org.springframework.beans.factory.annotation.Value("${spring.kafka.listener.auto-startup:true}")
+    @Value("${spring.kafka.listener.auto-startup:true}")
     private boolean enabled = true;
     public ConsumerHealth(KafkaListenerEndpointRegistry containers) { this.containers = containers; }
     @Override public Health health() {

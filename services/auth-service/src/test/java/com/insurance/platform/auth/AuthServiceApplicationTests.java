@@ -1,26 +1,42 @@
 package com.insurance.platform.auth;
 
+import com.insurance.platform.auth.entity.RefreshToken;
 import com.insurance.platform.auth.entity.User;
 import com.insurance.platform.auth.enums.Role;
 import com.insurance.platform.auth.enums.UserStatus;
+import com.insurance.platform.auth.repository.OutboxRepository;
+import com.insurance.platform.auth.repository.RefreshTokenRepository;
 import com.insurance.platform.auth.repository.UserRepository;
-
 import java.net.URI;
-import java.net.http.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
-import java.time.*;
-import java.util.*;
-
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -28,22 +44,25 @@ import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {"auth.service-client.secret=test-machine-secret", "auth.service-client.token-ttl=45s"})
 @ActiveProfiles("test")
-@org.junit.jupiter.api.extension.ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
+@ExtendWith(OutputCaptureExtension.class)
 class AuthServiceApplicationTests {
     private static final String PASSWORD = "Test-only-password-42!";
 
-    @MockitoBean com.insurance.platform.auth.repository.OutboxRepository outbox;
+    @MockitoBean OutboxRepository outbox;
     @MockitoBean UserRepository users;
-    @MockitoBean com.insurance.platform.auth.repository.RefreshTokenRepository refreshTokens;
+    @MockitoBean RefreshTokenRepository refreshTokens;
     @Autowired PasswordEncoder passwords;
     @Autowired ObjectMapper mapper;
     @LocalServerPort int port;
 
-    @Test void serviceCredentialsIssueIndependentShortLivedRs256Token(org.springframework.boot.test.system.CapturedOutput output) throws Exception {
+    @Test void serviceCredentialsIssueIndependentShortLivedRs256Token(CapturedOutput output) throws Exception {
         try (var client = HttpClient.newHttpClient()) {
             String basic = Base64.getEncoder().encodeToString("quote-service:test-machine-secret".getBytes(StandardCharsets.UTF_8));
             var request = HttpRequest.newBuilder(URI.create("http://localhost:"+port+"/api/v1/auth/service-token"))
@@ -55,8 +74,8 @@ class AuthServiceApplicationTests {
             assertThat(response.headers().firstValue("Cache-Control")).contains("no-store");
             var json = mapper.readTree(response.body());
             assertThat(json.get("expires_in").asLong()).isEqualTo(45);
-            var key = org.springframework.security.converter.RsaKeyConverters.x509().convert(new org.springframework.core.io.ClassPathResource("keys/dev-jwt-public.pem").getInputStream());
-            var decoder = NimbusJwtDecoder.withPublicKey(key).signatureAlgorithm(org.springframework.security.oauth2.jose.jws.SignatureAlgorithm.RS256).build();
+            var key = RsaKeyConverters.x509().convert(new ClassPathResource("keys/dev-jwt-public.pem").getInputStream());
+            var decoder = NimbusJwtDecoder.withPublicKey(key).signatureAlgorithm(SignatureAlgorithm.RS256).build();
             var jwt = decoder.decode(json.get("access_token").asText());
             assertThat(jwt.getSubject()).isEqualTo("quote-service");
             assertThat(jwt.getClaimAsStringList("scope")).containsExactly("pricing:calculate");
@@ -134,7 +153,7 @@ class AuthServiceApplicationTests {
 
     @Test
     void concurrentDuplicateConstraintBecomesConflict() throws Exception {
-        var violation = new org.hibernate.exception.ConstraintViolationException(
+        var violation = new ConstraintViolationException(
                 "duplicate", new SQLException("duplicate", "23505"), "users_email_key");
         when(users.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("duplicate", violation));
         assertError(post("register", registration("customer@example.com")), 409, "EMAIL_ALREADY_EXISTS");
@@ -177,7 +196,7 @@ class AuthServiceApplicationTests {
         var cookie=response.headers().firstValue("Set-Cookie").orElseThrow();
         assertThat(cookie).contains("HttpOnly","Secure","SameSite=Lax","Path=/api/v1/auth","Max-Age=604800");
         var raw=cookie.split(";",2)[0].split("=",2)[1];
-        var captured=ArgumentCaptor.forClass(com.insurance.platform.auth.entity.RefreshToken.class);
+        var captured=ArgumentCaptor.forClass(RefreshToken.class);
         verify(refreshTokens).saveAndFlush(captured.capture());
         assertThat(captured.getValue().getTokenHash()).hasSize(64).isNotEqualTo(raw);
         assertThat(response.body()).doesNotContain(raw,"refreshToken");
@@ -186,7 +205,7 @@ class AuthServiceApplicationTests {
         var body = mapper.readTree(response.body());
         assertThat(body.get("tokenType").asText()).isEqualTo("Bearer");
         assertThat(body.get("expiresIn").asLong()).isEqualTo(900);
-        var decoder = NimbusJwtDecoder.withPublicKey(org.springframework.security.converter.RsaKeyConverters.x509().convert(new org.springframework.core.io.ClassPathResource("keys/dev-jwt-public.pem").getInputStream())).build();
+        var decoder = NimbusJwtDecoder.withPublicKey(RsaKeyConverters.x509().convert(new ClassPathResource("keys/dev-jwt-public.pem").getInputStream())).build();
         var jwt = decoder.decode(body.get("accessToken").asText());
         assertThat(jwt.getSubject()).isEqualTo(user.getId().toString());
         assertThat(jwt.getClaimAsStringList("roles")).containsExactly("CUSTOMER");

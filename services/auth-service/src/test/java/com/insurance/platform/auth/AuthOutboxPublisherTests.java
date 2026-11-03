@@ -1,16 +1,37 @@
 package com.insurance.platform.auth;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.insurance.platform.auth.repository.OutboxPollingRepository;
-import com.insurance.platform.auth.repository.OutboxPollingRepository.*;
+import com.insurance.platform.auth.repository.OutboxPollingRepository.Batch;
+import com.insurance.platform.auth.repository.OutboxPollingRepository.PendingEvent;
 import com.insurance.platform.auth.service.AuthOutboxPublisher;
 import java.sql.SQLException;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.springframework.kafka.support.SendResult;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 class AuthOutboxPublisherTests {
     private final OutboxPollingRepository repository = mock(OutboxPollingRepository.class);
@@ -26,7 +47,7 @@ class AuthOutboxPublisherTests {
     }
     @Test void exactPayloadAndUserKeyAreSentAndOnlyAcknowledgmentAllowsPublished() throws Exception {
         claim();
-        var future = new CompletableFuture<org.springframework.kafka.support.SendResult<String, String>>();
+        var future = new CompletableFuture<SendResult<String, String>>();
         when(kafka.send("insurance.user.events", event.aggregateId(), event.payload())).thenAnswer(call -> {
             verify(batch, never()).published(any(), any());
             future.complete(null);
@@ -70,8 +91,8 @@ class AuthOutboxPublisherTests {
     }
     @Test void failureLogsContainMetadataButNeverPayloadOrExceptionText() throws Exception {
         claim(); when(kafka.send(anyString(), anyString(), anyString())).thenThrow(new IllegalStateException("private-password"));
-        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(AuthOutboxPublisher.class);
-        var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        var logger = (Logger) LoggerFactory.getLogger(AuthOutboxPublisher.class);
+        var appender = new ListAppender<ILoggingEvent>();
         appender.start(); logger.addAppender(appender);
         try {
             publisher.poll();

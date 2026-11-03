@@ -2,15 +2,14 @@ package com.insurance.platform.quote.client;
 
 import com.insurance.platform.quote.exception.QuoteException;
 import jakarta.annotation.PreDestroy;
+import java.net.http.HttpClient;
+import java.time.Duration;
+import java.time.Instant;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-
-import java.net.http.HttpClient;
-import java.time.Duration;
-import java.time.Instant;
 
 /**
  * Instance-local cache. The monitor makes acquisition single flight, including 401 replacement.

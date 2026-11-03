@@ -1,22 +1,33 @@
 package com.insurance.platform.pricing;
 
 import com.insurance.platform.pricing.entity.PricingRule;
-import com.insurance.platform.pricing.enums.*;
+import com.insurance.platform.pricing.enums.RuleOperator;
+import com.insurance.platform.pricing.enums.RuleType;
+import com.insurance.platform.pricing.repository.OutboxRepository;
 import com.insurance.platform.pricing.repository.PricingRuleRepository;
 import java.math.BigDecimal;
 import java.net.URI;
-import java.net.http.*;
-import java.time.*;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -27,7 +38,7 @@ class PricingServiceApplicationTests {
              "vehicleValue":700000,"engineSizeCc":1500,"previousClaimsCount":1,"coverageType":"COMPREHENSIVE"}
             """;
     @LocalServerPort int port;
-    @MockitoBean com.insurance.platform.pricing.repository.OutboxRepository outbox;
+    @MockitoBean OutboxRepository outbox;
     @MockitoBean PricingRuleRepository repository;
     @MockitoBean Clock clock;
 
@@ -112,7 +123,7 @@ class PricingServiceApplicationTests {
         assertThat(response.body()).isEqualTo("{\"code\":\"PRICING_CONFIGURATION_ERROR\",\"message\":\"Pricing configuration is unavailable or invalid\"}");
     }
     @Test void databaseErrorsDoNotExposeSqlDetails() throws Exception {
-        when(repository.findByEnabledTrueAndEffectiveFromLessThanEqual(NOW)).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("private SQL details"));
+        when(repository.findByEnabledTrueAndEffectiveFromLessThanEqual(NOW)).thenThrow(new DataAccessResourceFailureException("private SQL details"));
         var response=post(VALID);
         assertThat(response.statusCode()).isEqualTo(500);
         assertThat(response.body()).contains("PRICING_CONFIGURATION_ERROR").doesNotContain("private SQL details");

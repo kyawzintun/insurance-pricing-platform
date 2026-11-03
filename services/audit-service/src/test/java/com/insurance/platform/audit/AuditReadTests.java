@@ -1,22 +1,33 @@
 package com.insurance.platform.audit;
 
 import com.insurance.platform.audit.entity.AuditRecord;
-import com.insurance.platform.audit.repository.*;
-import java.net.*;
-import java.net.http.*;
+import com.insurance.platform.audit.repository.AuditRecordRepository;
+import com.insurance.platform.audit.repository.ProcessedEventRepository;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Instant;
-import java.util.*;
-import org.junit.jupiter.api.*;
-import org.springframework.beans.factory.annotation.Autowired;
+import java.util.Base64;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -56,7 +67,7 @@ class AuditReadTests {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("\"page\":0","\"size\":20","trace-22").doesNotContain("metadata","script");
         assertThat(response.headers().firstValue("Cache-Control")).contains("no-store");
-        var captor=org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        var captor=ArgumentCaptor.forClass(Pageable.class);
         verify(repository).findAll(any(Specification.class),captor.capture());
         assertThat(captor.getValue().getSort().toString()).isEqualTo("occurredAt: DESC,id: DESC");
     }

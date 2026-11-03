@@ -1,16 +1,28 @@
 package com.insurance.platform.quote;
 
-import com.insurance.platform.quote.client.*;
+import com.insurance.platform.quote.client.PricingClient;
+import com.insurance.platform.quote.client.ServiceTokenClient;
 import com.insurance.platform.quote.exception.QuoteException;
 import com.sun.net.httpserver.HttpServer;
 import jakarta.validation.Validation;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
-import static org.assertj.core.api.Assertions.*;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ServiceAuthenticationTests {
     @Test void singleFlightCacheExpiryAndFailureRecovery() throws Exception {
@@ -30,7 +42,7 @@ class ServiceAuthenticationTests {
         try (var tokens = new ServiceTokenClient("http://127.0.0.1:"+server.getAddress().getPort()+"/token", "quote-service", "secret", Duration.ofSeconds(30), Duration.ofSeconds(1), Duration.ofSeconds(2));
              var pool = Executors.newFixedThreadPool(10)) {
             var gate = new CountDownLatch(1);
-            var tasks = new java.util.ArrayList<Future<String>>();
+            var tasks = new ArrayList<Future<String>>();
             for (int i=0;i<10;i++) tasks.add(pool.submit(() -> { gate.await(); return tokens.token("correlation-test"); }));
             gate.countDown();
             for(var task:tasks) assertThat(task.get(5, TimeUnit.SECONDS)).isEqualTo("service-credential");
@@ -57,22 +69,22 @@ class ServiceAuthenticationTests {
             } else exchange.sendResponseHeaders(responseStatus.get() == 200 ? 401 : responseStatus.get(), -1);
             exchange.close();
         }); server.start();
-        var request = new org.springframework.mock.web.MockHttpServletRequest();
+        var request = new MockHttpServletRequest();
         request.addHeader("X-Correlation-ID", "customer-correlation");
-        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(new org.springframework.web.context.request.ServletRequestAttributes(request));
-        var tokens = org.mockito.Mockito.mock(ServiceTokenClient.class);
-        org.mockito.Mockito.when(tokens.token(org.mockito.ArgumentMatchers.anyString())).thenReturn("machine-token");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        var tokens = Mockito.mock(ServiceTokenClient.class);
+        Mockito.when(tokens.token(ArgumentMatchers.anyString())).thenReturn("machine-token");
         try (var validation = Validation.buildDefaultValidatorFactory();
              var pricing = new PricingClient("http://127.0.0.1:"+server.getAddress().getPort(), Duration.ofSeconds(1), Duration.ofSeconds(2), validation.getValidator(), tokens)) {
             assertThatThrownBy(() -> pricing.calculate(QuoteFixtures.request())).isInstanceOf(QuoteException.class);
             assertThat(calls.get()).isEqualTo(2);
-            org.mockito.Mockito.verify(tokens).invalidate("machine-token");
+            Mockito.verify(tokens).invalidate("machine-token");
             responseStatus.set(403); calls.set(0);
             assertThatThrownBy(() -> pricing.calculate(QuoteFixtures.request())).isInstanceOf(QuoteException.class);
             assertThat(calls.get()).isEqualTo(1);
             responseStatus.set(200); calls.set(0);
             assertThat(pricing.calculate(QuoteFixtures.request()).finalPremium()).isEqualByComparingTo("11200.00");
             assertThat(calls.get()).isEqualTo(2);
-        } finally { server.stop(0); org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes(); }
+        } finally { server.stop(0); RequestContextHolder.resetRequestAttributes(); }
     }
 }

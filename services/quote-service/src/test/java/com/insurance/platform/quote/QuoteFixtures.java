@@ -2,10 +2,13 @@ package com.insurance.platform.quote;
 
 import com.insurance.platform.quote.client.PricingResult;
 import com.insurance.platform.quote.dto.CreateQuoteRequest;
-import com.insurance.platform.quote.enums.*;
+import com.insurance.platform.quote.enums.CoverageType;
+import com.insurance.platform.quote.enums.PricingRuleType;
 import java.math.BigDecimal;
-import java.time.*;
-import java.util.*;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
 
 final class QuoteFixtures {
     static final UUID BRAND = UUID.fromString("f0a67386-c7ae-562e-ae46-9fe3042cf38e");

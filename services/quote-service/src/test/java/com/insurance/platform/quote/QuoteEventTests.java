@@ -1,19 +1,32 @@
 package com.insurance.platform.quote;
 
 import com.insurance.platform.quote.dto.QuoteResponse;
-import com.insurance.platform.quote.enums.*;
-import com.insurance.platform.quote.event.*;
+import com.insurance.platform.quote.enums.CoverageType;
+import com.insurance.platform.quote.enums.QuoteStatus;
+import com.insurance.platform.quote.event.EventEnvelope;
+import com.insurance.platform.quote.event.QuoteCorrelationId;
+import com.insurance.platform.quote.event.QuotePricedEventData;
+import com.insurance.platform.quote.event.QuotePricedEventFactory;
 import java.nio.charset.StandardCharsets;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.kafka.support.serializer.JacksonJsonSerializer;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.web.context.request.*;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import tools.jackson.databind.json.JsonMapper;
-import static com.insurance.platform.quote.QuoteFixtures.*;
-import static org.assertj.core.api.Assertions.*;
+
+import static com.insurance.platform.quote.QuoteFixtures.CUSTOMER;
+import static com.insurance.platform.quote.QuoteFixtures.NOW;
+import static com.insurance.platform.quote.QuoteFixtures.price;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class QuoteEventTests {
     static QuoteResponse response() {

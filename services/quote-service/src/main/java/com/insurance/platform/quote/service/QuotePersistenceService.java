@@ -1,19 +1,29 @@
 package com.insurance.platform.quote.service;
 
 import com.insurance.platform.quote.client.PricingResult;
-import com.insurance.platform.quote.dto.*;
-import com.insurance.platform.quote.entity.*;
+import com.insurance.platform.quote.dto.CreateQuoteRequest;
+import com.insurance.platform.quote.dto.QuoteResponse;
+import com.insurance.platform.quote.dto.VehicleSnapshot;
+import com.insurance.platform.quote.entity.OutboxEvent;
+import com.insurance.platform.quote.entity.PricingAdjustment;
+import com.insurance.platform.quote.entity.PricingBreakdown;
+import com.insurance.platform.quote.entity.Quote;
+import com.insurance.platform.quote.entity.QuoteDriver;
+import com.insurance.platform.quote.entity.QuoteVehicle;
 import com.insurance.platform.quote.enums.QuoteStatus;
+import com.insurance.platform.quote.event.QuotePricedEventFactory;
+import com.insurance.platform.quote.repository.OutboxRepository;
 import com.insurance.platform.quote.repository.QuoteRepository;
-import java.time.*;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.Locale;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
-import com.insurance.platform.quote.repository.OutboxRepository;
-import tools.jackson.databind.json.JsonMapper;
-import com.insurance.platform.quote.event.QuotePricedEventFactory;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Separate Spring bean so the transaction starts only after successful pricing. */
 @Service
@@ -41,7 +51,7 @@ public class QuotePersistenceService {
         var now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         var id = UUID.randomUUID();
         var reference = "Q-" + DateTimeFormatter.BASIC_ISO_DATE.format(LocalDate.ofInstant(now, ZoneOffset.UTC))
-                + "-" + id.toString().replace("-", "").toUpperCase(java.util.Locale.ROOT);
+                + "-" + id.toString().replace("-", "").toUpperCase(Locale.ROOT);
         var quote = new Quote(id, reference, customerId, QuoteStatus.PRICED, request.coverageType(),
                 pricing.finalPremium(), pricing.currency(), now, now, now.plus(30, ChronoUnit.DAYS), now);
         var driver = new QuoteDriver(UUID.randomUUID(), quote, request.dateOfBirth(), request.drivingExperienceYears(), request.previousClaimsCount());

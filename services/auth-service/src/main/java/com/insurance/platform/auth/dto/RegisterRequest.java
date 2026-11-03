@@ -1,9 +1,12 @@
 package com.insurance.platform.auth.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
-import jakarta.validation.constraints.*;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 
 public record RegisterRequest(
         @NotBlank @Email @Size(max = 255) String email,

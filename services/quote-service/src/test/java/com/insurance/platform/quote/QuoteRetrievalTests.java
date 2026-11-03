@@ -1,32 +1,59 @@
 package com.insurance.platform.quote;
 
 import com.insurance.platform.quote.client.PricingClient;
-import com.insurance.platform.quote.entity.*;
-import com.insurance.platform.quote.enums.*;
-import com.insurance.platform.quote.repository.*;
+import com.insurance.platform.quote.entity.PricingAdjustment;
+import com.insurance.platform.quote.entity.PricingBreakdown;
+import com.insurance.platform.quote.entity.Quote;
+import com.insurance.platform.quote.entity.QuoteDriver;
+import com.insurance.platform.quote.entity.QuoteVehicle;
+import com.insurance.platform.quote.enums.CoverageType;
+import com.insurance.platform.quote.enums.QuoteStatus;
+import com.insurance.platform.quote.event.QuotePricedEventFactory;
+import com.insurance.platform.quote.repository.OutboxRepository;
+import com.insurance.platform.quote.repository.QuoteRepository;
+import com.insurance.platform.quote.repository.VehicleBrandRepository;
+import com.insurance.platform.quote.repository.VehicleModelRepository;
 import java.net.URI;
-import java.net.http.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Instant;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.test.context.*;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import static com.insurance.platform.quote.QuoteFixtures.*;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+
+import static com.insurance.platform.quote.QuoteFixtures.BRAND;
+import static com.insurance.platform.quote.QuoteFixtures.CUSTOMER;
+import static com.insurance.platform.quote.QuoteFixtures.MODEL;
+import static com.insurance.platform.quote.QuoteFixtures.NOW;
+import static com.insurance.platform.quote.QuoteFixtures.price;
+import static com.insurance.platform.quote.QuoteFixtures.request;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class QuoteRetrievalTests {
-    @MockitoBean org.springframework.jdbc.core.JdbcTemplate expirationJdbc;
+    @MockitoBean JdbcTemplate expirationJdbc;
     @LocalServerPort int port;
-    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean com.insurance.platform.quote.event.QuotePricedEventFactory eventFactory;
+    @MockitoSpyBean QuotePricedEventFactory eventFactory;
     @MockitoBean QuoteRepository quotes;
     @MockitoBean OutboxRepository outbox;
     @MockitoBean VehicleBrandRepository brands;

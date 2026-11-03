@@ -2,31 +2,64 @@ package com.insurance.platform.quote;
 
 import com.insurance.platform.quote.client.PricingClient;
 import com.insurance.platform.quote.repository.OutboxPollingRepository;
-import com.insurance.platform.quote.service.*;
-import java.time.*;
-import java.util.*;
+import com.insurance.platform.quote.service.QuoteExpirationService;
+import com.insurance.platform.quote.service.QuoteOutboxPublisher;
+import com.insurance.platform.quote.service.QuoteRetrievalService;
+import com.insurance.platform.quote.service.QuoteService;
+import com.insurance.platform.quote.service.VehicleReferenceService;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.sql.Timestamp;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.apache.kafka.clients.admin.*;
-import org.apache.kafka.clients.consumer.*;
+import java.util.function.BooleanSupplier;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.test.context.*;
-import org.springframework.test.context.bean.override.mockito.*;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.testcontainers.junit.jupiter.*;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.json.JsonMapper;
-import static com.insurance.platform.quote.QuoteFixtures.*;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+
+import static com.insurance.platform.quote.QuoteFixtures.BRAND;
+import static com.insurance.platform.quote.QuoteFixtures.CUSTOMER;
+import static com.insurance.platform.quote.QuoteFixtures.INPUT;
+import static com.insurance.platform.quote.QuoteFixtures.NOW;
+import static com.insurance.platform.quote.QuoteFixtures.price;
+import static com.insurance.platform.quote.QuoteFixtures.request;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.when;
 
 /** Disposable PostgreSQL + Kafka. Manual inspection never changes a consumer group offset. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -52,7 +85,7 @@ class QuoteKafkaIT {
             admin.createTopics(List.of(new NewTopic(TOPIC, 3, (short) 1))).all().get(20, TimeUnit.SECONDS);
         }
     }
-    @Autowired org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor scheduling;
+    @Autowired ScheduledAnnotationBeanPostProcessor scheduling;
     @Autowired QuoteExpirationService expiration;
     @Autowired QuoteService service;
     @Autowired QuoteRetrievalService retrieval;
@@ -64,7 +97,7 @@ class QuoteKafkaIT {
     @MockitoBean PricingClient pricing;
     @MockitoBean Clock clock;
     @MockitoSpyBean QuoteOutboxPublisher scheduledPublisher;
-    @org.springframework.boot.test.web.server.LocalServerPort int port;
+    @LocalServerPort int port;
 
     @Test void scheduledOutboxPublicationOutageRecoveryAndDuplicateWindow() throws Exception {
         when(clock.instant()).thenReturn(NOW);
@@ -131,12 +164,12 @@ class QuoteKafkaIT {
             UUID outageQuote;
             String stored;
             try {
-                try (var client = java.net.http.HttpClient.newHttpClient()) {
-                    var request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://localhost:" + port + "/api/v1/quotes"))
+                try (var client = HttpClient.newHttpClient()) {
+                    var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/quotes"))
                             .header("Authorization", "Bearer " + QuoteJwtSupport.token("CUSTOMER"))
                             .header("Content-Type", "application/json").header("X-Correlation-ID", "outage-correlation")
-                            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(INPUT)).build();
-                    var response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+                            .POST(HttpRequest.BodyPublishers.ofString(INPUT)).build();
+                    var response = client.send(request, HttpResponse.BodyHandlers.ofString());
                     assertThat(response.statusCode()).isEqualTo(201);
                     outageQuote = UUID.fromString(JsonMapper.builder().build().readTree(response.body()).get("id").asText());
                 }
@@ -172,7 +205,7 @@ class QuoteKafkaIT {
             manual.poll();
             assertThat(consumer.poll(Duration.ofSeconds(1)).isEmpty()).isTrue();
             var beforeExpiration = retrieval.get(duplicateQuote.id(), CUSTOMER, false);
-            jdbc.update("update quotes set expires_at=? where id=?", java.sql.Timestamp.from(NOW), duplicateQuote.id());
+            jdbc.update("update quotes set expires_at=? where id=?", Timestamp.from(NOW), duplicateQuote.id());
             assertThat(expiration.expireBatch(50)).isEqualTo(1);
             assertThat(jdbc.queryForObject("select status from outbox_events where event_type='QuoteExpired'", String.class)).isEqualTo("PENDING");
             manual.poll();
@@ -199,7 +232,7 @@ class QuoteKafkaIT {
     private String status(UUID id) { return jdbc.queryForObject("select status from outbox_events where aggregate_id=?", String.class, id.toString()); }
     private String payload(UUID id) { return jdbc.queryForObject("select payload::text from outbox_events where aggregate_id=?", String.class, id.toString()); }
     private long total(Map<TopicPartition, Long> offsets) { return offsets.values().stream().mapToLong(Long::longValue).sum(); }
-    private void await(java.util.function.BooleanSupplier condition) throws Exception {
+    private void await(BooleanSupplier condition) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
         while (!condition.getAsBoolean() && System.nanoTime() < deadline) Thread.sleep(100);
         assertThat(condition.getAsBoolean()).isTrue();

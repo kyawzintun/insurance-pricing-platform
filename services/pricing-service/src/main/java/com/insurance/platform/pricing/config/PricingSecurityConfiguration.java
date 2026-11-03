@@ -2,12 +2,16 @@ package com.insurance.platform.pricing.config;
 
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Collection;
+import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -22,7 +26,7 @@ public class PricingSecurityConfiguration {
         authorities.setAuthorityPrefix("ROLE_");
         var authentication = new JwtAuthenticationConverter();
         authentication.setJwtGrantedAuthoritiesConverter(jwt -> "service".equals(jwt.getClaimAsString("token_use"))
-                ? java.util.List.of() : authorities.convert(jwt));
+                ? List.of() : authorities.convert(jwt));
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -31,13 +35,13 @@ public class PricingSecurityConfiguration {
                         .requestMatchers("/api/v1/admin/pricing/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/internal/v1/pricing/calculate").access((auth, context) -> {
                             var principal = auth.get().getPrincipal();
-                            boolean allowed = principal instanceof org.springframework.security.oauth2.jwt.Jwt jwt
+                            boolean allowed = principal instanceof Jwt jwt
                                     && "service".equals(jwt.getClaimAsString("token_use"))
                                     && "quote-service".equals(jwt.getSubject())
                                     && jwt.getAudience().contains("pricing-service")
-                                    && jwt.getClaims().get("scope") instanceof java.util.Collection<?> scopes
+                                    && jwt.getClaims().get("scope") instanceof Collection<?> scopes
                                     && scopes.contains("pricing:calculate");
-                            return new org.springframework.security.authorization.AuthorizationDecision(allowed);
+                            return new AuthorizationDecision(allowed);
                         })
                         .requestMatchers(HttpMethod.GET, "/actuator/metrics", "/actuator/metrics/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()

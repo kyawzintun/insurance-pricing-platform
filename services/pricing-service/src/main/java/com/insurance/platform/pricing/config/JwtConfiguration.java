@@ -1,16 +1,20 @@
 package com.insurance.platform.pricing.config;
 
 import java.time.Duration;
-
 import java.util.Collection;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
-import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.core.io.Resource;
-import org.springframework.security.oauth2.jwt.*;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
 @Configuration(proxyBeanMethods = false)
 public class JwtConfiguration {
@@ -31,9 +35,9 @@ public class JwtConfiguration {
                     boolean valid = "service".equals(jwt.getClaimAsString("token_use"))
                             || value instanceof Collection<?> roles && !roles.isEmpty()
                             && roles.stream().allMatch(role -> role instanceof String text && !text.isBlank());
-                    return valid ? org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.success()
-                            : org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.failure(
-                                new org.springframework.security.oauth2.core.OAuth2Error("invalid_token"));
+                    return valid ? OAuth2TokenValidatorResult.success()
+                            : OAuth2TokenValidatorResult.failure(
+                                new OAuth2Error("invalid_token"));
                 }));
         return decoder;
     }

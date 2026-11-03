@@ -4,8 +4,20 @@ import com.insurance.platform.quote.dto.CreateQuoteRequest;
 import com.insurance.platform.quote.enums.PricingRuleType;
 import com.insurance.platform.quote.event.QuoteCorrelationId;
 import com.insurance.platform.quote.exception.QuoteException;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.annotation.PreDestroy;
 import jakarta.validation.Validator;
+import java.net.http.HttpClient;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.HashSet;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -14,12 +26,6 @@ import org.springframework.web.client.HttpClientErrorException.Unauthorized;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-
-import java.net.http.HttpClient;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Comparator;
-import java.util.HashSet;
 
 @Component
 public class PricingClient implements AutoCloseable {
@@ -43,19 +49,19 @@ public class PricingClient implements AutoCloseable {
         this.tokens = tokens;
     }
 
-    private io.github.resilience4j.circuitbreaker.CircuitBreaker breaker =
-            io.github.resilience4j.circuitbreaker.CircuitBreaker.ofDefaults("pricing");
-    private io.micrometer.core.instrument.MeterRegistry meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+    private CircuitBreaker breaker =
+            CircuitBreaker.ofDefaults("pricing");
+    private MeterRegistry meters = new SimpleMeterRegistry();
 
-    @org.springframework.beans.factory.annotation.Autowired
-    public void configureObservability(io.github.resilience4j.circuitbreaker.CircuitBreaker breaker,
-                                       io.micrometer.core.instrument.MeterRegistry meters) {
+    @Autowired
+    public void configureObservability(CircuitBreaker breaker,
+                                       MeterRegistry meters) {
         this.breaker = breaker;
         this.meters = meters;
     }
 
     public PricingResult calculate(CreateQuoteRequest request) {
-        var sample = io.micrometer.core.instrument.Timer.start(meters);
+        var sample = Timer.start(meters);
         try {
             // Token endpoint failure must not count against Pricing's breaker.
             String correlation = new QuoteCorrelationId().current();
@@ -63,13 +69,13 @@ public class PricingClient implements AutoCloseable {
                 String token = tokens.token(correlation);
                 return callWithTokenRefresh(request, token, correlation);
             }));
-            org.slf4j.LoggerFactory.getLogger(getClass()).info("action=pricing-call result=success");
+            LoggerFactory.getLogger(getClass()).info("action=pricing-call result=success");
             return result;
         } catch (RuntimeException failure) {
             meters.counter("insurance.pricing.client.errors").increment();
-            org.slf4j.LoggerFactory.getLogger(getClass()).warn("action=pricing-call result=failure failureType={}", failure.getClass().getSimpleName());
+            LoggerFactory.getLogger(getClass()).warn("action=pricing-call result=failure failureType={}", failure.getClass().getSimpleName());
             if (failure instanceof RestClientException && !(failure instanceof ResourceAccessException)) throw QuoteException.pricingError();
-            if (failure instanceof ResourceAccessException || failure instanceof io.github.resilience4j.circuitbreaker.CallNotPermittedException) throw QuoteException.pricingUnavailable();
+            if (failure instanceof ResourceAccessException || failure instanceof CallNotPermittedException) throw QuoteException.pricingUnavailable();
             throw failure;
         } finally {
             sample.stop(meters.timer("insurance.pricing.client.duration"));

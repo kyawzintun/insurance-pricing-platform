@@ -1,18 +1,26 @@
 package com.insurance.platform.quote;
 
-import com.insurance.platform.quote.client.*;
-import com.insurance.platform.quote.exception.QuoteException;
+import com.insurance.platform.quote.client.PricingClient;
+import com.insurance.platform.quote.client.ServiceTokenClient;
 import com.insurance.platform.quote.config.PricingResilienceConfiguration;
+import com.insurance.platform.quote.exception.QuoteException;
 import com.sun.net.httpserver.HttpServer;
-import io.github.resilience4j.circuitbreaker.*;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.validation.Validation;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 class PricingResilienceTests {
     @Test void opensRejectsWithoutHttpOrAuthAndRecoversThroughHalfOpen() throws Exception {
@@ -21,7 +29,7 @@ class PricingResilienceTests {
         var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/internal/v1/pricing/calculate", exchange -> {
             calls.incrementAndGet(); exchange.getRequestBody().readAllBytes();
-            var body = QuoteFixtures.PRICE.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            var body = QuoteFixtures.PRICE.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(status.get(), body.length);
             exchange.getResponseBody().write(body); exchange.close();

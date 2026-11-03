@@ -2,9 +2,9 @@ package com.insurance.platform.notification.service;
 
 import com.insurance.platform.notification.entity.Notification;
 import com.insurance.platform.notification.event.QuotePricedEnvelope;
+import com.insurance.platform.notification.event.UserRegisteredEnvelope;
 import com.insurance.platform.notification.repository.NotificationRepository;
 import com.insurance.platform.notification.repository.ProcessedEventRepository;
-import com.insurance.platform.notification.event.UserRegisteredEnvelope;
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;

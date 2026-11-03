@@ -1,9 +1,12 @@
 package com.insurance.platform.notification;
 import com.insurance.platform.notification.event.UserEventDecoder;
 import com.insurance.platform.notification.exception.InvalidUserEventException;
-import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
-import static org.assertj.core.api.Assertions.*;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class UserEventTests {
     private final UserEventDecoder decoder=new UserEventDecoder();
     private final String json="""
@@ -17,7 +20,7 @@ class UserEventTests {
         assertThat(decoder.decode("{\"eventType\":\"FutureEvent\"}".getBytes(StandardCharsets.UTF_8))).isEmpty();
     }
     @Test void invalidSupportedInputsHaveSafePermanentReasons() {
-        for(String invalid:java.util.List.of(json.replace("\"eventVersion\":1","\"eventVersion\":2"),json.replace("CUSTOMER","ADMIN"),
+        for(String invalid:List.of(json.replace("\"eventVersion\":1","\"eventVersion\":2"),json.replace("CUSTOMER","ADMIN"),
                 json.replace("customer@example.com"," CUSTOMER@example.com"),json.replace("auth-service","quote-service"),"{broken",json+"{}")) {
             assertThatThrownBy(()->decoder.decode(invalid.getBytes(StandardCharsets.UTF_8))).isInstanceOf(InvalidUserEventException.class);
         }
@@ -25,7 +28,7 @@ class UserEventTests {
     }
 
     @Test void adminStatusEventsAreIntentionallyIgnored() {
-        for(String type:java.util.List.of("UserDisabled","UserEnabled"))
+        for(String type:List.of("UserDisabled","UserEnabled"))
             assertThat(decoder.decode(json.replace("UserRegistered",type).getBytes(StandardCharsets.UTF_8))).isEmpty();
     }
 }

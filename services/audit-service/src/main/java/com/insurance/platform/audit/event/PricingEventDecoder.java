@@ -1,11 +1,6 @@
 package com.insurance.platform.audit.event;
 
 import com.insurance.platform.audit.exception.InvalidPricingEventException;
-import org.springframework.stereotype.Component;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
-
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -13,6 +8,10 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.Set;
+import org.springframework.stereotype.Component;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 @Component
 public class PricingEventDecoder {

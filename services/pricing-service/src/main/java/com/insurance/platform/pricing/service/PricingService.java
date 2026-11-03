@@ -10,7 +10,6 @@ import com.insurance.platform.pricing.exception.PricingConfigurationException;
 import com.insurance.platform.pricing.repository.PricingRuleRepository;
 import jakarta.validation.Validator;
 import java.math.BigDecimal;
-import static com.insurance.platform.pricing.service.PricingRuleValidator.numeric;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -21,6 +20,8 @@ import java.util.Comparator;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import static com.insurance.platform.pricing.service.PricingRuleValidator.numeric;
 
 @Service
 public class PricingService {

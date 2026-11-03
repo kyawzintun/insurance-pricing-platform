@@ -1,20 +1,59 @@
 package com.insurance.platform.auth;
+import com.insurance.platform.auth.config.RsaKeys;
+import com.insurance.platform.auth.dto.CustomerResponse;
+import com.insurance.platform.auth.dto.LoginRequest;
 import com.insurance.platform.auth.dto.RegisterRequest;
-import com.insurance.platform.auth.service.AuthService;
+import com.insurance.platform.auth.entity.User;
+import com.insurance.platform.auth.enums.Role;
+import com.insurance.platform.auth.enums.UserStatus;
+import com.insurance.platform.auth.exception.AuthException;
 import com.insurance.platform.auth.repository.OutboxPollingRepository;
-import java.time.*;
-import org.junit.jupiter.api.*;
+import com.insurance.platform.auth.repository.UserRepository;
+import com.insurance.platform.auth.service.AuthService;
+import com.insurance.platform.auth.service.CustomerAdminService;
+import com.insurance.platform.auth.service.RefreshSessionService;
+import com.nimbusds.jose.crypto.RSASSAVerifier;
+import com.nimbusds.jwt.SignedJWT;
+import java.sql.Timestamp;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.Comparator;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
+import javax.sql.DataSource;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.*;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.testcontainers.junit.jupiter.*;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 @SpringBootTest
 @ActiveProfiles("integration")
 @Testcontainers
@@ -26,14 +65,14 @@ class AuthPostgresIT {
         r.add("spring.datasource.password", DATABASE::getPassword);
 
     }
-    @Autowired com.insurance.platform.auth.service.RefreshSessionService sessions;
+    @Autowired RefreshSessionService sessions;
     @Autowired AuthService service;
-    @Autowired com.insurance.platform.auth.service.CustomerAdminService customers;
-    @Autowired com.insurance.platform.auth.repository.UserRepository users;
+    @Autowired CustomerAdminService customers;
+    @Autowired UserRepository users;
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager transactions;
-    @Autowired javax.sql.DataSource datasource;
-    @Autowired org.springframework.security.crypto.password.PasswordEncoder passwords;
+    @Autowired DataSource datasource;
+    @Autowired PasswordEncoder passwords;
     @MockitoBean Clock clock;
     static final Instant NOW = Instant.parse("2026-10-17T00:00:00Z");
     static RegisterRequest request(String email) { return new RegisterRequest(email, "Test-password-42!", "Test", "Customer"); }
@@ -46,53 +85,53 @@ class AuthPostgresIT {
     }
     @Test void refreshRotationLogoutExpiryDisabledAndRollback() {
         var user=service.register(request("session@example.com"));
-        var login=sessions.login(new com.insurance.platform.auth.dto.LoginRequest("session@example.com","Test-password-42!"));
+        var login=sessions.login(new LoginRequest("session@example.com","Test-password-42!"));
         assertThat(login.cookieToken).matches("[A-Za-z0-9_-]{43}");
         assertThat(jdbc.queryForObject("select token_hash from refresh_tokens",String.class)).hasSize(64).isNotEqualTo(login.cookieToken);
         var next=sessions.refresh(login.cookieToken);
-        for (var access : java.util.List.of(login.access, next.access)) {
+        for (var access : List.of(login.access, next.access)) {
             try {
-                var signed = com.nimbusds.jwt.SignedJWT.parse(access.accessToken());
+                var signed = SignedJWT.parse(access.accessToken());
                 assertThat(signed.getHeader().getAlgorithm().getName()).isEqualTo("RS256");
-                assertThat(signed.verify(new com.nimbusds.jose.crypto.RSASSAVerifier(
-                    com.insurance.platform.auth.config.RsaKeys.publicKey(new org.springframework.core.io.ClassPathResource("keys/dev-jwt-public.pem")))))
+                assertThat(signed.verify(new RSASSAVerifier(
+                    RsaKeys.publicKey(new ClassPathResource("keys/dev-jwt-public.pem")))))
                     .isTrue();
             } catch (Exception ex) { throw new AssertionError("RSA token verification failed", ex); }
         }
         assertThat(next.cookieToken).isNotEqualTo(login.cookieToken);
-        assertThat(jdbc.queryForObject("select expires_at from refresh_tokens where revoked_at is null",java.time.OffsetDateTime.class).toInstant())
+        assertThat(jdbc.queryForObject("select expires_at from refresh_tokens where revoked_at is null",OffsetDateTime.class).toInstant())
             .isEqualTo(NOW.plus(Duration.ofDays(7)));
         assertThat(jdbc.queryForObject("select count(*) from refresh_tokens where revoked_at is not null",Integer.class)).isEqualTo(1);
-        assertThatThrownBy(()->sessions.refresh(login.cookieToken)).isInstanceOf(com.insurance.platform.auth.exception.AuthException.class);
+        assertThatThrownBy(()->sessions.refresh(login.cookieToken)).isInstanceOf(AuthException.class);
         jdbc.execute("alter table refresh_tokens add constraint phase23_failure check (revoked_at is not null) not valid");
         try { assertThatThrownBy(()->sessions.refresh(next.cookieToken)).isInstanceOf(RuntimeException.class); }
         finally {jdbc.execute("alter table refresh_tokens drop constraint phase23_failure");}
         var recovered=sessions.refresh(next.cookieToken);
         sessions.logout(recovered.cookieToken); sessions.logout(recovered.cookieToken);sessions.logout(null);sessions.logout("invalid");
-        assertThatThrownBy(()->sessions.refresh(recovered.cookieToken)).isInstanceOf(com.insurance.platform.auth.exception.AuthException.class);
-        var expiring=sessions.login(new com.insurance.platform.auth.dto.LoginRequest("session@example.com","Test-password-42!"));
-        jdbc.update("update refresh_tokens set expires_at=?",java.sql.Timestamp.from(NOW.minusSeconds(1)));
-        assertThatThrownBy(()->sessions.refresh(expiring.cookieToken)).isInstanceOf(com.insurance.platform.auth.exception.AuthException.class);
-        var disabled=sessions.login(new com.insurance.platform.auth.dto.LoginRequest("session@example.com","Test-password-42!"));
+        assertThatThrownBy(()->sessions.refresh(recovered.cookieToken)).isInstanceOf(AuthException.class);
+        var expiring=sessions.login(new LoginRequest("session@example.com","Test-password-42!"));
+        jdbc.update("update refresh_tokens set expires_at=?",Timestamp.from(NOW.minusSeconds(1)));
+        assertThatThrownBy(()->sessions.refresh(expiring.cookieToken)).isInstanceOf(AuthException.class);
+        var disabled=sessions.login(new LoginRequest("session@example.com","Test-password-42!"));
         jdbc.update("update users set status='DISABLED' where id=?",user.id());
-        assertThatThrownBy(()->sessions.refresh(disabled.cookieToken)).isInstanceOf(com.insurance.platform.auth.exception.AuthException.class);
+        assertThatThrownBy(()->sessions.refresh(disabled.cookieToken)).isInstanceOf(AuthException.class);
         jdbc.update("update users set status='ACTIVE' where id=?",user.id());
-        assertThatThrownBy(()->sessions.refresh(disabled.cookieToken)).isInstanceOf(com.insurance.platform.auth.exception.AuthException.class);
+        assertThatThrownBy(()->sessions.refresh(disabled.cookieToken)).isInstanceOf(AuthException.class);
     }
     @Test void concurrentRefreshHasOneWinner() throws Exception {
         service.register(request("race-session@example.com"));
-        var login=sessions.login(new com.insurance.platform.auth.dto.LoginRequest("race-session@example.com","Test-password-42!"));
-        var start=new java.util.concurrent.CountDownLatch(1);
-        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
-          java.util.concurrent.Callable<Boolean> attempt=()->{start.await();try{sessions.refresh(login.cookieToken);return true;}catch(com.insurance.platform.auth.exception.AuthException e){return false;}};
+        var login=sessions.login(new LoginRequest("race-session@example.com","Test-password-42!"));
+        var start=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+          Callable<Boolean> attempt=()->{start.await();try{sessions.refresh(login.cookieToken);return true;}catch(AuthException e){return false;}};
           var a=pool.submit(attempt);var b=pool.submit(attempt);start.countDown();
-          assertThat(java.util.List.of(a.get(),b.get())).containsExactlyInAnyOrder(true,false);
+          assertThat(List.of(a.get(),b.get())).containsExactlyInAnyOrder(true,false);
         }
     }
     @Test void registrationIsAtomicAndSensitiveFieldsAreExcluded() {
-        var attributes = new org.springframework.mock.web.MockHttpServletRequest();
+        var attributes = new MockHttpServletRequest();
         attributes.addHeader("X-Correlation-ID", "x".repeat(128));
-        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(new org.springframework.web.context.request.ServletRequestAttributes(attributes));
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(attributes));
         try {
             var user = service.register(request(" TEST@Example.COM "));
             counts(1,1);
@@ -105,7 +144,7 @@ class AuthPostgresIT {
             assertThat(passwords.matches("Test-password-42!", jdbc.queryForObject("select password_hash from users", String.class))).isTrue();
             assertThatThrownBy(() -> service.register(request("test@example.com"))).isInstanceOf(RuntimeException.class);
             counts(1,1);
-        } finally { org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes(); }
+        } finally { RequestContextHolder.resetRequestAttributes(); }
     }
     @Test void failedOutboxInsertRollsBackUser() {
         jdbc.execute("alter table outbox_events add constraint phase19_failure check (event_type <> 'UserRegistered')");
@@ -132,22 +171,22 @@ class AuthPostgresIT {
         try (var batch = poller.claim(50).orElseThrow()) { assertThat(batch.events()).hasSize(1); }
     }
 
-    @AfterEach void clearAdminContext() { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+    @AfterEach void clearAdminContext() { SecurityContextHolder.clearContext(); }
 
     @Test void customerPaginationScopeTransitionsAndLoginRegression() {
         AuthTestIdentity.authenticate();
         var first=service.register(request("one@example.com"));var second=service.register(request("two@example.com"));
-        users.saveAndFlush(new com.insurance.platform.auth.entity.User(AuthTestIdentity.ADMIN,"admin@example.com","not-a-login-hash","Admin","User",
-                com.insurance.platform.auth.enums.Role.ADMIN,com.insurance.platform.auth.enums.UserStatus.ACTIVE,NOW));
+        users.saveAndFlush(new User(AuthTestIdentity.ADMIN,"admin@example.com","not-a-login-hash","Admin","User",
+                Role.ADMIN,UserStatus.ACTIVE,NOW));
         var list=customers.list(0,100);assertThat(list.totalElements()).isEqualTo(2);
-        assertThat(list.content()).extracting(com.insurance.platform.auth.dto.CustomerResponse::id).doesNotContain(AuthTestIdentity.ADMIN);
-        var expected=java.util.stream.Stream.of(first.id(),second.id()).sorted(java.util.Comparator.comparing(java.util.UUID::toString).reversed()).toList();
-        assertThat(list.content()).extracting(com.insurance.platform.auth.dto.CustomerResponse::id).containsExactlyElementsOf(expected);
+        assertThat(list.content()).extracting(CustomerResponse::id).doesNotContain(AuthTestIdentity.ADMIN);
+        var expected=Stream.of(first.id(),second.id()).sorted(Comparator.comparing(UUID::toString).reversed()).toList();
+        assertThat(list.content()).extracting(CustomerResponse::id).containsExactlyElementsOf(expected);
         assertThat(customers.list(0,1).totalPages()).isEqualTo(2);assertThat(customers.list(2,1).content()).isEmpty();
         assertThat(customers.get(first.id()).email()).isEqualTo("one@example.com");counts(3,2);
         assertThatThrownBy(()->customers.get(AuthTestIdentity.ADMIN)).hasMessage("Only CUSTOMER accounts can be managed");
         assertThatThrownBy(()->customers.setEnabled(AuthTestIdentity.ADMIN,false)).hasMessage("Only CUSTOMER accounts can be managed");
-        var credentials=new com.insurance.platform.auth.dto.LoginRequest(first.email(),"Test-password-42!");
+        var credentials=new LoginRequest(first.email(),"Test-password-42!");
         assertThat(service.login(credentials).accessToken()).isNotBlank();
         var before=jdbc.queryForMap("select * from users where id=?",first.id());
         var disabled=customers.setEnabled(first.id(),false);assertThat(disabled.status().name()).isEqualTo("DISABLED");
@@ -176,7 +215,7 @@ class AuthPostgresIT {
         } finally { jdbc.execute("alter table outbox_events drop constraint phase21_failure"); }
         new TransactionTemplate(transactions).executeWithoutResult(tx->{customers.setEnabled(user.id(),false);tx.setRollbackOnly();});
         assertThat(jdbc.queryForMap("select * from users where id=?",user.id())).isEqualTo(before);counts(1,1);
-        assertThatThrownBy(()->customers.setEnabled(java.util.UUID.randomUUID(),false)).hasMessage("Customer not found");counts(1,1);
+        assertThatThrownBy(()->customers.setEnabled(UUID.randomUUID(),false)).hasMessage("Customer not found");counts(1,1);
         customers.setEnabled(user.id(),false);
         jdbc.execute("alter table outbox_events add constraint phase21_enable_failure check(event_type<>'UserEnabled')");
         try {
@@ -187,16 +226,16 @@ class AuthPostgresIT {
 
     @Test void concurrentSameStatusCommandsCreateExactlyOneIntentPerTransition() throws Exception {
         var user=service.register(request("concurrent@example.com"));
-        for(boolean enabled:java.util.List.of(false,true)) {
-            var barrier=new java.util.concurrent.CyclicBarrier(2);
-            java.util.concurrent.Callable<String> call=()->{
+        for(boolean enabled:List.of(false,true)) {
+            var barrier=new CyclicBarrier(2);
+            Callable<String> call=()->{
                 AuthTestIdentity.authenticate();
-                try { barrier.await(10,java.util.concurrent.TimeUnit.SECONDS);return customers.setEnabled(user.id(),enabled).status().name(); }
-                finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+                try { barrier.await(10,TimeUnit.SECONDS);return customers.setEnabled(user.id(),enabled).status().name(); }
+                finally { SecurityContextHolder.clearContext(); }
             };
-            try(var executor=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            try(var executor=Executors.newFixedThreadPool(2)) {
                 var a=executor.submit(call);var b=executor.submit(call);
-                assertThat(java.util.List.of(a.get(20,java.util.concurrent.TimeUnit.SECONDS),b.get(20,java.util.concurrent.TimeUnit.SECONDS)))
+                assertThat(List.of(a.get(20,TimeUnit.SECONDS),b.get(20,TimeUnit.SECONDS)))
                         .containsOnly(enabled?"ACTIVE":"DISABLED");
             }
             assertThat(jdbc.queryForObject("select count(*) from outbox_events where event_type=?",Integer.class,enabled?"UserEnabled":"UserDisabled")).isEqualTo(1);

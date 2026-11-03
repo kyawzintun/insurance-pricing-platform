@@ -1,9 +1,11 @@
 package com.insurance.platform.audit.event;
 
+import com.insurance.platform.audit.exception.InvalidPricingEventException;
 import com.insurance.platform.audit.exception.InvalidQuoteEventException;
 import com.insurance.platform.audit.exception.InvalidUserEventException;
-import com.insurance.platform.audit.exception.InvalidPricingEventException;
 import com.insurance.platform.audit.exception.QuoteProcessingException;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.Set;
@@ -55,8 +57,8 @@ public class QuoteDeadLetterRecoverer implements ConsumerRecordRecoverer, RetryL
         this.pricingDlqTopic = pricingDlqTopic;
     }
 
-    private io.micrometer.core.instrument.MeterRegistry meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
-    public void configureMetrics(io.micrometer.core.instrument.MeterRegistry meters) { this.meters = meters; }
+    private MeterRegistry meters = new SimpleMeterRegistry();
+    public void configureMetrics(MeterRegistry meters) { this.meters = meters; }
 
     @Override
     public void failedDelivery(ConsumerRecord<?, ?> record, Exception failure, int attempt) {

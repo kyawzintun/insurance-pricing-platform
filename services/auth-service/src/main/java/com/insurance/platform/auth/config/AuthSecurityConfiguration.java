@@ -1,6 +1,8 @@
 package com.insurance.platform.auth.config;
 
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -12,8 +14,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
-
-import java.time.Clock;
 
 @Configuration(proxyBeanMethods = false)
 public class AuthSecurityConfiguration {
@@ -59,16 +59,16 @@ public class AuthSecurityConfiguration {
                 .build();
     }
 
-    private static void unauthorized(HttpServletResponse response) throws java.io.IOException {
+    private static void unauthorized(HttpServletResponse response) throws IOException {
         response.setHeader("WWW-Authenticate", "Bearer");
         error(response, 401, "UNAUTHORIZED", "Authentication required");
     }
 
-    private static void forbidden(HttpServletResponse response) throws java.io.IOException {
+    private static void forbidden(HttpServletResponse response) throws IOException {
         error(response, 403, "FORBIDDEN", "Access denied");
     }
 
-    private static void error(HttpServletResponse response, int status, String code, String message) throws java.io.IOException {
+    private static void error(HttpServletResponse response, int status, String code, String message) throws IOException {
         response.setStatus(status);
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");

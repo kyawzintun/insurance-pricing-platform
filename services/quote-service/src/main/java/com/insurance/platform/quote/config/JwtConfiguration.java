@@ -1,16 +1,19 @@
 package com.insurance.platform.quote.config;
 
 import java.time.Duration;
-
 import java.util.Collection;
-
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.Resource;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
-import org.springframework.core.io.Resource;
-import org.springframework.security.oauth2.jwt.*;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
 @Configuration(proxyBeanMethods = false)
 public class JwtConfiguration {
@@ -33,7 +36,7 @@ public class JwtConfiguration {
     }
     private static boolean validSubject(String value) {
         if (value == null) return false;
-        try { return java.util.UUID.fromString(value).toString().equalsIgnoreCase(value); }
+        try { return UUID.fromString(value).toString().equalsIgnoreCase(value); }
         catch (IllegalArgumentException ex) { return false; }
     }
 }

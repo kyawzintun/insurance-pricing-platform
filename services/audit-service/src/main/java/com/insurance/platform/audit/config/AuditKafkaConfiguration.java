@@ -1,11 +1,13 @@
 package com.insurance.platform.audit.config;
 
 import com.insurance.platform.audit.event.QuoteDeadLetterRecoverer;
+import com.insurance.platform.audit.exception.InvalidPricingEventException;
 import com.insurance.platform.audit.exception.InvalidQuoteEventException;
 import com.insurance.platform.audit.exception.InvalidUserEventException;
-import com.insurance.platform.audit.exception.InvalidPricingEventException;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,8 +19,8 @@ import org.springframework.util.backoff.FixedBackOff;
 
 @Configuration(proxyBeanMethods = false)
 public class AuditKafkaConfiguration {
-    @org.springframework.beans.factory.annotation.Autowired
-    private io.micrometer.core.instrument.MeterRegistry meters;
+    @Autowired
+    private MeterRegistry meters;
 
     @Bean
     Clock auditClock() { return Clock.systemUTC(); }

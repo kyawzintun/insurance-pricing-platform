@@ -1,14 +1,35 @@
 package com.insurance.platform.notification;
 
-import com.insurance.platform.notification.event.*;
-import com.insurance.platform.notification.repository.*;
-import com.insurance.platform.notification.service.*;
-import java.time.*;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import com.insurance.platform.notification.event.QuoteEventDecoder;
+import com.insurance.platform.notification.event.QuoteEventListener;
+import com.insurance.platform.notification.event.QuotePricedEnvelope;
+import com.insurance.platform.notification.repository.NotificationRepository;
+import com.insurance.platform.notification.repository.ProcessedEventRepository;
+import com.insurance.platform.notification.service.NotificationService;
+import com.insurance.platform.notification.service.ProcessResult;
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
-import static com.insurance.platform.notification.NotificationFixtures.*;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.slf4j.LoggerFactory;
+
+import static com.insurance.platform.notification.NotificationFixtures.EVENT;
+import static com.insurance.platform.notification.NotificationFixtures.NOW;
+import static com.insurance.platform.notification.NotificationFixtures.QUOTE;
+import static com.insurance.platform.notification.NotificationFixtures.json;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 class NotificationIdempotencyTests {
     final NotificationRepository business = mock(NotificationRepository.class);
@@ -48,11 +69,11 @@ class NotificationIdempotencyTests {
     @Test void listenerTreatsDuplicateAsSuccessAndLogsOnlyMetadata() {
         var processing = mock(NotificationService.class);
         when(processing.create(any())).thenReturn(ProcessResult.DUPLICATE);
-        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(QuoteEventListener.class);
-        var logs = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        var logger = (Logger) LoggerFactory.getLogger(QuoteEventListener.class);
+        var logs = new ListAppender<ILoggingEvent>();
         logs.start(); logger.addAppender(logs);
         try {
-            new QuoteEventListener(new QuoteEventDecoder(), processing).receive(new ConsumerRecord<>("insurance.quote.events", 1, 4, QUOTE.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8), json().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            new QuoteEventListener(new QuoteEventDecoder(), processing).receive(new ConsumerRecord<>("insurance.quote.events", 1, 4, QUOTE.toString().getBytes(StandardCharsets.UTF_8), json().getBytes(StandardCharsets.UTF_8)));
             assertThat(logs.list).anySatisfy(log -> assertThat(log.getFormattedMessage())
                     .contains("DUPLICATE", EVENT.toString(), "consumerName=notification-service", "partition=1", "offset=4")
                     .doesNotContain("11200", "Q-TEST-123"));

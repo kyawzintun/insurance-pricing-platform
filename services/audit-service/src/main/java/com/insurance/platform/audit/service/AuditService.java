@@ -2,17 +2,19 @@ package com.insurance.platform.audit.service;
 
 import com.insurance.platform.audit.dto.AuditMetadata;
 import com.insurance.platform.audit.entity.AuditRecord;
+import com.insurance.platform.audit.event.PricingRuleEnvelope;
 import com.insurance.platform.audit.event.QuotePricedEnvelope;
 import com.insurance.platform.audit.event.UserRegisteredEnvelope;
+import com.insurance.platform.audit.event.UserStatusEnvelope;
 import com.insurance.platform.audit.repository.AuditRecordRepository;
 import com.insurance.platform.audit.repository.ProcessedEventRepository;
+import java.time.Clock;
+import java.time.temporal.ChronoUnit;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
-
-import java.time.Clock;
-import java.time.temporal.ChronoUnit;
-import java.util.UUID;
 
 @Service
 public class AuditService {
@@ -42,7 +44,7 @@ public class AuditService {
         }
         var d = event.data();
         var expired = "QuoteExpired".equals(event.eventType());
-        Object metadata = expired ? java.util.Map.of("quoteReference", d.quoteReference(), "status", d.status(),
+        Object metadata = expired ? Map.of("quoteReference", d.quoteReference(), "status", d.status(),
                 "coverageType", d.coverageType(), "finalPremium", d.finalPremium(), "currency", d.currency(),
                 "originalExpiresAt", d.originalExpiresAt(), "expiredAt", d.expiredAt()) : new AuditMetadata(d.quoteReference(), d.status(), d.coverageType(),
                 d.finalPremium(), d.currency(), d.pricedAt(), d.expiresAt());
@@ -66,13 +68,13 @@ public class AuditService {
 
         repository.saveAndFlush(new AuditRecord(UUID.randomUUID(), event.eventId(), event.aggregateId().toString(),
                 event.aggregateId().toString(), event.correlationId(), event.occurredAt(), event.producer(),
-                mapper.writeValueAsString(java.util.Map.of("role", event.data().role(), "status", event.data().status())),
+                mapper.writeValueAsString(Map.of("role", event.data().role(), "status", event.data().status())),
                 now, "UserRegistered", "CUSTOMER", "User"));
         return ProcessResult.PROCESSED;
     }
 
     @Transactional
-    public ProcessResult recordPricing(com.insurance.platform.audit.event.PricingRuleEnvelope event) {
+    public ProcessResult recordPricing(PricingRuleEnvelope event) {
         var now = clock.instant().truncatedTo(ChronoUnit.MICROS);
 
         if (!processedEvents.tryMarkProcessed(event.eventId(), CONSUMER_NAME, now)) {
@@ -91,7 +93,7 @@ public class AuditService {
     }
 
     @Transactional
-    public ProcessResult recordUserStatus(com.insurance.platform.audit.event.UserStatusEnvelope event) {
+    public ProcessResult recordUserStatus(UserStatusEnvelope event) {
         var now = clock.instant().truncatedTo(ChronoUnit.MICROS);
 
         if (!processedEvents.tryMarkProcessed(event.eventId(), CONSUMER_NAME, now)) {
@@ -105,7 +107,7 @@ public class AuditService {
         var d = event.data();
         repository.saveAndFlush(new AuditRecord(UUID.randomUUID(), event.eventId(), d.changedBy().toString(),
                 d.userId().toString(), event.correlationId(), event.occurredAt(), event.producer(),
-                mapper.writeValueAsString(java.util.Map.of("role", d.role(), "status", d.status())),
+                mapper.writeValueAsString(Map.of("role", d.role(), "status", d.status())),
                 now, event.eventType(), "ADMIN", "User"));
 
         return ProcessResult.PROCESSED;

@@ -2,7 +2,8 @@ package com.insurance.platform.quote.service;
 
 import com.insurance.platform.quote.dto.VehicleReferenceResponse;
 import com.insurance.platform.quote.exception.QuoteException;
-import com.insurance.platform.quote.repository.*;
+import com.insurance.platform.quote.repository.VehicleBrandRepository;
+import com.insurance.platform.quote.repository.VehicleModelRepository;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;

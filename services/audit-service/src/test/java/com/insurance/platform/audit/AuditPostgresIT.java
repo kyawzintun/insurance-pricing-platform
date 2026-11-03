@@ -1,26 +1,47 @@
 package com.insurance.platform.audit;
 
+import com.insurance.platform.audit.controller.AuditReadController;
+import com.insurance.platform.audit.entity.AuditRecord;
 import com.insurance.platform.audit.event.QuoteEventDecoder;
+import com.insurance.platform.audit.repository.AuditRecordRepository;
+import com.insurance.platform.audit.repository.ProcessedEventRepository;
 import com.insurance.platform.audit.service.AuditService;
+import com.insurance.platform.audit.service.ProcessResult;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.concurrent.*;
-import com.insurance.platform.audit.service.ProcessResult;
-import com.insurance.platform.audit.repository.ProcessedEventRepository;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
-import org.junit.jupiter.api.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.*;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.junit.jupiter.*;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import static com.insurance.platform.audit.AuditFixtures.*;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+
+import static com.insurance.platform.audit.AuditFixtures.CUSTOMER;
+import static com.insurance.platform.audit.AuditFixtures.EVENT;
+import static com.insurance.platform.audit.AuditFixtures.NOW;
+import static com.insurance.platform.audit.AuditFixtures.QUOTE;
+import static com.insurance.platform.audit.AuditFixtures.json;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(properties = "spring.kafka.listener.auto-startup=false")
 @ActiveProfiles("integration")
@@ -52,8 +73,8 @@ class AuditPostgresIT {
         assertThat(row.get("entity_id")).isEqualTo(QUOTE.toString());
         assertThat(row.get("correlation_id")).isEqualTo("phase14-test");
         assertThat(row.get("producer")).isEqualTo("quote-service");
-        assertThat(((java.sql.Timestamp) row.get("occurred_at")).toInstant()).isEqualTo(java.time.Instant.parse("2026-10-12T09:00:00Z"));
-        assertThat(((java.sql.Timestamp) row.get("created_at")).toInstant()).isEqualTo(NOW);
+        assertThat(((Timestamp) row.get("occurred_at")).toInstant()).isEqualTo(Instant.parse("2026-10-12T09:00:00Z"));
+        assertThat(((Timestamp) row.get("created_at")).toInstant()).isEqualTo(NOW);
         AuditEventTests.assertMetadata(row.get("metadata").toString());
 
     }
@@ -75,7 +96,7 @@ class AuditPostgresIT {
         var marker = jdbc.queryForMap("SELECT * FROM processed_events");
         assertThat(marker.get("event_id")).isEqualTo(EVENT);
         assertThat(marker.get("consumer_name")).isEqualTo(AuditService.CONSUMER_NAME);
-        assertThat(((java.sql.Timestamp) marker.get("processed_at")).toInstant()).isEqualTo(NOW);
+        assertThat(((Timestamp) marker.get("processed_at")).toInstant()).isEqualTo(NOW);
     }
     @Test void differentEventIdsBothProcessAndBusinessUniquenessRemains() {
         service.create(decoder.decode(json()).orElseThrow());
@@ -83,7 +104,7 @@ class AuditPostgresIT {
         service.create(decoder.decode(json().replace(EVENT.toString(), second.toString())).orElseThrow());
         assertCounts(2, 2);
         assertThatThrownBy(() -> jdbc.update("UPDATE audit_records SET event_id=? WHERE event_id=?", EVENT, second))
-                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+                .isInstanceOf(DataIntegrityViolationException.class);
         assertCounts(2, 2);
     }
     @Test void markerIdentityIncludesStableConsumerName() {
@@ -96,14 +117,14 @@ class AuditPostgresIT {
     }
     @Test void markerCannotCommitOutsideBusinessTransaction() {
         assertThatThrownBy(() -> markers.tryMarkProcessed(EVENT, AuditService.CONSUMER_NAME, NOW))
-                .isInstanceOf(org.springframework.transaction.IllegalTransactionStateException.class);
+                .isInstanceOf(IllegalTransactionStateException.class);
         assertCounts(0, 0);
     }
     @Test void businessFailureRollsBackMarker() {
         jdbc.execute("ALTER TABLE audit_records ADD CONSTRAINT phase15_reject CHECK (false) NOT VALID");
         try {
             assertThatThrownBy(() -> service.create(decoder.decode(json()).orElseThrow()))
-                    .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+                    .isInstanceOf(DataIntegrityViolationException.class);
             assertCounts(0, 0);
         } finally { jdbc.execute("ALTER TABLE audit_records DROP CONSTRAINT phase15_reject"); }
         assertThat(service.create(decoder.decode(json()).orElseThrow())).isEqualTo(ProcessResult.PROCESSED);
@@ -113,7 +134,7 @@ class AuditPostgresIT {
         jdbc.execute("ALTER TABLE processed_events ADD CONSTRAINT phase15_reject CHECK (false) NOT VALID");
         try {
             assertThatThrownBy(() -> service.create(decoder.decode(json()).orElseThrow()))
-                    .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+                    .isInstanceOf(DataIntegrityViolationException.class);
             assertCounts(0, 0);
         } finally { jdbc.execute("ALTER TABLE processed_events DROP CONSTRAINT phase15_reject"); }
     }
@@ -133,7 +154,7 @@ class AuditPostgresIT {
         assertThat(service.create(decoder.decode(json()).orElseThrow())).isEqualTo(ProcessResult.DUPLICATE);
         assertCounts(1, 1);
         assertThat(jdbc.queryForMap("SELECT * FROM audit_records")).isEqualTo(original);
-        assertThat(jdbc.queryForObject("SELECT processed_at FROM processed_events", java.sql.Timestamp.class).toInstant())
+        assertThat(jdbc.queryForObject("SELECT processed_at FROM processed_events", Timestamp.class).toInstant())
                 .isEqualTo(NOW.plusSeconds(60));
     }
     @Test void concurrentDuplicateWaitsForWinnerAndSkipsBusinessWrite() throws Exception { concurrent(false); }
@@ -164,35 +185,35 @@ class AuditPostgresIT {
             } finally { release.countDown(); }
         }
     }
-    @Autowired com.insurance.platform.audit.controller.AuditReadController reads;
-    @Autowired com.insurance.platform.audit.repository.AuditRecordRepository records;
+    @Autowired AuditReadController reads;
+    @Autowired AuditRecordRepository records;
     @Test void auditReadFiltersPaginationAndImmutability() {
         var actor = UUID.randomUUID().toString(); var entity = UUID.randomUUID().toString();
-        var types = java.util.List.of("QuotePriced","QuoteExpired","UserRegistered","UserDisabled","UserEnabled",
+        var types = List.of("QuotePriced","QuoteExpired","UserRegistered","UserDisabled","UserEnabled",
             "PricingRuleCreated","PricingRuleUpdated","PricingRuleEnabled","PricingRuleDisabled");
         var start = Instant.parse("2026-10-20T00:00:00Z");
         for (int i=0;i<types.size();i++) {
             String type=types.get(i), producer=i<2?"quote-service":i<5?"auth-service":"pricing-service";
             String entityType=i<2?"Quote":i<5?"User":"PricingRule";
-            records.saveAndFlush(new com.insurance.platform.audit.entity.AuditRecord(new UUID(0,i+1),UUID.randomUUID(),actor,entity,
+            records.saveAndFlush(new AuditRecord(new UUID(0,i+1),UUID.randomUUID(),actor,entity,
                 "trace-"+(i%2),start.plusSeconds(i/2),producer,"{\"safe\":true}",start.plusSeconds(60+i),type,i<3?"CUSTOMER":"ADMIN",entityType));
         }
         var before=jdbc.queryForList("SELECT * FROM audit_records ORDER BY id");
-        var page=reads.list(0,2,java.util.Map.of()).getBody();
+        var page=reads.list(0,2,Map.of()).getBody();
         assertThat(page.totalElements()).isEqualTo(9); assertThat(page.totalPages()).isEqualTo(5);
         assertThat(page.content()).extracting(r -> r.eventType()).containsExactly("PricingRuleDisabled","PricingRuleEnabled");
-        assertThat(reads.list(1,2,java.util.Map.of()).getBody().content()).extracting(r -> r.eventType())
+        assertThat(reads.list(1,2,Map.of()).getBody().content()).extracting(r -> r.eventType())
             .containsExactly("PricingRuleUpdated","PricingRuleCreated");
-        for(var type:types) assertThat(reads.list(0,20,java.util.Map.of("eventType",type)).getBody().totalElements()).isEqualTo(1);
-        var cases=java.util.List.of(java.util.Map.of("actorType","ADMIN"),java.util.Map.of("entityType","PricingRule"),
-            java.util.Map.of("actorId",actor),java.util.Map.of("entityId",entity),java.util.Map.of("correlationId","trace-0"),
-            java.util.Map.of("producer","auth-service"),java.util.Map.of("from",start.plusSeconds(1).toString(),"to",start.plusSeconds(3).toString()),
-            java.util.Map.of("actorType","ADMIN","entityType","PricingRule","producer","pricing-service","correlationId","trace-0"));
+        for(var type:types) assertThat(reads.list(0,20,Map.of("eventType",type)).getBody().totalElements()).isEqualTo(1);
+        var cases=List.of(Map.of("actorType","ADMIN"),Map.of("entityType","PricingRule"),
+            Map.of("actorId",actor),Map.of("entityId",entity),Map.of("correlationId","trace-0"),
+            Map.of("producer","auth-service"),Map.of("from",start.plusSeconds(1).toString(),"to",start.plusSeconds(3).toString()),
+            Map.of("actorType","ADMIN","entityType","PricingRule","producer","pricing-service","correlationId","trace-0"));
         long[] expected={6,4,9,9,5,3,4,2};
         for(int i=0;i<cases.size();i++) assertThat(reads.list(0,20,cases.get(i)).getBody().totalElements()).as(cases.get(i).toString()).isEqualTo(expected[i]);
         var detail=reads.detail(new UUID(0,1).toString()).getBody();
         assertThat(detail.metadata().get("safe").asBoolean()).isTrue();
-        assertThat(reads.list(0,20,java.util.Map.of("eventId",detail.eventId().toString())).getBody().totalElements()).isEqualTo(1);
+        assertThat(reads.list(0,20,Map.of("eventId",detail.eventId().toString())).getBody().totalElements()).isEqualTo(1);
         assertThat(jdbc.queryForList("SELECT * FROM audit_records ORDER BY id")).isEqualTo(before);
     }
     private void assertCounts(long business, long processed) {

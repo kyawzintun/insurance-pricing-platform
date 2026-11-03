@@ -1,11 +1,12 @@
 package com.insurance.platform.quote.service;
 
 import com.insurance.platform.quote.entity.OutboxEvent;
-import com.insurance.platform.quote.event.*;
+import com.insurance.platform.quote.event.EventEnvelope;
+import com.insurance.platform.quote.event.QuoteExpiredEventData;
 import com.insurance.platform.quote.repository.OutboxRepository;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
-import java.sql.Timestamp;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

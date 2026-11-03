@@ -1,25 +1,27 @@
 package com.insurance.platform.notification;
 
+import com.insurance.platform.notification.repository.NotificationRepository;
+import com.insurance.platform.notification.repository.ProcessedEventRepository;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class NotificationServiceApplicationTests {
-    @org.springframework.test.context.bean.override.mockito.MockitoBean
-    com.insurance.platform.notification.repository.NotificationRepository repository;
+    @MockitoBean
+    NotificationRepository repository;
 
-    @org.springframework.test.context.bean.override.mockito.MockitoBean
-    com.insurance.platform.notification.repository.ProcessedEventRepository processedEvents;
+    @MockitoBean
+    ProcessedEventRepository processedEvents;
 
     @LocalServerPort
     int port;

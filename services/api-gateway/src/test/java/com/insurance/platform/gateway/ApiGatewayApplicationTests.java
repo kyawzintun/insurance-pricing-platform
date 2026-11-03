@@ -3,10 +3,13 @@ package com.insurance.platform.gateway;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.net.URI;
-import java.net.http.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.*;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -16,6 +19,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -86,8 +90,8 @@ class ApiGatewayApplicationTests {
     }
 
     static volatile String forwardedCookie;
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings={"refresh","logout"})
+    @ParameterizedTest
+    @ValueSource(strings={"refresh","logout"})
     void cookieEndpointsArePublicAndForwardCookies(String endpoint) throws Exception {
       var response=request("POST","/api/v1/auth/"+endpoint,"Cookie","refresh_token=opaque-test","X-Correlation-ID","phase23-cookie");
       assertThat(response.statusCode()).isEqualTo(200);
@@ -268,7 +272,7 @@ class ApiGatewayApplicationTests {
     @ParameterizedTest @ValueSource(strings = {"CUSTOMER", "ADMIN"})
     void quoteRetrievalForwardsRolesPathsAndPagination(String role) throws Exception {
         String bearer = "Bearer " + token(claims("insurance-auth-service", Instant.now().getEpochSecond() + 300).replace("CUSTOMER", role));
-        for (String path : java.util.List.of("/api/v1/quotes?page=1&size=2", "/api/v1/quotes/00000000-0000-0000-0000-000000000001")) {
+        for (String path : List.of("/api/v1/quotes?page=1&size=2", "/api/v1/quotes/00000000-0000-0000-0000-000000000001")) {
             var response = request("GET", path, "Authorization", bearer);
             assertThat(response.statusCode()).isEqualTo(200);
             assertThat(forwardedQuoteUri).isEqualTo(path);

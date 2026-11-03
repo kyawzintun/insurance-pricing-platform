@@ -1,20 +1,40 @@
 package com.insurance.platform.audit;
 
 import com.insurance.platform.audit.config.AuditKafkaConfiguration;
-import com.insurance.platform.audit.event.*;
-import com.insurance.platform.audit.exception.*;
+import com.insurance.platform.audit.event.QuoteDeadLetterRecoverer;
+import com.insurance.platform.audit.event.QuoteEventDecoder;
+import com.insurance.platform.audit.exception.InvalidQuoteEventException;
+import com.insurance.platform.audit.exception.InvalidUserEventException;
+import com.insurance.platform.audit.exception.QuoteProcessingException;
 import java.nio.charset.StandardCharsets;
-import java.time.*;
-import java.util.concurrent.*;
+import java.time.Clock;
+import java.time.ZoneOffset;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.ListenerExecutionFailedException;
+import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.support.SendResult;
-import static com.insurance.platform.audit.AuditFixtures.*;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+
+import static com.insurance.platform.audit.AuditFixtures.EVENT;
+import static com.insurance.platform.audit.AuditFixtures.NOW;
+import static com.insurance.platform.audit.AuditFixtures.QUOTE;
+import static com.insurance.platform.audit.AuditFixtures.json;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class AuditRetryTests {
     @SuppressWarnings("unchecked") final KafkaTemplate<byte[], byte[]> kafka = mock(KafkaTemplate.class);
@@ -108,8 +128,8 @@ class AuditRetryTests {
         var handler = new AuditKafkaConfiguration().auditErrorHandler(callback, 3, 0);
         var input = record(json().getBytes(StandardCharsets.UTF_8));
         var failure = new IllegalStateException("unexpected processing failure");
-        var consumer = mock(org.apache.kafka.clients.consumer.Consumer.class);
-        var container = mock(org.springframework.kafka.listener.MessageListenerContainer.class);
+        var consumer = mock(Consumer.class);
+        var container = mock(MessageListenerContainer.class);
         assertThat(handler.handleOne(failure, input, consumer, container)).isFalse();
         assertThat(handler.handleOne(failure, input, consumer, container)).isFalse();
         verify(callback, never()).accept(any(), any());
@@ -121,9 +141,9 @@ class AuditRetryTests {
         var callback = mock(QuoteDeadLetterRecoverer.class);
         var handler = new AuditKafkaConfiguration().auditErrorHandler(callback, 3, 0);
         var input = record(new byte[]{'{'});
-        var failure = new org.springframework.kafka.listener.ListenerExecutionFailedException("safe", new InvalidQuoteEventException("MALFORMED_JSON"));
-        assertThat(handler.handleOne(failure, input, mock(org.apache.kafka.clients.consumer.Consumer.class),
-                mock(org.springframework.kafka.listener.MessageListenerContainer.class))).isTrue();
+        var failure = new ListenerExecutionFailedException("safe", new InvalidQuoteEventException("MALFORMED_JSON"));
+        assertThat(handler.handleOne(failure, input, mock(Consumer.class),
+                mock(MessageListenerContainer.class))).isTrue();
         verify(callback).accept(input, failure);
     }
     String text(ProducerRecord<?, ?> record, String name) { return new String(record.headers().lastHeader(name).value(), StandardCharsets.UTF_8); }

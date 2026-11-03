@@ -1,32 +1,60 @@
 package com.insurance.platform.audit;
 
-import com.insurance.platform.audit.event.*;
+import com.insurance.platform.audit.event.QuoteAuditListener;
+import com.insurance.platform.audit.event.QuoteDeadLetterRecoverer;
 import java.nio.charset.StandardCharsets;
-import java.time.*;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import org.apache.kafka.clients.admin.*;
-import org.apache.kafka.clients.producer.*;
-import org.apache.kafka.clients.consumer.*;
+import java.sql.Timestamp;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
-import org.springframework.kafka.listener.*;
-import org.springframework.test.context.*;
-import org.springframework.test.context.bean.override.mockito.*;
-import org.testcontainers.junit.jupiter.*;
+import org.springframework.kafka.listener.AbstractMessageListenerContainer;
+import org.springframework.kafka.listener.CommonContainerStoppingErrorHandler;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import static com.insurance.platform.audit.AuditFixtures.*;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import tools.jackson.databind.json.JsonMapper;
+
+import static com.insurance.platform.audit.AuditFixtures.CUSTOMER;
+import static com.insurance.platform.audit.AuditFixtures.EVENT;
+import static com.insurance.platform.audit.AuditFixtures.NOW;
+import static com.insurance.platform.audit.AuditFixtures.QUOTE;
+import static com.insurance.platform.audit.AuditFixtures.expiredJson;
+import static com.insurance.platform.audit.AuditFixtures.json;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(properties = {"spring.kafka.listener.auto-startup=false", "kafka.consumer.backoff-ms=100"})
 @ActiveProfiles("integration")
@@ -124,8 +152,8 @@ class AuditKafkaIT {
             assertThat(row.get("entity_id")).isEqualTo(QUOTE.toString());
             assertThat(row.get("correlation_id")).isEqualTo("phase14-test");
             assertThat(row.get("producer")).isEqualTo("quote-service");
-            assertThat(((java.sql.Timestamp) row.get("occurred_at")).toInstant()).isEqualTo(java.time.Instant.parse("2026-10-12T09:00:00Z"));
-            assertThat(((java.sql.Timestamp) row.get("created_at")).toInstant()).isEqualTo(NOW);
+            assertThat(((Timestamp) row.get("occurred_at")).toInstant()).isEqualTo(Instant.parse("2026-10-12T09:00:00Z"));
+            assertThat(((Timestamp) row.get("created_at")).toInstant()).isEqualTo(NOW);
             AuditEventTests.assertMetadata(row.get("metadata").toString());
 
 
@@ -199,7 +227,7 @@ class AuditKafkaIT {
             assertThat(end(admin, dlqPartition)).isEqualTo(1);
             assertCounts(3, 3);
             assertThat(end(admin, partition)).isEqualTo(11);
-            var expiration = expiredJson().replace(EVENT.toString(), java.util.UUID.randomUUID().toString());
+            var expiration = expiredJson().replace(EVENT.toString(), UUID.randomUUID().toString());
             send(producer, bytes(QUOTE.toString()), bytes(expiration));
             send(producer, bytes(QUOTE.toString()), bytes(expiration));
             awaitOffset(admin, partition, 13);
@@ -317,7 +345,7 @@ class AuditKafkaIT {
                     var statusRow=jdbc.queryForMap("select * from audit_records where event_id=?",statusId);
                     assertThat(statusRow.get("actor_type")).isEqualTo("ADMIN");assertThat(statusRow.get("actor_id")).isEqualTo(actor.toString());
                     assertThat(statusRow.get("entity_type")).isEqualTo("User");assertThat(statusRow.get("producer")).isEqualTo("auth-service");
-                    var metadata=tools.jackson.databind.json.JsonMapper.builder().build().readTree(statusRow.get("metadata").toString());
+                    var metadata=JsonMapper.builder().build().readTree(statusRow.get("metadata").toString());
                     assertThat(metadata.size()).isEqualTo(2);assertThat(metadata.has("email")).isFalse();
                     assertThat(jdbc.queryForObject("select count(*) from processed_events where event_id=?",Integer.class,statusId)).isEqualTo(1);
                 }

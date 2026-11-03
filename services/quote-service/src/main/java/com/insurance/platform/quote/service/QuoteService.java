@@ -1,14 +1,20 @@
 package com.insurance.platform.quote.service;
 
 import com.insurance.platform.quote.client.PricingClient;
-import com.insurance.platform.quote.dto.*;
+import com.insurance.platform.quote.dto.CreateQuoteRequest;
+import com.insurance.platform.quote.dto.QuoteResponse;
+import com.insurance.platform.quote.dto.VehicleSnapshot;
 import com.insurance.platform.quote.exception.QuoteException;
-import com.insurance.platform.quote.repository.*;
+import com.insurance.platform.quote.repository.VehicleBrandRepository;
+import com.insurance.platform.quote.repository.VehicleModelRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.validation.Validator;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -32,10 +38,10 @@ public class QuoteService {
         this.validator = validator;
     }
 
-    private io.micrometer.core.instrument.MeterRegistry meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+    private MeterRegistry meters = new SimpleMeterRegistry();
 
-    @org.springframework.beans.factory.annotation.Autowired
-    public void configureMetrics(io.micrometer.core.instrument.MeterRegistry meters) { this.meters = meters; }
+    @Autowired
+    public void configureMetrics(MeterRegistry meters) { this.meters = meters; }
 
     public QuoteResponse create(UUID customerId, CreateQuoteRequest request) {
         try {

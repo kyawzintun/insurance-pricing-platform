@@ -1,26 +1,41 @@
 package com.insurance.platform.notification;
 
 import com.insurance.platform.notification.event.QuoteEventDecoder;
-import com.insurance.platform.notification.service.NotificationService;
-import java.time.Clock;
-import java.time.Instant;
-import java.util.concurrent.*;
-import com.insurance.platform.notification.service.ProcessResult;
 import com.insurance.platform.notification.repository.ProcessedEventRepository;
+import com.insurance.platform.notification.service.NotificationService;
+import com.insurance.platform.notification.service.ProcessResult;
+import java.sql.Timestamp;
+import java.time.Clock;
 import java.util.UUID;
-import org.junit.jupiter.api.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.*;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.junit.jupiter.*;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import static com.insurance.platform.notification.NotificationFixtures.*;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+
+import static com.insurance.platform.notification.NotificationFixtures.CUSTOMER;
+import static com.insurance.platform.notification.NotificationFixtures.EVENT;
+import static com.insurance.platform.notification.NotificationFixtures.NOW;
+import static com.insurance.platform.notification.NotificationFixtures.QUOTE;
+import static com.insurance.platform.notification.NotificationFixtures.json;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(properties = "spring.kafka.listener.auto-startup=false")
 @ActiveProfiles("integration")
@@ -50,8 +65,8 @@ class NotificationPostgresIT {
         assertThat(row.get("type")).isEqualTo("QUOTE_PRICED");
         assertThat(row.get("status")).isEqualTo("CREATED");
         assertThat(row.get("message")).isEqualTo("Your quote Q-TEST-123 is ready. Premium: 11200.00 THB.");
-        assertThat(((java.sql.Timestamp) row.get("created_at")).toInstant()).isEqualTo(NOW);
-        assertThat(((java.sql.Timestamp) row.get("processed_at")).toInstant()).isEqualTo(NOW);
+        assertThat(((Timestamp) row.get("created_at")).toInstant()).isEqualTo(NOW);
+        assertThat(((Timestamp) row.get("processed_at")).toInstant()).isEqualTo(NOW);
     }
     @Test void duplicatePreservesRowsAndOriginalProcessedTime() {
         var event = decoder.decode(json()).orElseThrow();
@@ -64,7 +79,7 @@ class NotificationPostgresIT {
         var marker = jdbc.queryForMap("SELECT * FROM processed_events");
         assertThat(marker.get("event_id")).isEqualTo(EVENT);
         assertThat(marker.get("consumer_name")).isEqualTo(NotificationService.CONSUMER_NAME);
-        assertThat(((java.sql.Timestamp) marker.get("processed_at")).toInstant()).isEqualTo(NOW);
+        assertThat(((Timestamp) marker.get("processed_at")).toInstant()).isEqualTo(NOW);
     }
     @Test void differentEventIdsBothProcessAndBusinessUniquenessRemains() {
         service.create(decoder.decode(json()).orElseThrow());
@@ -72,7 +87,7 @@ class NotificationPostgresIT {
         service.create(decoder.decode(json().replace(EVENT.toString(), second.toString())).orElseThrow());
         assertCounts(2, 2);
         assertThatThrownBy(() -> jdbc.update("UPDATE notifications SET event_id=? WHERE event_id=?", EVENT, second))
-                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+                .isInstanceOf(DataIntegrityViolationException.class);
         assertCounts(2, 2);
     }
     @Test void markerIdentityIncludesStableConsumerName() {
@@ -85,14 +100,14 @@ class NotificationPostgresIT {
     }
     @Test void markerCannotCommitOutsideBusinessTransaction() {
         assertThatThrownBy(() -> markers.tryMarkProcessed(EVENT, NotificationService.CONSUMER_NAME, NOW))
-                .isInstanceOf(org.springframework.transaction.IllegalTransactionStateException.class);
+                .isInstanceOf(IllegalTransactionStateException.class);
         assertCounts(0, 0);
     }
     @Test void businessFailureRollsBackMarker() {
         jdbc.execute("ALTER TABLE notifications ADD CONSTRAINT phase15_reject CHECK (false) NOT VALID");
         try {
             assertThatThrownBy(() -> service.create(decoder.decode(json()).orElseThrow()))
-                    .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+                    .isInstanceOf(DataIntegrityViolationException.class);
             assertCounts(0, 0);
         } finally { jdbc.execute("ALTER TABLE notifications DROP CONSTRAINT phase15_reject"); }
         assertThat(service.create(decoder.decode(json()).orElseThrow())).isEqualTo(ProcessResult.PROCESSED);
@@ -102,7 +117,7 @@ class NotificationPostgresIT {
         jdbc.execute("ALTER TABLE processed_events ADD CONSTRAINT phase15_reject CHECK (false) NOT VALID");
         try {
             assertThatThrownBy(() -> service.create(decoder.decode(json()).orElseThrow()))
-                    .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+                    .isInstanceOf(DataIntegrityViolationException.class);
             assertCounts(0, 0);
         } finally { jdbc.execute("ALTER TABLE processed_events DROP CONSTRAINT phase15_reject"); }
     }
@@ -122,7 +137,7 @@ class NotificationPostgresIT {
         assertThat(service.create(decoder.decode(json()).orElseThrow())).isEqualTo(ProcessResult.DUPLICATE);
         assertCounts(1, 1);
         assertThat(jdbc.queryForMap("SELECT * FROM notifications")).isEqualTo(original);
-        assertThat(jdbc.queryForObject("SELECT processed_at FROM processed_events", java.sql.Timestamp.class).toInstant())
+        assertThat(jdbc.queryForObject("SELECT processed_at FROM processed_events", Timestamp.class).toInstant())
                 .isEqualTo(NOW.plusSeconds(60));
     }
     @Test void concurrentDuplicateWaitsForWinnerAndSkipsBusinessWrite() throws Exception { concurrent(false); }

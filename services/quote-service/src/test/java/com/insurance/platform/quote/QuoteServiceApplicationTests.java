@@ -1,34 +1,73 @@
 package com.insurance.platform.quote;
 
-import com.insurance.platform.quote.entity.*;
+import com.insurance.platform.quote.client.ServiceTokenClient;
+import com.insurance.platform.quote.entity.PricingAdjustment;
+import com.insurance.platform.quote.entity.Quote;
+import com.insurance.platform.quote.entity.VehicleBrand;
+import com.insurance.platform.quote.entity.VehicleModel;
 import com.insurance.platform.quote.enums.QuoteStatus;
-import com.insurance.platform.quote.repository.*;
+import com.insurance.platform.quote.event.QuotePricedEventFactory;
+import com.insurance.platform.quote.exception.QuoteException;
+import com.insurance.platform.quote.repository.OutboxRepository;
+import com.insurance.platform.quote.repository.QuoteRepository;
+import com.insurance.platform.quote.repository.VehicleBrandRepository;
+import com.insurance.platform.quote.repository.VehicleModelRepository;
 import com.sun.net.httpserver.HttpServer;
-import java.net.*;
-import java.net.http.*;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.*;
-import java.util.*;
-import java.util.concurrent.*;
-import org.junit.jupiter.api.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.*;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import static com.insurance.platform.quote.QuoteFixtures.*;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+
+import static com.insurance.platform.quote.QuoteFixtures.BRAND;
+import static com.insurance.platform.quote.QuoteFixtures.CUSTOMER;
+import static com.insurance.platform.quote.QuoteFixtures.INPUT;
+import static com.insurance.platform.quote.QuoteFixtures.MODEL;
+import static com.insurance.platform.quote.QuoteFixtures.NOW;
+import static com.insurance.platform.quote.QuoteFixtures.PRICE;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class QuoteServiceApplicationTests {
-    @org.springframework.beans.factory.annotation.Autowired io.github.resilience4j.circuitbreaker.CircuitBreaker circuit;
+    @Autowired CircuitBreaker circuit;
     @BeforeEach void resetCircuit() { circuit.reset(); }
 
-    @MockitoBean org.springframework.jdbc.core.JdbcTemplate expirationJdbc;
+    @MockitoBean JdbcTemplate expirationJdbc;
     private static final HttpServer PRICING;
     private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool();
     private static volatile String downstreamBody;
@@ -61,8 +100,8 @@ class QuoteServiceApplicationTests {
     }
     @AfterAll static void stop() { PRICING.stop(0); EXECUTOR.shutdownNow(); }
     @LocalServerPort int port;
-    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean com.insurance.platform.quote.event.QuotePricedEventFactory eventFactory;
-    @MockitoBean com.insurance.platform.quote.client.ServiceTokenClient serviceTokens;
+    @MockitoSpyBean QuotePricedEventFactory eventFactory;
+    @MockitoBean ServiceTokenClient serviceTokens;
     @MockitoBean VehicleBrandRepository brands;
     @MockitoBean VehicleModelRepository models;
     @MockitoBean QuoteRepository quotes;
@@ -92,21 +131,21 @@ class QuoteServiceApplicationTests {
         verifyNoInteractions(eventFactory);
     }
     @Test void authAcquisitionFailureDoesNotCallPricingOrPersist() throws Exception {
-        when(serviceTokens.token(anyString())).thenThrow(com.insurance.platform.quote.exception.QuoteException.pricingUnavailable());
+        when(serviceTokens.token(anyString())).thenThrow(QuoteException.pricingUnavailable());
         error(post(INPUT),503,"PRICING_SERVICE_UNAVAILABLE");
         assertThat(downstreamBody).isNull();
         verifyNoInteractions(outbox);
     }
-    @org.springframework.beans.factory.annotation.Autowired io.micrometer.core.instrument.MeterRegistry meters;
+    @Autowired MeterRegistry meters;
     @Test void creationAndFailureCountersAndHealthSecurityAreObservable() throws Exception {
         double created = meters.counter("insurance.quote.created").count();
         assertThat(post(INPUT).statusCode()).isEqualTo(201);
         assertThat(meters.counter("insurance.quote.created").count()).isEqualTo(created + 1);
         double failed = meters.counter("insurance.quote.failed").count();
-        when(serviceTokens.token(anyString())).thenThrow(com.insurance.platform.quote.exception.QuoteException.pricingUnavailable());
+        when(serviceTokens.token(anyString())).thenThrow(QuoteException.pricingUnavailable());
         assertThat(post(INPUT).statusCode()).isEqualTo(503);
         assertThat(meters.counter("insurance.quote.failed").count()).isEqualTo(failed + 1);
-        for (String path : java.util.List.of("/actuator/health/liveness", "/actuator/health/readiness"))
+        for (String path : List.of("/actuator/health/liveness", "/actuator/health/readiness"))
             assertThat(request("GET", path, null, null).statusCode()).isEqualTo(200);
         assertThat(request("GET", "/actuator/metrics", null, null).statusCode()).isEqualTo(401);
         assertThat(request("GET", "/actuator/metrics", null, QuoteJwtSupport.token("CUSTOMER")).statusCode()).isEqualTo(403);
@@ -189,7 +228,7 @@ class QuoteServiceApplicationTests {
         when(models.findById(MODEL)).thenReturn(Optional.of(new VehicleModel(MODEL,UUID.randomUUID(),"Camry",true,NOW)));
         error(post(INPUT),400,"INVALID_VEHICLE_SELECTION"); assertThat(downstreamBody).isNull();
     }
-    @ParameterizedTest @org.junit.jupiter.params.provider.ValueSource(ints={400,401,403,500,503})
+    @ParameterizedTest @ValueSource(ints={400,401,403,500,503})
     void downstreamErrorsAreSafe(int status) throws Exception {
         downstreamStatus=status; downstreamResponse="{\"private downstream\":\"SQL details\"}";
         error(post(INPUT),502,"PRICING_SERVICE_ERROR");

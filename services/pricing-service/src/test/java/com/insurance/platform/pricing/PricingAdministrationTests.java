@@ -1,24 +1,47 @@
 package com.insurance.platform.pricing;
 
+import com.insurance.platform.pricing.entity.OutboxEvent;
 import com.insurance.platform.pricing.entity.PricingRule;
-import com.insurance.platform.pricing.enums.*;
+import com.insurance.platform.pricing.enums.RuleOperator;
+import com.insurance.platform.pricing.enums.RuleType;
+import com.insurance.platform.pricing.repository.OutboxRepository;
 import com.insurance.platform.pricing.repository.PricingRuleRepository;
 import java.math.BigDecimal;
 import java.net.URI;
-import java.net.http.*;
-import java.time.*;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
-import org.springframework.test.context.*;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import tools.jackson.databind.json.JsonMapper;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -32,7 +55,7 @@ class PricingAdministrationTests {
              "effectiveFrom":"2026-11-01T00:00:00Z","enabled":true,"description":"Test rule"}
             """;
     @LocalServerPort int port;
-    @MockitoBean com.insurance.platform.pricing.repository.OutboxRepository outbox;
+    @MockitoBean OutboxRepository outbox;
     @MockitoBean PricingRuleRepository repository;
     @MockitoBean Clock clock;
     private PricingRule stored;
@@ -94,7 +117,7 @@ class PricingAdministrationTests {
         assertThat(response.headers().firstValue("Location").orElseThrow()).startsWith(PATH+"/");
         assertThat(response.body()).contains("\"version\":0","\"createdAt\":\"2026-10-07T10:00:00Z\"",
                 "\"updatedAt\":\"2026-10-07T10:00:00Z\"","2026-11-01T00:00:00Z");
-        var captor=org.mockito.ArgumentCaptor.forClass(PricingRule.class);
+        var captor=ArgumentCaptor.forClass(PricingRule.class);
         verify(repository).saveAndFlush(captor.capture());
         assertThat(captor.getValue().getId()).isNotNull().isNotEqualTo(ID);
     }
@@ -177,9 +200,9 @@ class PricingAdministrationTests {
         assertThat(admin("PUT",PATH+"/"+ID,VALID.replace("}",",\"version\":0}")).statusCode()).isEqualTo(200);
         assertThat(admin("PATCH",PATH+"/"+ID+"/disable","{\"version\":0}").statusCode()).isEqualTo(200);
         assertThat(admin("PATCH",PATH+"/"+ID+"/enable","{\"version\":0}").statusCode()).isEqualTo(200);
-        var captured=org.mockito.ArgumentCaptor.forClass(com.insurance.platform.pricing.entity.OutboxEvent.class);
+        var captured=ArgumentCaptor.forClass(OutboxEvent.class);
         verify(outbox,times(4)).saveAndFlush(captured.capture());
-        var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
+        var mapper=JsonMapper.builder().build();
         var ids=new HashSet<String>();
         var types=new ArrayList<String>();
         for(var row:captured.getAllValues()) {

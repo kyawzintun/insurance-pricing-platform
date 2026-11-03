@@ -1,26 +1,43 @@
 package com.insurance.platform.pricing;
 
-import com.insurance.platform.pricing.service.*;
-import com.insurance.platform.pricing.dto.*;
-import com.insurance.platform.pricing.enums.*;
+import com.insurance.platform.pricing.dto.CreatePricingRuleRequest;
+import com.insurance.platform.pricing.dto.PricingRuleResponse;
+import com.insurance.platform.pricing.dto.UpdatePricingRuleRequest;
+import com.insurance.platform.pricing.enums.RuleOperator;
+import com.insurance.platform.pricing.enums.RuleType;
 import com.insurance.platform.pricing.repository.OutboxPollingRepository;
-import java.time.*;
-import java.util.*;
+import com.insurance.platform.pricing.service.PricingOutboxPublisher;
+import com.insurance.platform.pricing.service.PricingRuleAdminService;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import org.apache.kafka.clients.admin.*;
-import org.apache.kafka.clients.consumer.*;
+import javax.sql.DataSource;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.test.context.*;
-import org.testcontainers.junit.jupiter.*;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import static org.assertj.core.api.Assertions.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @ActiveProfiles("integration")
@@ -35,12 +52,12 @@ class PricingKafkaIT {
     }
     @Autowired PricingRuleAdminService service;
     @Autowired JdbcTemplate jdbc;
-    @Autowired javax.sql.DataSource datasource;
+    @Autowired DataSource datasource;
     @Autowired KafkaTemplate<String,String> kafka;
-    CreatePricingRuleRequest request() { return new CreatePricingRuleRequest(RuleType.DRIVER_AGE,RuleOperator.LESS_THAN,"21",null,new java.math.BigDecimal("1.30"),null,Instant.now().plusSeconds(3600),false,"Disposable test"); }
+    CreatePricingRuleRequest request() { return new CreatePricingRuleRequest(RuleType.DRIVER_AGE,RuleOperator.LESS_THAN,"21",null,new BigDecimal("1.30"),null,Instant.now().plusSeconds(3600),false,"Disposable test"); }
     @Test void exactStoredPublicationPerRuleOrderingAndBrokerRecovery() throws Exception {
         PricingTestIdentity.authenticate();
-        try { validate(); } finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+        try { validate(); } finally { SecurityContextHolder.clearContext(); }
     }
     void validate() throws Exception {
         String topic="insurance.pricing.events";

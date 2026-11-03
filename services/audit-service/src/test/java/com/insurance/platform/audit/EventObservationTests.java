@@ -4,7 +4,9 @@ import com.insurance.platform.audit.event.EventObservation;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
-import static org.assertj.core.api.Assertions.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class EventObservationTests {
     @Test void countsOutcomesAndRestoresCorrelationEvenOnFailure() {
