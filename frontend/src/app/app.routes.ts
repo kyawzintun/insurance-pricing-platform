@@ -45,6 +45,12 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'admin/operations',
+    canActivate: [adminGuard],
+    loadComponent: () =>
+      import('@app/features/operations/operations.component').then((m) => m.OperationsComponent),
+  },
+  {
     path: 'admin/audit',
     canActivate: [adminGuard],
     loadComponent: () =>

@@ -206,3 +206,18 @@ Outbox pending/age samples and publish/consumer outcome counters add operational
 Metrics require ADMIN except Notification's internal numeric endpoint; keep that port private.
 See [specification](specs/phase-26-observability-resilience.md) and
 [validation](phase-26-validation.md) for configuration, readiness meaning and limits.
+
+## Phase 27 — Centralized Operations Dashboard
+
+ADMIN can open `/admin/operations`. Angular calls only Gateway's
+`GET /api/v1/admin/operations`; a focused Gateway component concurrently collects the six
+services' existing Phase 26 health/readiness and curated metrics. Gateway reads its own health
+locally. Per-service failure preserves HTTP 200 and the other cards; overall becomes DEGRADED.
+The fixed DTO excludes internal URLs, raw Actuator data and credentials. ADMIN authorization
+is enforced by Gateway; its existing JWT is relayed only to trusted protected metric endpoints.
+Collection has a configurable 1000 ms deadline per exchange and bounded response bodies.
+Manual refresh and pausable 15-second refresh use NgRx state and local Signals.
+Pricing circuit/latency/errors reuse Quote-owned metrics. Counters reset at restart; no
+history, Prometheus/Grafana stack, database performance work or next phase is included.
+See [specification and configuration](specs/phase-27-centralized-operations.md) and
+[validation](phase-27-validation.md). This supersedes the old Phase 27 performance placeholder.

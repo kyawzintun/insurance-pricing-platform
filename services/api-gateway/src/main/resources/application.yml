@@ -59,3 +59,11 @@ gateway:
 logging:
   pattern:
     level: "service=${spring.application.name} %5p"
+
+operations:
+  timeout-ms: ${OPERATIONS_HEALTH_TIMEOUT_MS:1000}
+  auth-url: ${AUTH_SERVICE_URL:http://localhost:8081}
+  quote-url: ${QUOTE_SERVICE_URL:http://localhost:8082}
+  pricing-url: ${PRICING_SERVICE_URL:http://localhost:8083}
+  notification-url: ${NOTIFICATION_SERVICE_URL:http://localhost:8084}
+  audit-url: ${AUDIT_SERVICE_URL:http://localhost:8085}

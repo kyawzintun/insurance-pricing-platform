@@ -8,7 +8,7 @@
         <a routerLink="/quotes/new">New Quote</a><a routerLink="/quotes">My Quotes</a>
       }
       @if (admin()) {
-        <a routerLink="/admin/audit">Audit</a>
+        <a routerLink="/admin/audit">Audit</a><a routerLink="/admin/operations">Operations</a>
       }
       <button type="button" class="outline" (click)="logout()">Logout</button>
     } @else {

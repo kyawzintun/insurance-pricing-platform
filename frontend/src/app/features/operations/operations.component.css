@@ -1,0 +1,165 @@
+.operations {
+  max-width: 1240px;
+  margin: auto;
+  padding: 42px 28px 56px;
+}
+.operations-header,
+.service-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+h1 {
+  margin: 0;
+  font-size: clamp(26px, 3vw, 36px);
+  letter-spacing: -1px;
+}
+h2 {
+  font-size: 18px;
+  margin: 0;
+}
+.eyebrow {
+  margin-bottom: 8px;
+}
+.muted,
+.footnote {
+  color: #566e68;
+}
+.refresh-controls {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: 13px;
+}
+.refresh-controls label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+button {
+  border: 1px solid #17655d;
+  background: #17655d;
+  color: white;
+  padding: 10px 20px;
+}
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px 60px;
+  margin: 26px 0;
+  padding: 22px 26px;
+  border: 1px solid #dce5e1;
+  border-radius: 10px;
+  background: #edf3ef;
+}
+.summary > div {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+.summary strong {
+  font-size: 16px;
+}
+.service-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.service-card {
+  background: white;
+  border: 1px solid #dce5e1;
+  border-radius: 10px;
+  padding: 22px;
+}
+.badge {
+  display: inline-block;
+  width: fit-content;
+  background: #eff0f2;
+  color: #414b58;
+  border-radius: 5px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.3px;
+}
+.badge[data-status='UP'] {
+  background: #e5f4eb;
+  color: #155632;
+}
+.badge[data-status='DOWN'] {
+  background: #fbe8e6;
+  color: #8d291e;
+}
+.badge[data-status='DEGRADED'] {
+  background: #fff1cf;
+  color: #72500a;
+}
+dl {
+  margin: 20px 0 0;
+  font-size: 13px;
+}
+dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+dt {
+  color: #566e68;
+}
+dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.metric-details {
+  border-top: 1px solid #e8eeeb;
+  padding-top: 12px;
+}
+.service-error,
+.error {
+  color: #8d291e;
+  font-size: 13px;
+}
+.notice {
+  padding: 14px;
+  border: 1px solid #edc9c4;
+  border-radius: 7px;
+  background: #fff3f1;
+}
+.footnote {
+  font-size: 12px;
+  margin-top: 24px;
+}
+@media (max-width: 1000px) {
+  .operations-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .service-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 620px) {
+  .operations {
+    padding: 28px 18px;
+  }
+  .service-grid {
+    grid-template-columns: 1fr;
+  }
+  .refresh-controls {
+    flex-wrap: wrap;
+  }
+}
+.refresh-controls input {
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  padding: 0;
+  flex: 0 0 16px;
+  accent-color: #17655d;
+}
+.refresh-controls label {
+  min-height: 44px;
+}

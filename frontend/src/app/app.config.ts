@@ -18,6 +18,7 @@ import { QuoteEffects } from '@app/store/quotes/quote.effects';
 import { SessionService } from '@app/core/auth/session.service';
 import { authInterceptor } from '@app/core/interceptors/auth.interceptor';
 import { AuditEffects, auditFeature } from '@app/store/audit/audit.store';
+import { OperationsEffects, operationsFeature } from '@app/store/operations/operations.store';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -29,6 +30,7 @@ export const appConfig: ApplicationConfig = {
     provideState(authFeature),
     provideState(quoteFeature),
     provideState(auditFeature),
-    provideEffects(AuthEffects, QuoteEffects, AuditEffects),
+    provideState(operationsFeature),
+    provideEffects(AuthEffects, QuoteEffects, AuditEffects, OperationsEffects),
   ],
 };

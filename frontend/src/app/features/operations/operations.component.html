@@ -1,0 +1,102 @@
+<section class="operations" aria-labelledby="operations-title" [attr.aria-busy]="state().loading">
+  <header class="operations-header">
+    <div>
+      <p class="eyebrow">ADMIN / OPERATIONS</p>
+      <h1 id="operations-title">Platform operations</h1>
+      <p class="muted">A live snapshot of service health and runtime activity.</p>
+    </div>
+    <div class="refresh-controls">
+      <label
+        ><input
+          type="checkbox"
+          [checked]="autoRefresh()"
+          (change)="autoRefresh.set($any($event.target).checked)"
+        />
+        Auto-refresh every 15 seconds</label
+      >
+      <button type="button" (click)="refresh()" [disabled]="state().loading">Refresh</button>
+    </div>
+  </header>
+  @if (state().error) {
+    <p class="notice error" role="alert">
+      {{ state().error }} Any displayed snapshot is from the last successful refresh.
+    </p>
+  }
+  @if (state().loading) {
+    <p role="status">Refreshing operations…</p>
+  }
+  @if (state().overview; as overview) {
+    <div class="summary" aria-live="polite">
+      <div>
+        <span class="muted">Platform status</span
+        ><strong class="badge" [attr.data-status]="overview.overallStatus">{{
+          overview.overallStatus
+        }}</strong>
+      </div>
+      <div>
+        <span class="muted">Healthy and ready</span
+        ><strong>{{ healthy() }} of {{ overview.services.length }} services</strong>
+      </div>
+      <div>
+        <span class="muted">Last refresh</span
+        ><strong>{{ overview.checkedAt | date: 'medium' }}</strong>
+      </div>
+    </div>
+    <div class="service-grid">
+      @for (service of overview.services; track service.id) {
+        <article class="service-card" [attr.aria-label]="service.name + ' service'">
+          <header>
+            <h2>{{ service.name }}</h2>
+            <span class="badge" [attr.data-status]="service.status">{{ service.status }}</span>
+          </header>
+          <dl class="health-details">
+            <div>
+              <dt>Health</dt>
+              <dd>{{ service.status }}</dd>
+            </div>
+            <div>
+              <dt>Readiness</dt>
+              <dd>{{ service.readiness }}</dd>
+            </div>
+            <div>
+              <dt>Response</dt>
+              <dd>{{ service.responseTimeMs | number: '1.0-0' }} ms</dd>
+            </div>
+            <div>
+              <dt>Last checked</dt>
+              <dd>{{ service.checkedAt | date: 'mediumTime' }}</dd>
+            </div>
+          </dl>
+          @if (service.errorCode) {
+            <p class="service-error">Probe: {{ service.errorCode }}</p>
+          }
+          <dl class="metric-details">
+            @for (metric of entries(service.metrics); track metric.label) {
+              <div>
+                <dt>{{ metric.label }}</dt>
+                <dd>
+                  @if (metric.value === null) {
+                    <span class="muted">Unavailable</span>
+                  } @else if (isNumber(metric.value)) {
+                    {{ metric.value | number: '1.0-2' }}
+                  } @else {
+                    {{ metric.value }}
+                  }
+                </dd>
+              </div>
+            } @empty {
+              <div>
+                <dt>Runtime metrics</dt>
+                <dd class="muted">No curated metrics</dd>
+              </div>
+            }
+          </dl>
+        </article>
+      }
+    </div>
+    <p class="footnote">
+      Counters are runtime values and may reset when a service restarts. Missing metrics are
+      unavailable, not zero. Pricing-client telemetry is reported by Quote.
+    </p>
+  }
+</section>

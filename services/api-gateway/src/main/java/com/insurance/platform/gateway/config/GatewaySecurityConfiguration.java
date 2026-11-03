@@ -44,6 +44,7 @@ public class GatewaySecurityConfiguration {
                         .pathMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
                         .pathMatchers(HttpMethod.GET, "/actuator/metrics", "/actuator/metrics/**").hasRole("ADMIN")
                         .pathMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                        .pathMatchers("/api/v1/admin/operations", "/api/v1/admin/operations/**").hasRole("ADMIN")
                         .pathMatchers("/api/v1/admin/audit", "/api/v1/admin/audit/**").hasRole("ADMIN")
                         .pathMatchers("/api/v1/admin/pricing/**").hasRole("ADMIN")
                         .pathMatchers("/api/v1/admin/customers", "/api/v1/admin/customers/**").hasRole("ADMIN")
