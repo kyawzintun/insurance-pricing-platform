@@ -21,6 +21,10 @@ public class QuoteEventListener {
         this.service = service;
     }
 
+    private EventObservation observation = new EventObservation(new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+    @org.springframework.beans.factory.annotation.Autowired
+    public void configureObservation(EventObservation observation) { this.observation = observation; }
+
     @KafkaListener(id = "quote-notifications", idIsGroup = false,
             topics = "${notification.events.topic:insurance.quote.events}")
     public void receive(ConsumerRecord<byte[], byte[]> record) {
@@ -40,25 +44,25 @@ public class QuoteEventListener {
 
         if (!java.util.Arrays.equals(event.data().quoteId().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8), record.key())) {
             // The event body is authoritative. Do not echo an untrusted key.
-            LOG.warn("Quote event key mismatch eventId={} quoteId={} partition={} offset={}",
-                    event.eventId(), event.aggregateId(), record.partition(), record.offset());
+            LOG.warn("Quote event key mismatch eventId={} quoteId={} topic={} partition={} offset={}",
+                    event.eventId(), event.aggregateId(), record.topic(), record.partition(), record.offset());
         }
 
         ProcessResult result;
         try {
-            result = service.create(event);
+            result = observation.process(event.correlationId(), record.topic(), () -> service.create(event));
         } catch (RuntimeException failure) {
             log(event, record, "PERSISTENCE_FAILURE");
             throw new QuoteProcessingException(failure);
         }
 
-        LOG.info("Event handled result={} eventId={} eventType={} consumerName={} quoteId={} correlationId={} partition={} offset={}",
+        LOG.info("Event handled result={} eventId={} eventType={} consumerName={} quoteId={} correlationId={} topic={} partition={} offset={}",
                 result, event.eventId(), event.eventType(), NotificationService.CONSUMER_NAME, event.aggregateId(),
-                event.correlationId(), record.partition(), record.offset());
+                event.correlationId(), record.topic(), record.partition(), record.offset());
     }
 
     private void log(QuotePricedEnvelope event, ConsumerRecord<byte[], byte[]> record, String reason) {
-        LOG.warn("Notification failed reason={} eventId={} eventType={} quoteId={} correlationId={} partition={} offset={}; error handler will classify this failure",
-                reason, event.eventId(), event.eventType(), event.aggregateId(), event.correlationId(), record.partition(), record.offset());
+        LOG.warn("Notification failed reason={} eventId={} eventType={} quoteId={} correlationId={} topic={} partition={} offset={}; error handler will classify this failure",
+                reason, event.eventId(), event.eventType(), event.aggregateId(), event.correlationId(), record.topic(), record.partition(), record.offset());
     }
 }

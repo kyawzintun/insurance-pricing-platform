@@ -34,10 +34,17 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
 auth:
   refresh:
     ttl: ${AUTH_REFRESH_TOKEN_TTL:7d}
@@ -62,3 +69,7 @@ outbox:
 auth.service-client.id: ${QUOTE_SERVICE_CLIENT_ID:quote-service}
 auth.service-client.secret: ${QUOTE_SERVICE_CLIENT_SECRET:}
 auth.service-client.token-ttl: ${SERVICE_TOKEN_TTL:5m}
+
+logging:
+  pattern:
+    level: "service=${spring.application.name} correlationId=%X{correlationId:-none} %5p"

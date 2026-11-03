@@ -10,3 +10,6 @@ spring:
   kafka:
     listener:
       auto-startup: false
+
+# Unit HTTP tests deliberately exclude the real datasource.
+management.endpoint.health.group.readiness.include: readinessState

@@ -39,7 +39,9 @@ public class PricingSecurityConfiguration {
                                     && scopes.contains("pricing:calculate");
                             return new org.springframework.security.authorization.AuthorizationDecision(allowed);
                         })
-                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/actuator/metrics", "/actuator/metrics/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                        .requestMatchers("/actuator/**").denyAll()
                         .anyRequest().denyAll())
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)

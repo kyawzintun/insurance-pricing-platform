@@ -16,6 +16,9 @@ import org.springframework.util.backoff.FixedBackOff;
 
 @Configuration(proxyBeanMethods = false)
 public class NotificationKafkaConfiguration {
+    @org.springframework.beans.factory.annotation.Autowired
+    private io.micrometer.core.instrument.MeterRegistry meters;
+
     @Bean
     Clock notificationClock() { return Clock.systemUTC(); }
 
@@ -29,7 +32,9 @@ public class NotificationKafkaConfiguration {
         if (maxAttempts < 1 || maxAttempts > 10) {
             throw new IllegalArgumentException("Consumer max attempts must be 1..10");
         }
-        return new QuoteDeadLetterRecoverer(kafka, clock, group, maxAttempts, userTopic, userDlqTopic);
+        var recoverer = new QuoteDeadLetterRecoverer(kafka, clock, group, maxAttempts, userTopic, userDlqTopic);
+        recoverer.configureMetrics(meters);
+        return recoverer;
     }
 
     @Bean

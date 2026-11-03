@@ -176,3 +176,13 @@ valid until expiry and can still authorize Quote requests. No token revocation,
 migration, historical backfill, admin UI or Phase 22 work.
 See [API contract](../../docs/admin-customer-management.md),
 [status events](../../docs/user-status-events.md), and [validation](../../docs/phase-21-validation.md).
+
+## Phase 26 — Operations
+
+Health/info and liveness/readiness probes are available on this service's Actuator port.
+Metrics are exposed through `/actuator/metrics`; ADMIN is required except for Notification's
+internal endpoint. Logs include service and the existing correlation ID; credentials/payloads
+are excluded. Database services include their own DB in readiness; consumer services also
+check local listener containers. Gateway readiness is local availability only.
+See [Phase 26 operations/configuration](../../docs/specs/phase-26-observability-resilience.md)
+and [validation](../../docs/phase-26-validation.md). Earlier phase descriptions are historical.

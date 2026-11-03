@@ -32,7 +32,23 @@ public class QuoteService {
         this.validator = validator;
     }
 
+    private io.micrometer.core.instrument.MeterRegistry meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void configureMetrics(io.micrometer.core.instrument.MeterRegistry meters) { this.meters = meters; }
+
     public QuoteResponse create(UUID customerId, CreateQuoteRequest request) {
+        try {
+            var response = createQuote(customerId, request);
+            meters.counter("insurance.quote.created").increment();
+            return response;
+        } catch (RuntimeException failure) {
+            meters.counter("insurance.quote.failed").increment();
+            throw failure;
+        }
+    }
+
+    private QuoteResponse createQuote(UUID customerId, CreateQuoteRequest request) {
         var today = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
         if (customerId == null || request == null || !validator.validate(request).isEmpty()) throw QuoteException.invalid();
         if (!request.dateOfBirth().isBefore(today) || request.vehicleManufacturingYear() > today.getYear()) throw QuoteException.invalid();

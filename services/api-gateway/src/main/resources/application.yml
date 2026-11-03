@@ -9,6 +9,9 @@ spring:
     gateway:
       server:
         webflux:
+          httpclient:
+            connect-timeout: ${GATEWAY_HTTP_CONNECT_TIMEOUT_MS:2000}
+            response-timeout: ${GATEWAY_HTTP_RESPONSE_TIMEOUT:30s}
           routes:
             - id: auth-service
               uri: ${AUTH_SERVICE_URL:http://localhost:8081}
@@ -34,10 +37,17 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState
 auth:
   jwt:
     public-key: ${AUTH_JWT_PUBLIC_KEY:}
@@ -45,3 +55,7 @@ auth:
 gateway:
   cors:
     allowed-origins: ${GATEWAY_CORS_ALLOWED_ORIGINS:http://localhost:4200}
+
+logging:
+  pattern:
+    level: "service=${spring.application.name} %5p"

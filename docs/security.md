@@ -10,7 +10,7 @@ CUSTOMER/ADMIN user tokens cannot call internal calculation, and service tokens 
 use admin APIs. Secret distribution is limited to Auth/Quote; RSA private signing
 remains Auth-only. User refresh, events and transaction semantics remain unchanged.
 See [specification](specs/phase-25-service-authentication.md) and
-[validation](phase-25-validation.md). Phase 26 remains unstarted. Earlier sections
+[validation](phase-25-validation.md). Phase 26 implementation is described below. Earlier sections
 record historical phase behavior and are superseded by this Phase 25 boundary.
 
 
@@ -161,3 +161,14 @@ remain valid until expiry. No token events or Phase 24 changes are included.
 See [Phase 23 specification](specs/phase-23-refresh-tokens.md) for configuration,
 CSRF assumptions, queue behavior, transaction guarantees and deferred cleanup/family tracking.
 Earlier phase descriptions below/above are historical where superseded by Phase 23.
+
+## Phase 26 — Observability & Resilience
+
+Application logs now carry service/correlation context; all six services expose safe health,
+liveness/readiness and Actuator metrics. Quote uses independent Auth/Pricing HTTP timeouts and
+a Pricing-only circuit breaker, retaining the single 401 refresh and atomic quote/outbox commit.
+No fallback premium, transport retry, event/security contract changes or Phase 27 work.
+Outbox pending/age samples and publish/consumer outcome counters add operational visibility.
+Metrics require ADMIN except Notification's internal numeric endpoint; keep that port private.
+See [specification](specs/phase-26-observability-resilience.md) and
+[validation](phase-26-validation.md) for configuration, readiness meaning and limits.

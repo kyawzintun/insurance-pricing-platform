@@ -43,6 +43,9 @@ public class QuoteDeadLetterRecoverer implements ConsumerRecordRecoverer, RetryL
         this.userDlqTopic = userDlqTopic;
     }
 
+    private io.micrometer.core.instrument.MeterRegistry meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+    public void configureMetrics(io.micrometer.core.instrument.MeterRegistry meters) { this.meters = meters; }
+
     @Override
     public void failedDelivery(ConsumerRecord<?, ?> record, Exception failure, int attempt) {
         // This internal header is replaced on each failed delivery, never trusted from the producer or copied to DLQ.
@@ -87,6 +90,7 @@ public class QuoteDeadLetterRecoverer implements ConsumerRecordRecoverer, RetryL
             // No nested Kafka exception: it may contain record contents. Throwing prevents source completion.
             throw new IllegalStateException("DLQ_PUBLICATION_FAILED");
         }
+        meters.counter("insurance.kafka.consumer.dlq").increment();
         LOG.info("DLQ publication acknowledged consumerService=notification-service topic={} partition={} offset={} dlqTopic={} attempt={}",
                 record.topic(), record.partition(), record.offset(), dlq, attempt);
     }

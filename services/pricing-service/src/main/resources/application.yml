@@ -37,10 +37,17 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
 
 auth:
   jwt:
@@ -55,3 +62,7 @@ outbox:
     enabled: ${PRICING_OUTBOX_PUBLISHER_ENABLED:false}
     poll-interval: ${PRICING_OUTBOX_POLL_INTERVAL:2000}
     batch-size: ${PRICING_OUTBOX_BATCH_SIZE:50}
+
+logging:
+  pattern:
+    level: "service=${spring.application.name} correlationId=%X{correlationId:-none} %5p"

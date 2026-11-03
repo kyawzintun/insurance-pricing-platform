@@ -6,7 +6,7 @@ Quote obtains/caches short-lived RS256 service tokens from Auth and authenticate
 directly to Pricing. Internal calculation requires quote-service + pricing:calculate
 scope + pricing-service audience. User and service credentials remain separate.
 See [configuration and architecture](docs/specs/phase-25-service-authentication.md)
-and [validation](docs/phase-25-validation.md). Phase 26 is not started. Earlier phase
+and [validation](docs/phase-25-validation.md). Phase 26 implementation and validation are documented below. Earlier phase
 sections below record historical behavior.
 
 
@@ -321,3 +321,14 @@ See [retry/DLQ policy](docs/retry-and-dlq.md), [specification](docs/specs/phase-
 ## Phase 22 — Audit UI
 
 ADMIN users can browse `/admin/audit`, apply exact filters and UTC occurrence ranges, paginate, and inspect safe read-only JSON details. Gateway and Audit Service independently require ADMIN JWTs. No audit mutations or schema changes. See [API/UI specification](docs/specs/phase-22-audit-ui.md) and [validation/file manifest](docs/phase-22-validation.md). Phase 23 — Refresh Tokens is not started.
+
+## Phase 26 — Observability & Resilience
+
+Application logs now carry service/correlation context; all six services expose safe health,
+liveness/readiness and Actuator metrics. Quote uses independent Auth/Pricing HTTP timeouts and
+a Pricing-only circuit breaker, retaining the single 401 refresh and atomic quote/outbox commit.
+No fallback premium, transport retry, event/security contract changes or Phase 27 work.
+Outbox pending/age samples and publish/consumer outcome counters add operational visibility.
+Metrics require ADMIN except Notification's internal numeric endpoint; keep that port private.
+See [specification](docs/specs/phase-26-observability-resilience.md) and
+[validation](docs/phase-26-validation.md) for configuration, readiness meaning and limits.

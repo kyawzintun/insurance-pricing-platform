@@ -32,7 +32,10 @@ class QuoteOutboxPublisherTests {
             future.complete(null);
             return future;
         });
+        var meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        publisher.configureMetrics(meters);
         publisher.poll();
+        assertThat(meters.counter("insurance.outbox.published").count()).isEqualTo(1);
         var order = inOrder(repository, kafka, batch);
         order.verify(repository).claim(7);
         order.verify(kafka).send("test-quote-topic", event.aggregateId(), event.payload());
@@ -43,7 +46,10 @@ class QuoteOutboxPublisherTests {
     @Test void asynchronousFailureLeavesPendingAndIncrementsFailureCount() throws Exception {
         claim();
         when(kafka.send(anyString(), anyString(), anyString())).thenReturn(CompletableFuture.failedFuture(new IllegalStateException("private payload")));
+        var meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        publisher.configureMetrics(meters);
         publisher.poll();
+        assertThat(meters.counter("insurance.outbox.failed").count()).isEqualTo(1);
         verify(batch).failed(event.id()); verify(batch, never()).published(any(), any()); verify(batch).close();
     }
     @Test void synchronousEnqueueFailureAlsoLeavesPending() throws Exception {

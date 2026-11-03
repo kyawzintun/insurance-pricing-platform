@@ -214,3 +214,13 @@ remain valid until expiry. No token events or Phase 24 changes are included.
 See [Phase 23 specification](../../docs/specs/phase-23-refresh-tokens.md) for configuration,
 CSRF assumptions, queue behavior, transaction guarantees and deferred cleanup/family tracking.
 Earlier phase descriptions below/above are historical where superseded by Phase 23.
+
+## Phase 26 — Operations
+
+Health/info and liveness/readiness probes are available on this service's Actuator port.
+Metrics are exposed through `/actuator/metrics`; ADMIN is required except for Notification's
+internal endpoint. Logs include service and the existing correlation ID; credentials/payloads
+are excluded. Database services include their own DB in readiness; consumer services also
+check local listener containers. Gateway readiness is local availability only.
+See [Phase 26 operations/configuration](../../docs/specs/phase-26-observability-resilience.md)
+and [validation](../../docs/phase-26-validation.md). Earlier phase descriptions are historical.

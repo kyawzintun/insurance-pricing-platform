@@ -256,3 +256,13 @@ Normal tests disable scheduling and need no Docker. Integration profiles use dis
 ## Phase 18 — Quote Expiration
 
 Automatic PRICED → EXPIRED transitions use bounded PostgreSQL transactions and the existing outbox. Notification supports QUOTE_EXPIRED; Audit uses a SYSTEM actor. See the [Phase 18 specification](../../docs/specs/phase-18-quote-expiration.md) for configuration, contract, concurrency and failure semantics. Phase 19 is outside this change.
+
+## Phase 26 — Operations
+
+Health/info and liveness/readiness probes are available on this service's Actuator port.
+Metrics are exposed through `/actuator/metrics`; ADMIN is required except for Notification's
+internal endpoint. Logs include service and the existing correlation ID; credentials/payloads
+are excluded. Database services include their own DB in readiness; consumer services also
+check local listener containers. Gateway readiness is local availability only.
+See [Phase 26 operations/configuration](../../docs/specs/phase-26-observability-resilience.md)
+and [validation](../../docs/phase-26-validation.md). Earlier phase descriptions are historical.

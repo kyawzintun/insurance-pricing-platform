@@ -25,6 +25,9 @@ import static org.mockito.Mockito.*;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class QuoteServiceApplicationTests {
+    @org.springframework.beans.factory.annotation.Autowired io.github.resilience4j.circuitbreaker.CircuitBreaker circuit;
+    @BeforeEach void resetCircuit() { circuit.reset(); }
+
     @MockitoBean org.springframework.jdbc.core.JdbcTemplate expirationJdbc;
     private static final HttpServer PRICING;
     private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool();
@@ -94,6 +97,22 @@ class QuoteServiceApplicationTests {
         assertThat(downstreamBody).isNull();
         verifyNoInteractions(outbox);
     }
+    @org.springframework.beans.factory.annotation.Autowired io.micrometer.core.instrument.MeterRegistry meters;
+    @Test void creationAndFailureCountersAndHealthSecurityAreObservable() throws Exception {
+        double created = meters.counter("insurance.quote.created").count();
+        assertThat(post(INPUT).statusCode()).isEqualTo(201);
+        assertThat(meters.counter("insurance.quote.created").count()).isEqualTo(created + 1);
+        double failed = meters.counter("insurance.quote.failed").count();
+        when(serviceTokens.token(anyString())).thenThrow(com.insurance.platform.quote.exception.QuoteException.pricingUnavailable());
+        assertThat(post(INPUT).statusCode()).isEqualTo(503);
+        assertThat(meters.counter("insurance.quote.failed").count()).isEqualTo(failed + 1);
+        for (String path : java.util.List.of("/actuator/health/liveness", "/actuator/health/readiness"))
+            assertThat(request("GET", path, null, null).statusCode()).isEqualTo(200);
+        assertThat(request("GET", "/actuator/metrics", null, null).statusCode()).isEqualTo(401);
+        assertThat(request("GET", "/actuator/metrics", null, QuoteJwtSupport.token("CUSTOMER")).statusCode()).isEqualTo(403);
+        assertThat(request("GET", "/actuator/metrics/insurance.quote.created", null, QuoteJwtSupport.token("ADMIN")).statusCode()).isEqualTo(200);
+    }
+
     @Test void healthIsPublic() throws Exception {
         assertThat(request("GET","/actuator/health",null,null).statusCode()).isEqualTo(200);
     }

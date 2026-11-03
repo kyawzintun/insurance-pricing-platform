@@ -39,10 +39,17 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
 
 auth:
   jwt:
@@ -73,3 +80,14 @@ service-auth.client-id: ${QUOTE_SERVICE_CLIENT_ID:quote-service}
 service-auth.client-secret: ${QUOTE_SERVICE_CLIENT_SECRET:}
 service-auth.token-url: ${SERVICE_TOKEN_URL:http://localhost:8081/api/v1/auth/service-token}
 service-auth.expiry-margin: ${SERVICE_TOKEN_EXPIRY_MARGIN:30s}
+
+logging:
+  pattern:
+    level: "service=${spring.application.name} correlationId=%X{correlationId:-none} %5p"
+
+service-auth.connect-timeout: ${AUTH_TOKEN_CONNECT_TIMEOUT:2s}
+service-auth.read-timeout: ${AUTH_TOKEN_READ_TIMEOUT:5s}
+pricing.circuit-breaker.failure-rate: ${PRICING_CB_FAILURE_RATE_THRESHOLD:50}
+pricing.circuit-breaker.minimum-calls: ${PRICING_CB_MIN_CALLS:5}
+pricing.circuit-breaker.window: ${PRICING_CB_SLIDING_WINDOW_SIZE:10}
+pricing.circuit-breaker.open-wait: ${PRICING_CB_OPEN_WAIT:10s}

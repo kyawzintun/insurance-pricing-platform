@@ -234,3 +234,13 @@ Only Pricing V4 widens outbox correlation IDs to 128; existing migrations stay i
 No pricing-calculation events, customer notifications or historical backfill.
 See [contract/configuration](../../docs/pricing-rule-events.md) and
 [validation](../../docs/phase-20-validation.md). Phase 21 is not implemented.
+
+## Phase 26 — Operations
+
+Health/info and liveness/readiness probes are available on this service's Actuator port.
+Metrics are exposed through `/actuator/metrics`; ADMIN is required except for Notification's
+internal endpoint. Logs include service and the existing correlation ID; credentials/payloads
+are excluded. Database services include their own DB in readiness; consumer services also
+check local listener containers. Gateway readiness is local availability only.
+See [Phase 26 operations/configuration](../../docs/specs/phase-26-observability-resilience.md)
+and [validation](../../docs/phase-26-validation.md). Earlier phase descriptions are historical.

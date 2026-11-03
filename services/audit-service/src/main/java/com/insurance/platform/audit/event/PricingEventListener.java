@@ -15,6 +15,10 @@ public class PricingEventListener {
         this.service = service;
     }
 
+    private EventObservation observation = new EventObservation(new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+    @org.springframework.beans.factory.annotation.Autowired
+    public void configureObservation(EventObservation observation) { this.observation = observation; }
+
     @KafkaListener(id = "pricing-audit", idIsGroup = false, topics = "${pricing.events.topic:insurance.pricing.events}")
     public void receive(ConsumerRecord<byte[], byte[]> record) {
         var decoded = decoder.decode(record.value());
@@ -24,9 +28,9 @@ public class PricingEventListener {
         }
         try {
             var event = decoded.get();
-            var result = service.recordPricing(event);
-            LOG.info("Pricing event handled result={} eventId={} pricingRuleId={} correlationId={} partition={} offset={}",
-                    result, event.eventId(), event.aggregateId(), event.correlationId(), record.partition(), record.offset());
+            var result = observation.process(event.correlationId(), record.topic(), () -> service.recordPricing(event));
+            LOG.info("Pricing event handled result={} eventId={} pricingRuleId={} correlationId={} topic={} partition={} offset={}",
+                    result, event.eventId(), event.aggregateId(), event.correlationId(), record.topic(), record.partition(), record.offset());
         } catch (RuntimeException failure) {
             throw new QuoteProcessingException(failure);
         }

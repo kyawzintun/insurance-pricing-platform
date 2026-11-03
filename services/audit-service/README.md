@@ -248,3 +248,12 @@ See [API contract](../../docs/admin-customer-management.md),
 ## Phase 22 — ADMIN read API
 
 Current key configuration is described in the Phase 24 section above: Auth receives private and public RSA PEM resources; verifiers receive the public resource only. The earlier symmetric shared-secret setup has been removed.
+## Phase 26 — Operations
+
+Health/info and liveness/readiness probes are available on this service's Actuator port.
+Metrics are exposed through `/actuator/metrics`; ADMIN is required except for Notification's
+internal endpoint. Logs include service and the existing correlation ID; credentials/payloads
+are excluded. Database services include their own DB in readiness; consumer services also
+check local listener containers. Gateway readiness is local availability only.
+See [Phase 26 operations/configuration](../../docs/specs/phase-26-observability-resilience.md)
+and [validation](../../docs/phase-26-validation.md). Earlier phase descriptions are historical.

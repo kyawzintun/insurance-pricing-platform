@@ -10,11 +10,11 @@ CUSTOMER/ADMIN user tokens cannot call internal calculation, and service tokens 
 use admin APIs. Secret distribution is limited to Auth/Quote; RSA private signing
 remains Auth-only. User refresh, events and transaction semantics remain unchanged.
 See [specification](specs/phase-25-service-authentication.md) and
-[validation](phase-25-validation.md). Phase 26 remains unstarted. Earlier sections
+[validation](phase-25-validation.md). Phase 26 implementation is described below. Earlier sections
 record historical phase behavior and are superseded by this Phase 25 boundary.
 
 
-Status: Phases 0 through 25 implemented and validated; Phase 26 — Observability and Resilience not started.
+Status: Phases 0 through 26 implemented and validated. Phase 27 — PostgreSQL Performance is next and has not been started.
 
 ## Phase 0 — Repository and Project Foundation
 
@@ -143,3 +143,14 @@ and [validation](phase-24-validation.md).
 ### Phase 25 — Service-to-Service Authentication
 
 Completed. Auth machine credentials issue RS256 service tokens; Quote caches and forwards them directly to Pricing. Service identity, scope and audience enforcement, single-flight acquisition, controlled 401 retry, outage safety, PostgreSQL regressions and disposable E2E are validated. See [specification](specs/phase-25-service-authentication.md) and [validation](phase-25-validation.md).
+
+## Phase 26 — Observability & Resilience
+
+Application logs now carry service/correlation context; all six services expose safe health,
+liveness/readiness and Actuator metrics. Quote uses independent Auth/Pricing HTTP timeouts and
+a Pricing-only circuit breaker, retaining the single 401 refresh and atomic quote/outbox commit.
+No fallback premium, transport retry, event/security contract changes or Phase 27 work.
+Outbox pending/age samples and publish/consumer outcome counters add operational visibility.
+Metrics require ADMIN except Notification's internal numeric endpoint; keep that port private.
+See [specification](specs/phase-26-observability-resilience.md) and
+[validation](phase-26-validation.md) for configuration, readiness meaning and limits.

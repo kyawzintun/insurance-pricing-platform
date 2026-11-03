@@ -8,6 +8,8 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @Component
 public class PricingCorrelationId {
     public String current() {
+        String context = org.slf4j.MDC.get("correlationId");
+        if (context != null) return context;
         var attributes = RequestContextHolder.getRequestAttributes();
         var incoming = attributes instanceof ServletRequestAttributes servlet
                 ? servlet.getRequest().getHeader("X-Correlation-ID") : null;

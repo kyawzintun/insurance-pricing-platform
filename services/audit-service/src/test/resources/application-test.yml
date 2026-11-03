@@ -15,3 +15,6 @@ auth:
   jwt:
     issuer: insurance-auth-service
     public-key: classpath:keys/dev-jwt-public.pem
+
+# Unit HTTP tests deliberately exclude the real datasource.
+management.endpoint.health.group.readiness.include: readinessState

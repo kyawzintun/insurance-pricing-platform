@@ -17,6 +17,9 @@ import org.springframework.util.backoff.FixedBackOff;
 
 @Configuration(proxyBeanMethods = false)
 public class AuditKafkaConfiguration {
+    @org.springframework.beans.factory.annotation.Autowired
+    private io.micrometer.core.instrument.MeterRegistry meters;
+
     @Bean
     Clock auditClock() { return Clock.systemUTC(); }
 
@@ -29,7 +32,9 @@ public class AuditKafkaConfiguration {
             @Value("${pricing.events.topic:insurance.pricing.events}") String pricingTopic,
             @Value("${pricing.events.dlq-topic:insurance.pricing.events.dlq}") String pricingDlqTopic) {
         if (maxAttempts < 1 || maxAttempts > 10) throw new IllegalArgumentException("Consumer max attempts must be 1..10");
-        return new QuoteDeadLetterRecoverer(kafka, clock, group, maxAttempts, userTopic, userDlqTopic, pricingTopic, pricingDlqTopic);
+        var recoverer = new QuoteDeadLetterRecoverer(kafka, clock, group, maxAttempts, userTopic, userDlqTopic, pricingTopic, pricingDlqTopic);
+        recoverer.configureMetrics(meters);
+        return recoverer;
     }
 
     @Bean

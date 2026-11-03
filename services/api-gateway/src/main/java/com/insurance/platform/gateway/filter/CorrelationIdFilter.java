@@ -1,11 +1,15 @@
 package com.insurance.platform.gateway.filter;
 
-import java.util.UUID;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.*;
+import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.server.WebFilter;
+import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
+
+import java.util.UUID;
 
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -23,6 +27,9 @@ public class CorrelationIdFilter implements WebFilter {
             exchange.getResponse().getHeaders().set(HEADER, id);
             return Mono.empty();
         });
-        return chain.filter(exchange.mutate().request(request).build());
+        return chain.filter(exchange.mutate().request(request).build()).doFinally(signal ->
+                LoggerFactory.getLogger(getClass()).info(
+                        "action=http-request correlationId={} method={} status={}", id,
+                        request.getMethod(), exchange.getResponse().getStatusCode()));
     }
 }

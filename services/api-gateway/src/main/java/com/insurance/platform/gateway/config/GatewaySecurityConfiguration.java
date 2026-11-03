@@ -39,10 +39,12 @@ public class GatewaySecurityConfiguration {
                 .cors(config -> config.configurationSource(cors))
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/actuator/metrics", "/actuator/metrics/**").hasRole("ADMIN")
+                        .pathMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                         .pathMatchers("/api/v1/admin/audit", "/api/v1/admin/audit/**").hasRole("ADMIN")
                         .pathMatchers("/api/v1/admin/pricing/**").hasRole("ADMIN")
                         .pathMatchers("/api/v1/admin/customers", "/api/v1/admin/customers/**").hasRole("ADMIN")
+                        .pathMatchers("/actuator/**").denyAll()
                         .anyExchange().authenticated())
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((exchange, ex) -> unauthorized(exchange))

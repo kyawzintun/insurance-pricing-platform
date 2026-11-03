@@ -15,6 +15,10 @@ public class UserEventListener {
         this.service = service;
     }
 
+    private EventObservation observation = new EventObservation(new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+    @org.springframework.beans.factory.annotation.Autowired
+    public void configureObservation(EventObservation observation) { this.observation = observation; }
+
     @KafkaListener(id = "user-notification", idIsGroup = false, topics = "${user.events.topic:insurance.user.events}")
     public void receive(ConsumerRecord<byte[], byte[]> record) {
         var decoded = decoder.decode(record.value());
@@ -24,9 +28,9 @@ public class UserEventListener {
         }
         try {
             var event = decoded.get();
-            var result = service.registerUser(event);
-            LOG.info("User event handled result={} eventId={} userId={} correlationId={} partition={} offset={}",
-                    result, event.eventId(), event.aggregateId(), event.correlationId(), record.partition(), record.offset());
+            var result = observation.process(event.correlationId(), record.topic(), () -> service.registerUser(event));
+            LOG.info("User event handled result={} eventId={} userId={} correlationId={} topic={} partition={} offset={}",
+                    result, event.eventId(), event.aggregateId(), event.correlationId(), record.topic(), record.partition(), record.offset());
         } catch (RuntimeException failure) {
             throw new QuoteProcessingException(failure);
         }

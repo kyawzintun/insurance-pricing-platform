@@ -36,6 +36,11 @@ public class AuthOutboxPublisher {
         this.batchSize = batchSize;
     }
 
+    private io.micrometer.core.instrument.MeterRegistry meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void configureMetrics(io.micrometer.core.instrument.MeterRegistry meters) { this.meters = meters; }
+
     @Scheduled(fixedDelayString = "${outbox.publisher.poll-interval:2000}", initialDelayString = "${outbox.publisher.poll-interval:2000}")
     public void poll() {
         try {
@@ -60,6 +65,7 @@ public class AuthOutboxPublisher {
                         LOG.info("Outbox publisher interrupted; pending events remain publishable");
                         return;
                     } catch (Exception failure) {
+            meters.counter("insurance.outbox.failed").increment();
                         LOG.warn("Outbox publication failed outboxId={} eventId={} aggregateId={} eventType={} topic={} retryCount={} correlationId={} failureType={}",
                                 event.id(), event.eventId(), event.aggregateId(), event.eventType(), topic,
                                 event.retryCount(), event.correlationId(), failure.getClass().getSimpleName());
@@ -71,17 +77,20 @@ public class AuthOutboxPublisher {
                     try {
                         batch.published(event.id(), clock.instant().truncatedTo(ChronoUnit.MICROS));
                     } catch (Exception failure) {
+            meters.counter("insurance.outbox.failed").increment();
                         LOG.warn("Outbox acknowledgment received but status update failed outboxId={} eventId={} aggregateId={} eventType={} topic={} retryCount={} correlationId={} failureType={}; duplicate publication is possible",
                                 event.id(), event.eventId(), event.aggregateId(), event.eventType(), topic,
                                 event.retryCount(), event.correlationId(), failure.getClass().getSimpleName());
                         return;
                     }
+                    meters.counter("insurance.outbox.published").increment();
                     LOG.info("Outbox published outboxId={} eventId={} aggregateId={} eventType={} topic={} retryCount={} correlationId={}",
                             event.id(), event.eventId(), event.aggregateId(), event.eventType(), topic,
                             event.retryCount(), event.correlationId());
                 }
             }
         } catch (Exception failure) {
+            meters.counter("insurance.outbox.failed").increment();
             // No exception text/stack trace: JDBC/Kafka failures may include sensitive payload data.
             LOG.warn("Outbox poll failed failureType={}; pending rows will be polled again", failure.getClass().getSimpleName());
         }

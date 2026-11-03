@@ -1,3 +1,5 @@
 auth:
   jwt:
     public-key: classpath:keys/dev-jwt-public.pem
+
+management.endpoint.health.group.readiness.include: readinessState,db

@@ -42,10 +42,17 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db,kafkaConsumer
 
 notification:
   events:
@@ -60,3 +67,7 @@ user:
   events:
     topic: ${USER_EVENTS_TOPIC:insurance.user.events}
     dlq-topic: ${USER_EVENTS_DLQ_TOPIC:insurance.user.events.dlq}
+
+logging:
+  pattern:
+    level: "service=${spring.application.name} correlationId=%X{correlationId:-none} %5p"

@@ -43,23 +43,46 @@ public class PricingClient implements AutoCloseable {
         this.tokens = tokens;
     }
 
+    private io.github.resilience4j.circuitbreaker.CircuitBreaker breaker =
+            io.github.resilience4j.circuitbreaker.CircuitBreaker.ofDefaults("pricing");
+    private io.micrometer.core.instrument.MeterRegistry meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void configureObservability(io.github.resilience4j.circuitbreaker.CircuitBreaker breaker,
+                                       io.micrometer.core.instrument.MeterRegistry meters) {
+        this.breaker = breaker;
+        this.meters = meters;
+    }
+
     public PricingResult calculate(CreateQuoteRequest request) {
-        PricingResult result;
+        var sample = io.micrometer.core.instrument.Timer.start(meters);
         try {
+            // Token endpoint failure must not count against Pricing's breaker.
             String correlation = new QuoteCorrelationId().current();
-            String token = tokens.token(correlation);
-            try {
-                result = call(request, token, correlation);
-            } catch (Unauthorized ex) {
-                tokens.invalidate(token);
-                result = call(request, tokens.token(correlation), correlation);
-            }
-        } catch (ResourceAccessException ex) {
-            throw QuoteException.pricingUnavailable();
-        } catch (RestClientException ex) {
-            throw QuoteException.pricingError();
+            var result = validate(breaker.executeSupplier(() -> {
+                String token = tokens.token(correlation);
+                return callWithTokenRefresh(request, token, correlation);
+            }));
+            org.slf4j.LoggerFactory.getLogger(getClass()).info("action=pricing-call result=success");
+            return result;
+        } catch (RuntimeException failure) {
+            meters.counter("insurance.pricing.client.errors").increment();
+            org.slf4j.LoggerFactory.getLogger(getClass()).warn("action=pricing-call result=failure failureType={}", failure.getClass().getSimpleName());
+            if (failure instanceof RestClientException && !(failure instanceof ResourceAccessException)) throw QuoteException.pricingError();
+            if (failure instanceof ResourceAccessException || failure instanceof io.github.resilience4j.circuitbreaker.CallNotPermittedException) throw QuoteException.pricingUnavailable();
+            throw failure;
+        } finally {
+            sample.stop(meters.timer("insurance.pricing.client.duration"));
         }
-        return validate(result);
+    }
+
+    private PricingResult callWithTokenRefresh(CreateQuoteRequest request, String token, String correlation) {
+        try {
+            return call(request, token, correlation);
+        } catch (Unauthorized ex) {
+            tokens.invalidate(token);
+            return call(request, tokens.token(correlation), correlation);
+        }
     }
 
     private PricingResult call(CreateQuoteRequest request, String token, String correlation) {

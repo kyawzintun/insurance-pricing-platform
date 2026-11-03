@@ -42,10 +42,17 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db,kafkaConsumer
 
 kafka:
   consumer:
@@ -70,3 +77,7 @@ auth:
   jwt:
     public-key: ${AUTH_JWT_PUBLIC_KEY:}
     issuer: ${AUTH_JWT_ISSUER:insurance-auth-service}
+
+logging:
+  pattern:
+    level: "service=${spring.application.name} correlationId=%X{correlationId:-none} %5p"

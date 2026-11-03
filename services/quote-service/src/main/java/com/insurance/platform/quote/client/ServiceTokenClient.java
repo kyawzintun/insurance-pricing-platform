@@ -28,9 +28,9 @@ public class ServiceTokenClient implements AutoCloseable {
                               @Value("${service-auth.client-id:quote-service}") String id,
                               @Value("${service-auth.client-secret:}") String secret,
                               @Value("${service-auth.expiry-margin:30s}") Duration margin,
-                              @Value("${pricing.service.connect-timeout:2s}") Duration connect,
-                              @Value("${pricing.service.read-timeout:5s}") Duration read) {
-        if (margin.isNegative()) {
+                              @Value("${service-auth.connect-timeout:2s}") Duration connect,
+                              @Value("${service-auth.read-timeout:5s}") Duration read) {
+        if (connect.isZero() || connect.isNegative() || read.isZero() || read.isNegative() || margin.isNegative()) {
             throw new IllegalArgumentException("Invalid token expiry margin");
         }
 

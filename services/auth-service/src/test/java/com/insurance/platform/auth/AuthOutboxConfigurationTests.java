@@ -12,6 +12,7 @@ import static org.mockito.Mockito.*;
 
 class AuthOutboxConfigurationTests {
     private final ApplicationContextRunner context = new ApplicationContextRunner()
+            .withBean(io.micrometer.core.instrument.MeterRegistry.class, io.micrometer.core.instrument.simple.SimpleMeterRegistry::new)
             .withUserConfiguration(OutboxSchedulingConfiguration.class, AuthOutboxPublisher.class)
             .withBean(OutboxPollingRepository.class, () -> mock(OutboxPollingRepository.class))
             .withBean(KafkaTemplate.class, () -> mock(KafkaTemplate.class))
