@@ -1,6 +1,6 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
-import { sessionIsActive } from '@app/store/auth/auth.reducer';
+import { sessionIsActive } from '@app/store/auth/auth.store';
 import { withGuardSession } from './refresh-guard-session';
 
 export const authGuard: CanActivateFn = () => {

@@ -7,18 +7,10 @@ import {
 } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
-import { provideState, provideStore } from '@ngrx/store';
-import { provideEffects } from '@ngrx/effects';
 
 import { routes } from '@app/app.routes';
-import { authFeature } from '@app/store/auth/auth.reducer';
-import { AuthEffects } from '@app/store/auth/auth.effects';
-import { quoteFeature } from '@app/store/quotes/quote.reducer';
-import { QuoteEffects } from '@app/store/quotes/quote.effects';
 import { SessionService } from '@app/core/auth/session.service';
 import { authInterceptor } from '@app/core/interceptors/auth.interceptor';
-import { AuditEffects, auditFeature } from '@app/store/audit/audit.store';
-import { OperationsEffects, operationsFeature } from '@app/store/operations/operations.store';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -26,11 +18,5 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(() => firstValueFrom(inject(SessionService).restore())),
     provideRouter(routes),
     provideHttpClient(withInterceptors([authInterceptor])),
-    provideStore(),
-    provideState(authFeature),
-    provideState(quoteFeature),
-    provideState(auditFeature),
-    provideState(operationsFeature),
-    provideEffects(AuthEffects, QuoteEffects, AuditEffects, OperationsEffects),
   ],
 };

@@ -21,5 +21,7 @@ export interface OperationsOverview {
 export class OperationsApiService {
   private readonly http = inject(HttpClient);
   private readonly url = `${inject(GATEWAY_URL)}/api/v1/admin/operations`;
-  overview() { return this.http.get<OperationsOverview>(this.url); }
+  overview() {
+    return this.http.get<OperationsOverview>(this.url);
+  }
 }

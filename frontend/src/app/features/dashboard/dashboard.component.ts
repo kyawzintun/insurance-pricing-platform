@@ -1,7 +1,6 @@
+import { AuthStore } from '@app/store/auth/auth.store';
 import { Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { Store } from '@ngrx/store';
-import { authFeature } from '@app/store/auth/auth.reducer';
 
 @Component({
   selector: 'app-dashboard',
@@ -33,6 +32,6 @@ import { authFeature } from '@app/store/auth/auth.reducer';
   `,
 })
 export class DashboardComponent {
-  readonly roles = inject(Store).selectSignal(authFeature.selectRoles);
+  readonly roles = inject(AuthStore).roles;
   readonly isAdmin = computed(() => this.roles().includes('ADMIN'));
 }

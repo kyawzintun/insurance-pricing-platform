@@ -1,16 +1,15 @@
+import { patchState } from '@ngrx/signals';
+import { unprotected } from '@ngrx/signals/testing';
+import { AuthStore } from '@app/store/auth/auth.store';
+import { QuoteStore } from '@app/store/quotes/quote.store';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
-import { provideState, provideStore, Store } from '@ngrx/store';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, Subject, throwError } from 'rxjs';
 import { QuoteNewComponent } from '@app/features/quotes/new/quote-new.component';
 import { QuoteHistoryComponent } from '@app/features/quotes/history/quote-history.component';
 import { QuoteDetailComponent } from '@app/features/quotes/detail/quote-detail.component';
 import { QuoteApiService } from '@app/core/quotes/quote-api.service';
-import { quoteFeature } from '@app/store/quotes/quote.reducer';
-import { QuoteActions } from '@app/store/quotes/quote.actions';
-import { authFeature } from '@app/store/auth/auth.reducer';
-import { AuthActions } from '@app/store/auth/auth.actions';
 import { customerGuard } from '@app/core/guards/customer.guard';
 import { AppComponent } from '@app/app.component';
 import { quoteInput, storedQuote, quotePage } from '@app/testing/quote-fixtures';
@@ -19,12 +18,18 @@ import { routes } from '@app/app.routes';
 
 describe('Quote pages', () => {
   let api: {
+    createQuote: ReturnType<typeof vi.fn>;
+    getQuotes: ReturnType<typeof vi.fn>;
+    getQuote: ReturnType<typeof vi.fn>;
     getVehicleBrands: ReturnType<typeof vi.fn>;
     getVehicleModels: ReturnType<typeof vi.fn>;
   };
-  let store: Store;
+  let store: InstanceType<typeof QuoteStore>;
   beforeEach(() => {
     api = {
+      createQuote: vi.fn(() => new Subject()),
+      getQuotes: vi.fn(() => new Subject()),
+      getQuote: vi.fn(() => new Subject()),
       getVehicleBrands: vi.fn(() =>
         of([
           { id: 'brand-a', name: 'API Brand' },
@@ -36,9 +41,6 @@ describe('Quote pages', () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
-        provideStore(),
-        provideState(authFeature),
-        provideState(quoteFeature),
         { provide: QuoteApiService, useValue: api },
         {
           provide: ActivatedRoute,
@@ -46,7 +48,7 @@ describe('Quote pages', () => {
         },
       ],
     });
-    store = TestBed.inject(Store);
+    store = TestBed.inject(QuoteStore);
   });
   it('loads catalog and clears selected model when brand changes', () => {
     const fixture = TestBed.createComponent(QuoteNewComponent);
@@ -99,49 +101,57 @@ describe('Quote pages', () => {
   it('rejects empty forms and prevents duplicate valid submission while pending', () => {
     const fixture = TestBed.createComponent(QuoteNewComponent);
     const c = fixture.componentInstance;
-    const dispatch = vi.spyOn(store, 'dispatch');
+    const create = api.createQuote;
     c.submit();
-    expect(dispatch).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Select coverage.');
     c.form.setValue(quoteInput);
     c.submit();
     c.submit();
-    expect(dispatch).toHaveBeenCalledExactlyOnceWith(
-      QuoteActions.createQuote({ request: quoteInput }),
-    );
+    expect(create).toHaveBeenCalledExactlyOnceWith(quoteInput);
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('button[type=submit]').disabled).toBe(true);
   });
   it('shows safe creation failures', () => {
     const fixture = TestBed.createComponent(QuoteNewComponent);
-    store.dispatch(
-      QuoteActions.createQuoteFailure({ message: 'Please check your quote information.' }),
-    );
+    patchState(unprotected(TestBed.inject(QuoteStore)), {
+      createStatus: 'error',
+      createError: 'Please check your quote information.',
+    });
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Please check your quote information.');
   });
-  it('renders history and sends previous/next page actions', () => {
+  it('renders history and sends previous/next page requests', () => {
     const fixture = TestBed.createComponent(QuoteHistoryComponent);
-    store.dispatch(QuoteActions.loadQuotesSuccess({ result: quotePage }));
+    patchState(unprotected(TestBed.inject(QuoteStore)), {
+      historyStatus: 'success',
+      history: quotePage,
+    });
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Q-HISTORICAL');
     expect(fixture.nativeElement.textContent).toContain('Page 1 of 2');
     const buttons = fixture.nativeElement.querySelectorAll('button');
     expect(buttons[0].disabled).toBe(true);
-    const dispatch = vi.spyOn(store, 'dispatch');
+    const load = api.getQuotes;
     buttons[1].click();
-    expect(dispatch).toHaveBeenCalledWith(QuoteActions.loadQuotes({ page: 1, size: 20 }));
-    store.dispatch(QuoteActions.loadQuotesSuccess({ result: { ...quotePage, page: 1 } }));
+    expect(load).toHaveBeenCalledWith(1, 20);
+    patchState(unprotected(TestBed.inject(QuoteStore)), {
+      historyStatus: 'success',
+      history: { ...quotePage, page: 1 },
+    });
     fixture.detectChanges();
     const next = fixture.nativeElement.querySelectorAll('button');
     expect(next[1].disabled).toBe(true);
     next[0].click();
-    expect(dispatch).toHaveBeenLastCalledWith(QuoteActions.loadQuotes({ page: 0, size: 20 }));
+    expect(load).toHaveBeenLastCalledWith(0, 20);
   });
   it('renders historical snapshots without current catalog requests and toggles local breakdown', () => {
     const fixture = TestBed.createComponent(QuoteDetailComponent);
-    store.dispatch(QuoteActions.loadQuoteSuccess({ quote: storedQuote }));
+    patchState(unprotected(TestBed.inject(QuoteStore)), {
+      detailStatus: 'success',
+      selectedQuote: storedQuote,
+    });
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent;
     for (const value of [
@@ -162,7 +172,11 @@ describe('Quote pages', () => {
   });
   it('renders a safe missing detail and removes the old snapshot', () => {
     const fixture = TestBed.createComponent(QuoteDetailComponent);
-    store.dispatch(QuoteActions.loadQuoteFailure({ message: 'Quote not found.' }));
+    patchState(unprotected(TestBed.inject(QuoteStore)), {
+      detailStatus: 'error',
+      selectedQuote: null,
+      detailError: 'Quote not found.',
+    });
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Quote not found.');
     expect(fixture.nativeElement.textContent).not.toContain('Q-HISTORICAL');
@@ -175,16 +189,23 @@ describe('Quote pages', () => {
     ).toBe(true);
     const guard = () => TestBed.runInInjectionContext(() => (customerGuard as () => unknown)());
     expect(TestBed.inject(Router).serializeUrl(guard() as never)).toBe('/login');
-    store.dispatch(AuthActions.loginSuccess({ session: session() }));
+    TestBed.inject(AuthStore).loginSuccess(session());
     expect(guard()).toBe(true);
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('New Quote');
-    store.dispatch(AuthActions.loginSuccess({ session: { ...session(), roles: ['ADMIN'] } }));
+    TestBed.inject(AuthStore).loginSuccess({ ...session(), roles: ['ADMIN'] });
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).not.toContain('New Quote');
     expect(TestBed.inject(Router).serializeUrl(guard() as never)).toBe('/dashboard');
-    store.dispatch(AuthActions.logout());
+    TestBed.inject(AuthStore).logout();
     expect(TestBed.inject(Router).serializeUrl(guard() as never)).toBe('/login');
+  });
+  beforeEach(() => {
+    const router = TestBed.inject(Router, null);
+    if (router) {
+      vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+      vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    }
   });
 });

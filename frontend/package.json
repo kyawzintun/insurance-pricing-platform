@@ -17,10 +17,9 @@
     "@angular/forms": "22.2.2",
     "@angular/platform-browser": "22.2.2",
     "@angular/router": "22.2.2",
+    "@ngrx/signals": "22.0.1",
     "rxjs": "~7.8.0",
-    "tslib": "^2.3.0",
-    "@ngrx/store": "22.0.1",
-    "@ngrx/effects": "22.0.1"
+    "tslib": "^2.3.0"
   },
   "devDependencies": {
     "@angular/build": "22.2.2",

@@ -1,4 +1,4 @@
-<section class="operations" aria-labelledby="operations-title" [attr.aria-busy]="state().loading">
+<section class="operations" aria-labelledby="operations-title" [attr.aria-busy]="state.loading()">
   <header class="operations-header">
     <div>
       <p class="eyebrow">ADMIN / OPERATIONS</p>
@@ -14,18 +14,18 @@
         />
         Auto-refresh every 15 seconds</label
       >
-      <button type="button" (click)="refresh()" [disabled]="state().loading">Refresh</button>
+      <button type="button" (click)="refresh()" [disabled]="state.loading()">Refresh</button>
     </div>
   </header>
-  @if (state().error) {
+  @if (state.error()) {
     <p class="notice error" role="alert">
-      {{ state().error }} Any displayed snapshot is from the last successful refresh.
+      {{ state.error() }} Any displayed snapshot is from the last successful refresh.
     </p>
   }
-  @if (state().loading) {
+  @if (state.loading()) {
     <p role="status">Refreshing operations…</p>
   }
-  @if (state().overview; as overview) {
+  @if (state.overview(); as overview) {
     <div class="summary" aria-live="polite">
       <div>
         <span class="muted">Platform status</span

@@ -1,13 +1,12 @@
+import { AuthStore } from '@app/store/auth/auth.store';
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { provideRouter, Router } from '@angular/router';
-import { provideState, provideStore, Store } from '@ngrx/store';
 import { Subject } from 'rxjs';
 import { LoginComponent } from '@app/features/auth/login/login.component';
 import { RegisterComponent } from '@app/features/auth/register/register.component';
 import { AuthApiService } from '@app/core/auth/auth-api.service';
 import { RegisteredUser, TokenResponse } from '@app/core/auth/auth.models';
-import { authFeature } from '@app/store/auth/auth.reducer';
 import { token } from '@app/testing/auth-fixtures';
 
 const credentials = { email: 'alex@example.invalid', password: 'fictional-test-password' };
@@ -20,12 +19,7 @@ describe('Login page', () => {
     api = { login: vi.fn(() => result) };
     TestBed.configureTestingModule({
       imports: [LoginComponent],
-      providers: [
-        provideRouter([]),
-        provideStore(),
-        provideState(authFeature),
-        { provide: AuthApiService, useValue: api },
-      ],
+      providers: [provideRouter([]), { provide: AuthApiService, useValue: api }],
     });
   });
   function page() {
@@ -47,7 +41,7 @@ describe('Login page', () => {
     expect(
       element.querySelector('input[autocomplete="current-password"]')?.getAttribute('type'),
     ).toBe('text');
-    expect(TestBed.inject(Store).selectSignal(authFeature.selectIsAuthenticated)()).toBe(false);
+    expect(TestBed.inject(AuthStore).isAuthenticated()).toBe(false);
   });
   it('does not submit invalid forms and displays validation', () => {
     const fixture = page();
@@ -73,8 +67,8 @@ describe('Login page', () => {
     fixture.detectChanges();
     expect(component.loading()).toBe(false);
     expect(component.form.controls.password.value).toBe('');
-    expect(TestBed.inject(Store).selectSignal(authFeature.selectAccessToken)()).toBe(accessToken);
-    expect(TestBed.inject(Store).selectSignal(authFeature.selectIsAuthenticated)()).toBe(true);
+    expect(TestBed.inject(AuthStore).accessToken()).toBe(accessToken);
+    expect(TestBed.inject(AuthStore).isAuthenticated()).toBe(true);
   });
   it.each([
     [401, 'Invalid email or password.'],
@@ -96,7 +90,7 @@ describe('Login page', () => {
     expect(fixture.nativeElement.textContent).not.toContain('raw database exception');
     expect(component.loading()).toBe(false);
     expect(component.form.controls.password.value).toBe('');
-    expect(TestBed.inject(Store).selectSignal(authFeature.selectIsAuthenticated)()).toBe(false);
+    expect(TestBed.inject(AuthStore).isAuthenticated()).toBe(false);
   });
   it('rejects malformed successful token responses', () => {
     const fixture = page();
@@ -106,7 +100,7 @@ describe('Login page', () => {
     result.complete();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Unable to sign in. Please try again.');
-    expect(TestBed.inject(Store).selectSignal(authFeature.selectIsAuthenticated)()).toBe(false);
+    expect(TestBed.inject(AuthStore).isAuthenticated()).toBe(false);
   });
   it('cancels an in-flight request when the page is destroyed', () => {
     const fixture = page();
@@ -114,7 +108,14 @@ describe('Login page', () => {
     fixture.componentInstance.submit();
     fixture.destroy();
     result.next({ accessToken: token(), tokenType: 'Bearer', expiresIn: 900 });
-    expect(TestBed.inject(Store).selectSignal(authFeature.selectIsAuthenticated)()).toBe(false);
+    expect(TestBed.inject(AuthStore).isAuthenticated()).toBe(false);
+  });
+  beforeEach(() => {
+    const router = TestBed.inject(Router, null);
+    if (router) {
+      vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+      vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    }
   });
 });
 
@@ -127,12 +128,7 @@ describe('Registration page', () => {
     api = { register: vi.fn(() => result) };
     TestBed.configureTestingModule({
       imports: [RegisterComponent],
-      providers: [
-        provideRouter([]),
-        provideStore(),
-        provideState(authFeature),
-        { provide: AuthApiService, useValue: api },
-      ],
+      providers: [provideRouter([]), { provide: AuthApiService, useValue: api }],
     });
   });
   function page() {
@@ -194,7 +190,7 @@ describe('Registration page', () => {
     expect(navigate).toHaveBeenCalledWith(['/login'], { queryParams: { registered: '1' } });
     expect(component.loading()).toBe(false);
     expect(component.form.controls.password.value).toBe('');
-    expect(TestBed.inject(Store).selectSignal(authFeature.selectIsAuthenticated)()).toBe(false);
+    expect(TestBed.inject(AuthStore).isAuthenticated()).toBe(false);
   });
   it('renders a safe validation failure', () => {
     const fixture = page();
@@ -203,5 +199,12 @@ describe('Registration page', () => {
     result.error(new HttpErrorResponse({ status: 400, error: 'internal details' }));
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Please check your details and try again.');
+  });
+  beforeEach(() => {
+    const router = TestBed.inject(Router, null);
+    if (router) {
+      vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+      vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    }
   });
 });

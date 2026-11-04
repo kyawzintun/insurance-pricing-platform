@@ -1,13 +1,12 @@
+import { Router } from '@angular/router';
+import { AuthStore } from '@app/store/auth/auth.store';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideStore, provideState, Store } from '@ngrx/store';
 import { provideRouter } from '@angular/router';
 import { QuoteApiService } from '@app/core/quotes/quote-api.service';
 import { GATEWAY_URL } from '@app/core/auth/gateway.config';
 import { authInterceptor } from '@app/core/interceptors/auth.interceptor';
-import { AuthActions } from '@app/store/auth/auth.actions';
-import { authFeature } from '@app/store/auth/auth.reducer';
 import { session } from '@app/testing/auth-fixtures';
 import { quoteInput, storedQuote, quotePage } from '@app/testing/quote-fixtures';
 
@@ -18,8 +17,6 @@ describe('Quote Gateway API contracts', () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
-        provideStore(),
-        provideState(authFeature),
         provideHttpClient(withInterceptors([authInterceptor])),
         provideHttpClientTesting(),
         { provide: GATEWAY_URL, useValue: 'http://gateway.test' },
@@ -27,7 +24,7 @@ describe('Quote Gateway API contracts', () => {
     });
     api = TestBed.inject(QuoteApiService);
     http = TestBed.inject(HttpTestingController);
-    TestBed.inject(Store).dispatch(AuthActions.loginSuccess({ session: session() }));
+    TestBed.inject(AuthStore).sessionRestored(session());
   });
   afterEach(() => http.verify());
   it('posts only quote inputs and attaches JWT using the existing interceptor', () => {
@@ -57,5 +54,12 @@ describe('Quote Gateway API contracts', () => {
     http.expectOne('http://gateway.test/api/v1/vehicles/brands').flush([]);
     api.getVehicleModels('brand-a').subscribe();
     http.expectOne('http://gateway.test/api/v1/vehicles/brands/brand-a/models').flush([]);
+  });
+  beforeEach(() => {
+    const router = TestBed.inject(Router, null);
+    if (router) {
+      vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+      vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    }
   });
 });

@@ -1,11 +1,11 @@
 <section class="quote-page audit-page">
   <a routerLink="/admin/audit" [queryParams]="route.snapshot.queryParams">Back to audit history</a>
   <h1>Audit record</h1>
-  @if (state().detailLoading) {
+  @if (state.detailLoading()) {
     <p role="status">Loading audit record…</p>
-  } @else if (state().detailError) {
-    <p class="error" role="alert">{{ state().detailError }}</p>
-  } @else if (state().detail; as record) {
+  } @else if (state.detailError()) {
+    <p class="error" role="alert">{{ state.detailError() }}</p>
+  } @else if (state.detail(); as record) {
     <section class="card">
       <h2>Event</h2>
       <dl>

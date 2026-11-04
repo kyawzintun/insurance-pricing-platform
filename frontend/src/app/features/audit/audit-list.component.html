@@ -33,14 +33,14 @@
     </div>
   </form>
   <div aria-live="polite">
-    @if (state().listLoading) {
+    @if (state.listLoading()) {
       <p role="status">Loading audit history…</p>
-    } @else if (state().listError) {
-      <p class="error" role="alert">{{ state().listError }}</p>
+    } @else if (state.listError()) {
+      <p class="error" role="alert">{{ state.listError() }}</p>
       <button type="button" class="outline" (click)="retry()">Try again</button>
     } @else {
-      <p>{{ state().result.totalElements }} records</p>
-      @if (!state().result.content.length) {
+      <p>{{ state.result().totalElements }} records</p>
+      @if (!state.result().content.length) {
         <p>No audit records match these filters.</p>
       } @else {
         <div
@@ -64,11 +64,11 @@
               </tr>
             </thead>
             <tbody>
-              @for (row of state().result.content; track row.id) {
+              @for (row of state.result().content; track row.id) {
                 <tr>
                   <td>{{ row.occurredAt | date: 'yyyy-MM-dd HH:mm:ss' : 'UTC' }}</td>
                   <td>
-                    <a [routerLink]="['/admin/audit', row.id]" [queryParams]="state().query">{{
+                    <a [routerLink]="['/admin/audit', row.id]" [queryParams]="state.query()">{{
                       row.eventType
                     }}</a>
                   </td>
@@ -92,17 +92,17 @@
         <button
           type="button"
           class="outline"
-          [disabled]="state().query.page === 0"
-          (click)="page(state().query.page - 1)"
+          [disabled]="state.query().page === 0"
+          (click)="page(state.query().page - 1)"
         >
           Previous
         </button>
-        <span>Page {{ state().query.page + 1 }} of {{ state().result.totalPages || 1 }}</span>
+        <span>Page {{ state.query().page + 1 }} of {{ state.result().totalPages || 1 }}</span>
         <button
           type="button"
           class="outline"
-          [disabled]="state().query.page + 1 >= state().result.totalPages"
-          (click)="page(state().query.page + 1)"
+          [disabled]="state.query().page + 1 >= state.result().totalPages"
+          (click)="page(state.query().page + 1)"
         >
           Next
         </button>

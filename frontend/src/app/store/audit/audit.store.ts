@@ -1,21 +1,11 @@
-import { inject, Injectable } from '@angular/core';
-import { createAction, createFeature, createReducer, on, props } from '@ngrx/store';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
-import { catchError, map, of, switchMap, takeUntil } from 'rxjs';
+import { inject } from '@angular/core';
+import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
+import { rxMethod } from '@ngrx/signals/rxjs-interop';
+import { catchError, EMPTY, pipe, Subject, switchMap, takeUntil, tap } from 'rxjs';
+import { SessionResetService } from '@app/store/session-reset.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuditDetail, AuditPage, AuditQuery } from '@app/core/audit/audit.models';
 import { AuditApiService } from '@app/core/audit/audit-api.service';
-import { AuthActions } from '@app/store/auth/auth.actions';
-
-export const AuditActions = {
-  list: createAction('[Audit] List', props<{ query: AuditQuery }>()),
-  listed: createAction('[Audit] Listed', props<{ result: AuditPage }>()),
-  listFailed: createAction('[Audit] List Failed', props<{ message: string }>()),
-  detail: createAction('[Audit] Detail', props<{ id: string }>()),
-  detailed: createAction('[Audit] Detailed', props<{ detail: AuditDetail }>()),
-  detailFailed: createAction('[Audit] Detail Failed', props<{ message: string }>()),
-};
-
 interface AuditState {
   query: AuditQuery;
   result: AuditPage;
@@ -45,44 +35,6 @@ export const initialAuditState: AuditState = {
   detailError: null,
 };
 
-export const auditFeature = createFeature({
-  name: 'audit',
-  reducer: createReducer(
-    initialAuditState,
-    on(AuditActions.list, (s, { query }) => ({
-      ...s,
-      query,
-      result: { ...initialAuditState.result, page: query.page, size: query.size },
-      listLoading: true,
-      listError: null,
-    })),
-    on(AuditActions.listed, (s, { result }) => ({ ...s, result, listLoading: false })),
-    on(AuditActions.listFailed, (s, { message }) => ({
-      ...s,
-      listLoading: false,
-      listError: message,
-    })),
-    on(AuditActions.detail, (s) => ({
-      ...s,
-      detail: null,
-      detailLoading: true,
-      detailError: null,
-    })),
-    on(AuditActions.detailed, (s, { detail }) => ({ ...s, detail, detailLoading: false })),
-    on(AuditActions.detailFailed, (s, { message }) => ({
-      ...s,
-      detailLoading: false,
-      detailError: message,
-    })),
-    on(
-      AuthActions.logout,
-      AuthActions.loginFailure,
-      AuthActions.loginSuccess,
-      () => initialAuditState,
-    ),
-  ),
-});
-
 export function auditError(error: unknown): string {
   const status = error instanceof HttpErrorResponse ? error.status : 0;
   if (status === 403) return 'Access denied. Audit history requires ADMIN access.';
@@ -91,37 +43,59 @@ export function auditError(error: unknown): string {
   return 'Audit history is unavailable. Please try again.';
 }
 
-@Injectable()
-export class AuditEffects {
-  private readonly actions = inject(Actions);
-  private readonly api = inject(AuditApiService);
-  private readonly sessionChanged = this.actions.pipe(
-    ofType(AuthActions.logout, AuthActions.loginFailure, AuthActions.loginSuccess),
-  );
-
-  readonly list = createEffect(() =>
-    this.actions.pipe(
-      ofType(AuditActions.list),
-      switchMap(({ query }) =>
-        this.api.list(query).pipe(
-          map((result) => AuditActions.listed({ result })),
-          catchError((error) => of(AuditActions.listFailed({ message: auditError(error) }))),
-          takeUntil(this.sessionChanged),
+export const AuditStore = signalStore(
+  { providedIn: 'root' },
+  withState(initialAuditState),
+  withMethods((store, api = inject(AuditApiService), resets = inject(SessionResetService)) => {
+    const cancelled = new Subject<void>();
+    const reset = () => {
+      cancelled.next();
+      patchState(store, initialAuditState);
+    };
+    const unregister = resets.register(reset);
+    return {
+      reset,
+      _dispose: () => {
+        unregister();
+        cancelled.next();
+        cancelled.complete();
+      },
+      loadList: rxMethod<{ query: AuditQuery }>(
+        pipe(
+          switchMap(({ query }) => {
+            patchState(store, {
+              query,
+              result: { ...initialAuditState.result, page: query.page, size: query.size },
+              listLoading: true,
+              listError: null,
+            });
+            return api.list(query).pipe(
+              tap((result) => patchState(store, { result, listLoading: false })),
+              catchError((error) => {
+                patchState(store, { listError: auditError(error), listLoading: false });
+                return EMPTY;
+              }),
+              takeUntil(cancelled),
+            );
+          }),
         ),
       ),
-    ),
-  );
-
-  readonly detail = createEffect(() =>
-    this.actions.pipe(
-      ofType(AuditActions.detail),
-      switchMap(({ id }) =>
-        this.api.detail(id).pipe(
-          map((detail) => AuditActions.detailed({ detail })),
-          catchError((error) => of(AuditActions.detailFailed({ message: auditError(error) }))),
-          takeUntil(this.sessionChanged),
+      loadDetail: rxMethod<{ id: string }>(
+        pipe(
+          switchMap(({ id }) => {
+            patchState(store, { detail: null, detailLoading: true, detailError: null });
+            return api.detail(id).pipe(
+              tap((detail) => patchState(store, { detail, detailLoading: false })),
+              catchError((error) => {
+                patchState(store, { detailError: auditError(error), detailLoading: false });
+                return EMPTY;
+              }),
+              takeUntil(cancelled),
+            );
+          }),
         ),
       ),
-    ),
-  );
-}
+    };
+  }),
+  withHooks({ onDestroy: (store) => store._dispose() }),
+);

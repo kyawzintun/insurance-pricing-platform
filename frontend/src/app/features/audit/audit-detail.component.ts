@@ -1,9 +1,8 @@
-import { Store } from '@ngrx/store';
+import { AuditStore } from '@app/store/audit/audit.store';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Component, computed, inject, signal } from '@angular/core';
-import { AuditActions, auditFeature } from '@app/store/audit/audit.store';
 
 @Component({
   selector: 'app-audit-detail',
@@ -11,18 +10,18 @@ import { AuditActions, auditFeature } from '@app/store/audit/audit.store';
   templateUrl: './audit-detail.component.html',
 })
 export class AuditDetailComponent {
-  private readonly store = inject(Store);
+  private readonly store = inject(AuditStore);
   readonly route = inject(ActivatedRoute);
-  readonly state = this.store.selectSignal(auditFeature.selectAuditState);
+  readonly state = this.store;
   readonly metadataExpanded = signal(true);
   readonly metadataEmpty = computed(() => {
-    const m = this.state().detail?.metadata;
+    const m = this.state.detail()?.metadata;
     return m == null || (typeof m === 'object' && Object.keys(m).length === 0);
   });
 
   constructor() {
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
-      this.store.dispatch(AuditActions.detail({ id: params.get('id') ?? '' }));
+      this.store.loadDetail({ id: params.get('id') ?? '' });
     });
   }
 }

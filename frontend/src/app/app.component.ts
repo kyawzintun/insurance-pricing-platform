@@ -1,7 +1,6 @@
-import { Component, computed, inject } from '@angular/core';
+import { AuthStore } from '@app/store/auth/auth.store';
+import { Component, inject } from '@angular/core';
 import { RouterLink, RouterOutlet } from '@angular/router';
-import { Store } from '@ngrx/store';
-import { authFeature } from '@app/store/auth/auth.reducer';
 import { SessionService } from '@app/core/auth/session.service';
 
 @Component({
@@ -11,12 +10,12 @@ import { SessionService } from '@app/core/auth/session.service';
   styleUrl: './app.component.css',
 })
 export class AppComponent {
-  private readonly store = inject(Store);
+  private readonly store = inject(AuthStore);
   private readonly session = inject(SessionService);
-  readonly authenticated = this.store.selectSignal(authFeature.selectIsAuthenticated);
-  readonly roles = this.store.selectSignal(authFeature.selectRoles);
-  readonly customer = computed(() => this.roles().includes('CUSTOMER'));
-  readonly admin = computed(() => this.roles().includes('ADMIN'));
+  readonly authenticated = this.store.isAuthenticated;
+  readonly roles = this.store.roles;
+  readonly customer = this.store.isCustomer;
+  readonly admin = this.store.isAdmin;
 
   logout(): void {
     this.session.logout();

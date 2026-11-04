@@ -1,16 +1,15 @@
+import { AuthStore, sessionIsActive } from '@app/store/auth/auth.store';
 import { SessionService } from '@app/core/auth/session.service';
 import { inject } from '@angular/core';
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
-import { Store } from '@ngrx/store';
 import { catchError, switchMap, throwError } from 'rxjs';
 import { GATEWAY_URL } from '@app/core/auth/gateway.config';
-import { authFeature, sessionIsActive } from '@app/store/auth/auth.reducer';
 
 export const authInterceptor: HttpInterceptorFn = (request, next) => {
   const base = inject(GATEWAY_URL);
-  const store = inject(Store);
+  const store = inject(AuthStore);
   const sessions = inject(SessionService);
-  const readAuth = store.selectSignal(authFeature.selectAuthState);
+  const readAuth = store.snapshot;
   // Match the configured origin AND API path boundary. Never send our token to another origin.
   const gateway = new URL(base);
   const target = new URL(request.url, document.baseURI);

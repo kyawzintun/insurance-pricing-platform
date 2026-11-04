@@ -1,5 +1,5 @@
+import { AuthStore } from '@app/store/auth/auth.store';
 import { inject, Injectable } from '@angular/core';
-import { Store } from '@ngrx/store';
 import {
   catchError,
   finalize,
@@ -15,12 +15,11 @@ import {
 import { AuthApiService } from './auth-api.service';
 import { decodeSession } from './decode-session';
 import { AuthSession } from './auth.models';
-import { AuthActions } from '@app/store/auth/auth.actions';
 
 @Injectable({ providedIn: 'root' })
 export class SessionService {
   private readonly api = inject(AuthApiService);
-  private readonly store = inject(Store);
+  private readonly store = inject(AuthStore);
   private pending?: Observable<AuthSession>;
   private generation = 0;
 
@@ -34,9 +33,9 @@ export class SessionService {
           if (!session || generation !== this.generation) throw new Error('Invalid session');
           return session;
         }),
-        tap((session) => this.store.dispatch(AuthActions.sessionRestored({ session }))),
+        tap((session) => this.store.sessionRestored(session)),
         catchError((error) => {
-          this.store.dispatch(AuthActions.loginFailure());
+          this.store.loginFailure();
           return throwError(() => error);
         }),
         finalize(() => (this.pending = undefined)),
@@ -50,7 +49,7 @@ export class SessionService {
   }
   logout() {
     this.generation++;
-    this.store.dispatch(AuthActions.logout());
+    this.store.logout();
     // Wait for any rotating response to set its cookie before sending logout.
     const settled = this.pending ? this.pending.pipe(catchError(() => of(null))) : of(null);
     settled

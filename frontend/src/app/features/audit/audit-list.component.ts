@@ -1,4 +1,4 @@
-import { Store } from '@ngrx/store';
+import { AuditStore } from '@app/store/audit/audit.store';
 import { DatePipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -6,7 +6,6 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 
 import { auditFilterKeys, AuditQuery } from '@app/core/audit/audit.models';
-import { AuditActions, auditFeature } from '@app/store/audit/audit.store';
 
 @Component({
   selector: 'app-audit-list',
@@ -14,13 +13,13 @@ import { AuditActions, auditFeature } from '@app/store/audit/audit.store';
   templateUrl: './audit-list.component.html',
 })
 export class AuditListComponent {
-  private readonly store = inject(Store);
+  private readonly store = inject(AuditStore);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   readonly validation = signal('');
   readonly fields = auditFilterKeys;
   readonly size = new FormControl(20, { nonNullable: true });
-  readonly state = this.store.selectSignal(auditFeature.selectAuditState);
+  readonly state = this.store;
   readonly labels: Record<string, string> = {
     eventType: 'Event type',
     actorType: 'Actor type',
@@ -57,7 +56,7 @@ export class AuditListComponent {
         if (value) query[key] = value;
       }
       this.size.setValue(query.size);
-      this.store.dispatch(AuditActions.list({ query }));
+      this.store.loadList({ query });
     });
   }
 
@@ -110,14 +109,14 @@ export class AuditListComponent {
   }
 
   retry(): void {
-    this.store.dispatch(AuditActions.list({ query: this.state().query }));
+    this.store.loadList({ query: this.state.query() });
   }
 
   page(page: number): void {
     if (page < 0) return;
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { ...this.state().query, page },
+      queryParams: { ...this.state.query(), page },
     });
   }
 }

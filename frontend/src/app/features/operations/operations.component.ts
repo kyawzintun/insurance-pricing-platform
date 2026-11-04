@@ -1,9 +1,8 @@
+import { OperationsStore } from '@app/store/operations/operations.store';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Store } from '@ngrx/store';
 import { interval } from 'rxjs';
-import { OperationsActions, operationsFeature } from '@app/store/operations/operations.store';
 
 @Component({
   selector: 'app-operations',
@@ -12,12 +11,12 @@ import { OperationsActions, operationsFeature } from '@app/store/operations/oper
   styleUrl: './operations.component.css',
 })
 export class OperationsComponent {
-  private readonly store = inject(Store);
-  readonly state = this.store.selectSignal(operationsFeature.selectOperationsState);
+  private readonly store = inject(OperationsStore);
+  readonly state = this.store;
   readonly autoRefresh = signal(true);
   readonly healthy = computed(
     () =>
-      this.state().overview?.services.filter((s) => s.status === 'UP' && s.readiness === 'READY')
+      this.state.overview()?.services.filter((s) => s.status === 'UP' && s.readiness === 'READY')
         .length ?? 0,
   );
   readonly metricLabels: Record<string, string> = {
@@ -38,12 +37,12 @@ export class OperationsComponent {
     interval(15000)
       .pipe(takeUntilDestroyed())
       .subscribe(() => {
-        if (this.autoRefresh() && !this.state().loading) this.refresh();
+        if (this.autoRefresh() && !this.state.loading()) this.refresh();
       });
-    inject(DestroyRef).onDestroy(() => this.store.dispatch(OperationsActions.leave()));
+    inject(DestroyRef).onDestroy(() => this.store.leave());
   }
   refresh() {
-    if (!this.state().loading) this.store.dispatch(OperationsActions.refresh());
+    if (!this.state.loading()) this.store.refresh();
   }
   entries(metrics: Record<string, number | string | null>) {
     // Render only the fixed presentation keys, never arbitrary downstream fields.

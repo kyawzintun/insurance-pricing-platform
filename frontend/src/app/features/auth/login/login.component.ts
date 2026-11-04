@@ -1,14 +1,13 @@
+import { AuthStore } from '@app/store/auth/auth.store';
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { Store } from '@ngrx/store';
 import { finalize } from 'rxjs';
 import { AuthApiService } from '@app/core/auth/auth-api.service';
 import { authErrorMessage } from '@app/core/auth/auth-errors';
 import { nonBlank, passwordBytes } from '@app/core/auth/auth.validators';
 import { decodeSession } from '@app/core/auth/decode-session';
-import { AuthActions } from '@app/store/auth/auth.actions';
 
 @Component({
   selector: 'app-login',
@@ -17,7 +16,7 @@ import { AuthActions } from '@app/store/auth/auth.actions';
 })
 export class LoginComponent {
   private readonly api = inject(AuthApiService);
-  private readonly store = inject(Store);
+  private readonly store = inject(AuthStore);
   private readonly destroyRef = inject(DestroyRef);
   readonly registered = inject(ActivatedRoute).snapshot.queryParamMap.get('registered') === '1';
   readonly loading = signal(false);
@@ -51,14 +50,14 @@ export class LoginComponent {
         next: (response) => {
           const session =
             response?.tokenType === 'Bearer' ? decodeSession(response.accessToken) : null;
-          if (session) this.store.dispatch(AuthActions.loginSuccess({ session }));
+          if (session) this.store.loginSuccess(session);
           else {
-            this.store.dispatch(AuthActions.loginFailure());
+            this.store.loginFailure();
             this.errorMessage.set('Unable to sign in. Please try again.');
           }
         },
         error: (error) => {
-          this.store.dispatch(AuthActions.loginFailure());
+          this.store.loginFailure();
           this.errorMessage.set(authErrorMessage(error, 'login'));
         },
       });

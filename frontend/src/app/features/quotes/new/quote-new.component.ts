@@ -1,13 +1,11 @@
+import { QuoteStore } from '@app/store/quotes/quote.store';
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Store } from '@ngrx/store';
 import { catchError, of, switchMap, tap } from 'rxjs';
 import { QuoteApiService } from '@app/core/quotes/quote-api.service';
 import { CoverageType, CreateQuoteRequest, VehicleReference } from '@app/core/quotes/quote.models';
 import { quoteErrorMessage } from '@app/core/quotes/quote-errors';
-import { QuoteActions } from '@app/store/quotes/quote.actions';
-import { quoteFeature } from '@app/store/quotes/quote.reducer';
 import { integer, pastDate, vehicleYear } from '@app/features/quotes/quote.validators';
 
 @Component({
@@ -17,10 +15,10 @@ import { integer, pastDate, vehicleYear } from '@app/features/quotes/quote.valid
 })
 export class QuoteNewComponent {
   private readonly api = inject(QuoteApiService);
-  private readonly store = inject(Store);
+  private readonly store = inject(QuoteStore);
   private readonly destroyRef = inject(DestroyRef);
-  readonly status = this.store.selectSignal(quoteFeature.selectCreateStatus);
-  readonly error = this.store.selectSignal(quoteFeature.selectCreateError);
+  readonly status = this.store.createStatus;
+  readonly error = this.store.createError;
   readonly brands = signal<VehicleReference[]>([]);
   readonly models = signal<VehicleReference[]>([]);
   readonly loadingBrands = signal(true);
@@ -111,6 +109,6 @@ export class QuoteNewComponent {
       return;
     }
     // The validated form contains only the nine backend input fields, never identity or calculated values.
-    this.store.dispatch(QuoteActions.createQuote({ request: value as CreateQuoteRequest }));
+    this.store.createQuote({ request: value as CreateQuoteRequest });
   }
 }
