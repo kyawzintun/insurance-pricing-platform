@@ -257,3 +257,7 @@ are excluded. Database services include their own DB in readiness; consumer serv
 check local listener containers. Gateway readiness is local availability only.
 See [Phase 26 operations/configuration](../../docs/specs/phase-26-observability-resilience.md)
 and [validation](../../docs/phase-26-validation.md). Earlier phase descriptions are historical.
+
+## PostgreSQL performance
+
+V4 adds a correlation_id index after a 100,000-record exact trace lookup scanned 99,997 unrelated rows. Existing latest/event/entity indexes remain effective for the measured pages. No business/query semantics change. See [Phase 27 evidence and insert/storage costs](../../docs/phase-27-postgres-performance-validation.md).

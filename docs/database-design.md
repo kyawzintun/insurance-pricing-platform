@@ -108,3 +108,7 @@ using existing idempotency and pricing retry/DLQ handling. Pricing V4 widens onl
 outbox correlation_id to 128. Calculation emits no event; Notification is unchanged.
 See [contracts and lifecycle](pricing-rule-events.md), [specification](specs/phase-20-pricing-events.md),
 and [validation](phase-20-validation.md). No historical backfill or Phase 21 work.
+
+## Phase 27 — PostgreSQL Performance
+
+Measured disposable PostgreSQL plans justify four additional indexes in Audit V4 (exact correlation_id), Quote V7 (global created_at DESC/id DESC ID pagination), and Auth V5 (upper(email) for actual IgnoreCase SQL; role/created_at DESC/id DESC customer pagination). Existing migrations remain immutable. The email expression index is nonunique and does not change identity semantics. Customer quote, expiration, all three outboxes, pricing and processed_events retain their measured existing indexes. See [plans, dataset, write/storage costs and limits](phase-27-postgres-performance-validation.md).

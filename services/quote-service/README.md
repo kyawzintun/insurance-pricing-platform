@@ -266,3 +266,7 @@ are excluded. Database services include their own DB in readiness; consumer serv
 check local listener containers. Gateway readiness is local availability only.
 See [Phase 26 operations/configuration](../../docs/specs/phase-26-observability-resilience.md)
 and [validation](../../docs/phase-26-validation.md). Earlier phase descriptions are historical.
+
+## PostgreSQL performance
+
+V7 adds (created_at DESC, id DESC) for global ADMIN ID pagination, avoiding a full scan/sort of 50,000 quotes. Existing customer and expiration indexes remain; bulk snapshot loading, ownership predicates, ordering and scheduler locks are unchanged. Exact counts and deep offsets still scale with rows visited. See [Phase 27 evidence and write/storage costs](../../docs/phase-27-postgres-performance-validation.md).

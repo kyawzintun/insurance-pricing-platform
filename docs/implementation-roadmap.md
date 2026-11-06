@@ -168,4 +168,8 @@ Manual refresh and pausable 15-second refresh use NgRx state and local Signals.
 Pricing circuit/latency/errors reuse Quote-owned metrics. Counters reset at restart; no
 history, Prometheus/Grafana stack, database performance work or next phase is included.
 See [specification and configuration](specs/phase-27-centralized-operations.md) and
-[validation](phase-27-validation.md). This supersedes the old Phase 27 performance placeholder.
+[validation](phase-27-validation.md). The requested PostgreSQL performance scope is documented separately below.
+
+## Phase 27 — PostgreSQL Performance (requested scope)
+
+Completed and validated alongside the previously recorded Centralized Operations Dashboard; its historical deliverables remain intact. This request restores the focused PostgreSQL performance scope without renumbering or implementing another phase. Audit V4, Quote V7 and Auth V5 add four evidence-backed indexes. Repeatable disposable plans cover Audit, Quote history/expiration, three outboxes, Pricing and Auth; full regression and 57 PostgreSQL integration tests pass. See [specification](specs/phase-27-postgres-performance.md) and [validation](phase-27-postgres-performance-validation.md). No next phase started.

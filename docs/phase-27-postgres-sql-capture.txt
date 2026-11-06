@@ -1,0 +1,7 @@
+Test-only Hibernate SQL captured during postgres-it on 2026-11-04. Parameters remain placeholders.
+
+Hibernate: select u1_0.id from users u1_0 where upper(u1_0.email)=upper(?) fetch first ? rows only
+Hibernate: select u1_0.id,u1_0.created_at,u1_0.email,u1_0.first_name,u1_0.last_name,u1_0.password_hash,u1_0.role,u1_0.status,u1_0.updated_at from users u1_0 where upper(u1_0.email)=upper(?)
+Hibernate: select pr1_0.id,pr1_0.comparison_value,pr1_0.comparison_value_to,pr1_0.created_at,pr1_0.description,pr1_0.effective_from,pr1_0.enabled,pr1_0.factor,pr1_0.fixed_amount,pr1_0.operator,pr1_0.rule_type,pr1_0.updated_at,pr1_0.version from pricing_rules pr1_0 where (? is null or pr1_0.rule_type=?) and (? is null or pr1_0.enabled=?) order by pr1_0.id fetch first ? rows only
+Hibernate: select count(*) from pricing_rules pr1_0 where (? is null or pr1_0.rule_type=?) and (? is null or pr1_0.enabled=?)
+Hibernate: select pr1_0.id,pr1_0.comparison_value,pr1_0.comparison_value_to,pr1_0.created_at,pr1_0.description,pr1_0.effective_from,pr1_0.enabled,pr1_0.factor,pr1_0.fixed_amount,pr1_0.operator,pr1_0.rule_type,pr1_0.updated_at,pr1_0.version from pricing_rules pr1_0 where pr1_0.enabled=true and pr1_0.effective_from<=?

@@ -221,3 +221,7 @@ Pricing circuit/latency/errors reuse Quote-owned metrics. Counters reset at rest
 history, Prometheus/Grafana stack, database performance work or next phase is included.
 See [specification and configuration](specs/phase-27-centralized-operations.md) and
 [validation](phase-27-validation.md). This supersedes the old Phase 27 performance placeholder.
+
+## Phase 27 — PostgreSQL Performance
+
+Query-plan validation uses isolated PostgreSQL databases rather than shared development state. Four measured indexes accelerate exact Audit correlation, global Quote pagination, Auth case-insensitive email lookup and customer pagination. No cross-service reads, repository semantics, locking, event behavior or infrastructure topology change. Exact totals and deep offset remain proportional to rows visited. See [performance specification](specs/phase-27-postgres-performance.md) and [measured evidence](phase-27-postgres-performance-validation.md).

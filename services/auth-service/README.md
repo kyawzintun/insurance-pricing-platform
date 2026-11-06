@@ -224,3 +224,7 @@ are excluded. Database services include their own DB in readiness; consumer serv
 check local listener containers. Gateway readiness is local availability only.
 See [Phase 26 operations/configuration](../../docs/specs/phase-26-observability-resilience.md)
 and [validation](../../docs/phase-26-validation.md). Earlier phase descriptions are historical.
+
+## PostgreSQL performance
+
+V5 adds a nonunique upper(email) expression index for Spring Data IgnoreCase queries and (role, created_at DESC, id DESC) for CUSTOMER pages. Plain email uniqueness and all login/admin behavior remain unchanged. These avoid measured user scans and page sorting at 15,000 users. See [Phase 27 evidence and write/storage costs](../../docs/phase-27-postgres-performance-validation.md).

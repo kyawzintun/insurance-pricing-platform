@@ -31,3 +31,5 @@ Automatic PRICED → EXPIRED transitions use bounded PostgreSQL transactions and
 - [Phase 24 — Asymmetric JWT](phase-24-asymmetric-jwt.md)
 
 - [Phase 25 — Service-to-Service Authentication](phase-25-service-authentication.md)
+
+- [Phase 27 — PostgreSQL Performance](phase-27-postgres-performance.md): measured query plans and targeted indexes; coexists with the existing operations dashboard milestone.

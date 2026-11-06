@@ -163,7 +163,7 @@ class QuotePostgresIT {
         assertThat(adjustments.getFirst().get("sequence_number")).isEqualTo(1);
         assertThat((BigDecimal)adjustments.getFirst().get("factor")).isEqualTo(new BigDecimal("1.4000"));
         assertThat(jdbc.queryForObject("select count(*) from outbox_events",Long.class)).isEqualTo(1);
-        assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where success",Long.class)).isEqualTo(6);
+        assertThat(jdbc.queryForObject("select count(*) from flyway_schema_history where success",Long.class)).isEqualTo(7);
         // Existing unique quote reference and one-driver-per-quote constraints are real PostgreSQL constraints.
         assertThatThrownBy(() -> jdbc.update("insert into quotes select ?,quote_reference,customer_id,status,coverage_type,premium_amount,currency,created_at,priced_at,expires_at,updated_at from quotes where id=?",UUID.randomUUID(),response.id()))
                 .isInstanceOf(DataIntegrityViolationException.class);
