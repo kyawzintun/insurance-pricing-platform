@@ -1,5 +1,7 @@
 # Phase 15 — Idempotent Consumers Validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Completed 2026-10-14. No Phase 16 implementation and no commit created.
 
 ## Automated results

@@ -1,266 +1,193 @@
 # Insurance Pricing Platform
 
-## Phase 25 — Service-to-Service Authentication
+## Overview
 
-Quote obtains/caches short-lived RS256 service tokens from Auth and authenticates
-directly to Pricing. Internal calculation requires quote-service + pricing:calculate
-scope + pricing-service audience. User and service credentials remain separate.
-See [configuration and architecture](docs/specs/phase-25-service-authentication.md)
-and [validation](docs/phase-25-validation.md). Phase 26 implementation and validation are documented below. Earlier phase
-sections below record historical behavior.
+A car-insurance quote platform with CUSTOMER and ADMIN workflows, built with Angular and Spring Boot microservices. Quotes receive an immediate premium calculation; Kafka handles notifications and audit history asynchronously. Each backend domain owns its PostgreSQL database.
 
+**Complete through PostgreSQL performance tuning and final portfolio polish.** Validation results and existing dependency advisories are disclosed in the [final report](docs/portfolio-validation.md). Pricing is educational, not actuarial. Notifications are simulated database records. This is a production-style engineering portfolio, not a production insurance system.
 
-## Phase 24 — RS256 access JWTs
+## Why I Built This Project
 
-Auth now signs access JWTs with a private RSA key using **RS256 only**. Auth's admin
-APIs, Gateway, Quote, Pricing and Audit independently verify with the public key;
-verifier services receive no private-key configuration. Existing role/ownership,
-issuer, expiry, subject, error and correlation behavior remains unchanged. Opaque
-Phase 23 refresh cookies and rotation are unchanged. Old HS256 access tokens are
-rejected; refresh/login obtains RS256 tokens. No JWKS, key rotation or Phase 25 work.
+I built this project to practice full-stack engineering across frontend architecture, backend APIs, distributed transactions, security, reliability, testing and database performance. A deliberately small business domain makes failure handling and design decisions easier to inspect.
 
-Configure `AUTH_JWT_PUBLIC_KEY=file:/path/jwt-public-key.pem` in all five services and
-`AUTH_JWT_PRIVATE_KEY=file:/path/jwt-private-key.pem` **only in Auth**. Keys are RSA PEM
-(at least 2048 bits), PKCS#8 private and X.509 SubjectPublicKeyInfo public. Non-local
-profiles require external files. Default `local` uses publicly known **development-only**
-fixtures, never suitable for production. `AUTH_JWT_ISSUER` and `AUTH_JWT_ACCESS_TOKEN_TTL`
-retain existing defaults. `AUTH_JWT_SECRET` is no longer supported.
+## Key Features
 
-See [Phase 24 specification](docs/specs/phase-24-asymmetric-jwt.md) and [validation](docs/phase-24-validation.md) for setup,
-startup checks, private-key isolation, rollout and validation evidence.
+- **Customer UI:** registration, login, session restoration, quote creation, paginated history and historical detail. Quotes expire automatically after 30 days.
+- **Admin UI:** immutable audit history with filters/detail; six-service Operations dashboard with partial-failure handling and manual/automatic refresh.
+- **Admin APIs:** versioned pricing-rule management and customer enable/disable. These two workflows have no Angular administration pages.
+- **Platform:** transactional outboxes, idempotent Kafka consumers, bounded retry/DLQ, RS256 JWTs, rotating refresh cookies, service credentials, locking, health/metrics and a Pricing circuit breaker.
+- **Evidence:** real PostgreSQL/Kafka integration suites and reproducible query-plan optimization.
 
-> Earlier phase sections below record historical behavior; Phase 24 configuration above supersedes symmetric-key instructions.
+## Architecture Overview
 
+```mermaid
+flowchart LR
+  UI[Angular] -->|HTTP| G[API Gateway]
+  G -->|HTTP| A[Auth]
+  G -->|HTTP| Q[Quote]
+  G -->|HTTP admin| P[Pricing]
+  G -->|HTTP admin| AU[Audit]
+  Q -->|HTTP service token| A
+  Q -->|HTTP calculation| P
+  A -.->|Outbox / Kafka| K[Kafka]
+  Q -.->|Outbox / Kafka| K
+  P -.->|Outbox / Kafka| K
+  K -.->|Kafka| N[Notification]
+  K -.->|Kafka| AU
+  DB[(Service-owned PostgreSQL databases)]
+  A --- DB
+  Q --- DB
+  P --- DB
+  N --- DB
+  AU --- DB
+```
 
-A learning project for practicing Angular + NgRx, Spring Boot 4, Spring Security, Kafka, PostgreSQL, Docker, microservices, and specification-first AI-assisted SDLC.
+The database node represents **five separate logical databases**, not shared tables. Auth alone signs user/service tokens. Gateway also collects health and curated metrics for Operations. See [database ownership and request sequences](docs/architecture.md).
 
-The project focuses on a simple car-insurance pricing platform. It is not intended to implement realistic actuarial insurance pricing. The main learning targets are Spring Boot/microservices, Kafka, Angular + NgRx, PostgreSQL, and specification-first AI-assisted development.
+| Service | Responsibility | Local port | Database |
+| --- | --- | ---: | --- |
+| API Gateway | Routing, authorization, CORS, Operations aggregation | 8080 | — |
+| Auth | Users, sessions, service-token issuance, customer administration | 8081 | `auth_db` |
+| Quote | Quotes, snapshots, expiration, Pricing orchestration | 8082 | `quote_db` |
+| Pricing | Premium calculation, versioned rule administration | 8083 | `pricing_db` |
+| Notification | Simulated notifications from events | 8084 | `notification_db` |
+| Audit | Event audit trail and ADMIN read API | 8085 | `audit_db` |
 
-## Current Project Status
+## Technology Stack
 
-**Phase 17 — Retry and DLQ: Complete**
+| Area | Implementation |
+| --- | --- |
+| Frontend | Angular 22, TypeScript, NgRx SignalStore, Signals, RxJS, Reactive Forms |
+| Backend | Java 25, Spring Boot 4.1.1, Spring Security, Spring Data JPA/JDBC, Flyway, Spring Cloud Gateway |
+| Messaging / database | Kafka 4.1.2; PostgreSQL 17.11 |
+| Infrastructure | Docker Compose; Maven Wrapper (Maven 3.9.16); npm lockfile |
+| Testing | JUnit, Mockito, Testcontainers; Angular TestBed, Vitest, jsdom |
+| Observability / resilience | Actuator, Micrometer, correlation IDs, Resilience4j |
+| Security | RS256 JWTs, refresh-token rotation, service client credentials |
 
-Phase 0 is complete. Phase 1 shared PostgreSQL and Kafka infrastructure has passed startup, connectivity, initialization, and persistence validation. Phase 2 added six Maven-based service skeletons. Phase 3 adds service-owned Flyway schemas and educational seed data. Phase 4 implements registration and login in Auth Service only. Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 adds secure quote retrieval and pagination. Phase 10 adds Angular registration/login and a protected dashboard foundation. Implementation will proceed phase by phase.
+## Architecture Decisions
 
-## Main Users
+- **Synchronous Quote → Pricing:** quote creation needs an immediate premium. Failed calculation creates no partial quote or invented fallback premium.
+- **Kafka for Notification/Audit:** these effects need not block the HTTP response; independent groups process the same event separately.
+- **Transactional outbox:** business state and event intent commit together, avoiding a database-commit/direct-publish loss window.
+- **Idempotent consumers:** at-least-once delivery permits duplicates; a database marker and side effect commit atomically.
+- **RS256:** Auth signs with a private key; other services verify with public keys only.
+- **Separate service identity:** Quote's machine token has a dedicated subject, scope and audience, independent of the customer's JWT.
 
-- **CUSTOMER**
-- **ADMIN**
+See [engineering tradeoffs and scope](docs/engineering-tradeoffs.md).
 
-## Planned Features
+## Reliability Flow
 
-Customer registration/login, Gateway JWT validation, internal pricing, ADMIN pricing-rule management, CUSTOMER quote creation with stored pricing breakdowns and a 30-day expiresAt, and secure CUSTOMER/ADMIN retrieval are implemented (Phases 4–9). The following features remain planned:
+```mermaid
+flowchart LR
+  T[Business transaction + PENDING outbox] --> O[Polling publisher]
+  O -->|broker acknowledgment| K[Kafka]
+  O -->|send failure: retain PENDING| O
+  K --> C[Consumer transaction]
+  C --> M[Claim processed_events + persist effect]
+  M -->|commit| ACK[Source offset completion]
+  C -->|transient failure / rollback| R[Bounded retry]
+  R --> C
+  R -->|exhausted| D[DLQ publication]
+  C -->|invalid supported event| D
+  D -->|acknowledged| ACK
+```
 
-- Kafka-based notifications
-- Kafka-based audit logging
-- Automatic quote expiration processing (the 30-day timestamp is stored now)
+Auth, Quote and Pricing publish stored intent after commit. A crash after Kafka acceptance but before marking PUBLISHED can resend the event. Notification/Audit deduplicate by `(eventId, consumerName)`. Failed transactions roll back both marker and effect. Default consumer policy allows three total attempts with a fixed one-second backoff; permanent invalid input goes directly to DLQ. Failed DLQ publication leaves the source replayable. Unknown event types are intentionally skipped.
 
-## Planned Architecture
+These are **at-least-once semantics**, including possible duplicate DLQ records. Producer retries have no cutoff; there is no producer DLQ or automatic replay tool. Details: [outbox](docs/transactional-outbox.md), [Kafka](docs/kafka-design.md), [retry/DLQ](docs/retry-and-dlq.md).
 
-- **Angular + NgRx** frontend
-- **API Gateway**
-- **Auth Service**
-- **Quote Service**
-- **Pricing Service**
-- **Notification Service**
-- **Audit Service**
-- **Kafka** for asynchronous domain events
-- **PostgreSQL** for all backend services
+## Security Architecture
 
-REST will be used for synchronous communication when an immediate response is needed. Each microservice will own its own logical database, with no cross-service database access. Transactional Outbox will be introduced in a later phase. PostgreSQL and Kafka are configured for local development. Auth Service implements registration and login. Gateway routes Auth, Pricing administration, and Quote requests. Pricing calculates premiums and manages rules; Quote creates priced snapshots. Notification consumes QuotePriced events and stores simulated notifications; Audit independently consumes the same events into audit records. The Angular frontend implements authentication and CUSTOMER quote creation/history/detail.
+Login returns a short-lived access JWT held only in Angular memory and an opaque HttpOnly refresh cookie. Auth stores only a SHA-256 digest of the refresh token; refresh rotates it under a database row lock. Reload restores the session, and simultaneous protected 401 responses share one refresh request. Logout revokes the refresh token and clears the cookie.
 
-## Repository Structure
+Auth signs RS256 with its private RSA key. Gateway, Auth, Quote, Pricing and Audit validate access JWTs using public keys; roles and quote ownership are enforced at the owning service as well as Gateway. Quote obtains/caches a short-lived service token from Auth using client credentials. Internal Pricing requires `quote-service`, `pricing:calculate` scope and `pricing-service` audience; user JWTs cannot substitute for machine credentials.
+
+**Known limits:** existing access JWTs can authorize until expiry after logout/disable. No immediate denylist, automatic key rotation or refresh-family revocation exists. Local RSA fixtures and service/database credentials are publicly known DEV/TEST ONLY. See [security checklist and cookie/CORS assumptions](docs/security.md).
+
+## Database Design
+
+Five databases (`auth_db`, `quote_db`, `pricing_db`, `notification_db`, `audit_db`) have service-owned Flyway migrations and UUID identities. There are no cross-service foreign keys or database reads. Quote snapshots preserve vehicle names, rule versions and premium breakdowns independently of later changes. Producers own `outbox_events`; consumers own `processed_events`.
+
+[Schema inventory and constraints](docs/database-design.md) include ownership, indexes and migrations. Local Compose uses one shared development administrator account; it does not enforce database isolation with separate grants.
+
+## PostgreSQL Performance
+
+Disposable realistic datasets and `EXPLAIN (ANALYZE, BUFFERS)` justified four targeted indexes:
+
+| Query | Before | After |
+| --- | --- | --- |
+| Audit correlation, 100k records | Sequential scan discards 99,997 rows | Bitmap index/heap lookup, sorts three rows |
+| Global Quote history, 50k quotes | Sequential scan + sort | Ordered index-only ID page |
+| Auth case-insensitive email, 15k users | Sequential scan | `upper(email)` expression index |
+| Customer list, 14,850 customers | Scan + sort | Role/creation/ID ordered index |
+
+The recorded Phase 27 run measured 12.785 → 0.109 ms for correlation and 17.950 → 0.101 ms for the first global Quote ID page. These are single local SQL observations, **not HTTP benchmarks or SLAs**. Exact totals still scan matching rows; deep offset pagination remains linear. Indexes increase write/storage costs. [Full evidence, unchanged paths and methodology](docs/phase-27-postgres-performance-validation.md) are preserved; the [final validation report](docs/portfolio-validation.md) records the fresh rerun.
+
+## Testing Strategy
+
+Unit/HTTP tests cover business rules, security and failure responses. PostgreSQL integration uses real Flyway, transactions, locking, concurrency and snapshot query-count checks. Kafka integration uses real brokers/databases for redelivery, outbox and DLQ behavior. Disposable E2E scripts run packaged services and real HTTP workflows. Frontend tests cover SignalStores, guards, interceptors, components and refresh coordination; production builds validate lazy routes and bundles.
+
+## Engineering Scenarios Demonstrated
+
+| Scenario | Concrete behavior |
+| --- | --- |
+| Optimistic locking | Two admins update one Pricing version: one commits, the other gets 409; only the winner emits intent |
+| Pessimistic locking | Concurrent customer-status changes serialize; repeated same-state commands produce no extra event |
+| Kafka redelivery | A committed processed-event marker prevents a second side effect |
+| Outbox crash window | Kafka acceptance before status update may duplicate publication; consumers remain safe |
+| Dependency outage | Auth/Pricing failures produce safe 502/503 responses without partial quotes |
+| Circuit breaker | Repeated qualifying Pricing failures open the circuit; probes allow recovery |
+| Refresh replay | A rotated refresh token is rejected if reused; no family-wide revocation claim |
+
+## Project Structure
 
 ```text
-frontend/                    Angular + NgRx authentication and quote workflow
-services/                    Gateway and five backend services
-  api-gateway/
-  auth-service/
-  quote-service/
-  pricing-service/
-  notification-service/
-  audit-service/
-infrastructure/              Shared runtime/deployment support
-  docker/
-  kafka/
-  postgres/
-docs/                        Project planning documentation
-  adr/                       Architecture Decision Records
-  specs/                     Phase implementation specifications
-docker-compose.yml           Shared PostgreSQL and Kafka infrastructure
+frontend/                       Angular application and tests
+services/
+  api-gateway/                  HTTP entry point and Operations
+  auth-service/                 Users, authentication, sessions
+  quote-service/                Quote orchestration and snapshots
+  pricing-service/              Calculation and rule administration
+  notification-service/         Simulated notification consumer
+  audit-service/                Audit consumer and read API
+infrastructure/                 PostgreSQL/Kafka bootstrap and validation harnesses
+docs/                           Current guides, historical specs and evidence
+docker-compose.yml              Infrastructure only
+mvnw                            Backend build/run wrapper
 ```
 
-Empty runtime directories contain `.gitkeep` files so Git retains them. `infrastructure/` is reserved for shared Docker, Kafka, and PostgreSQL support. Future service-owned Flyway migrations must live in the owning Spring Boot service, never in `infrastructure/`.
+## Prerequisites and Local Setup
 
-Start with [project context](docs/project-context.md), [architecture](docs/architecture.md), and the [implementation roadmap](docs/implementation-roadmap.md). Detailed planning that has not yet been supplied is explicitly marked as pending.
-
-## Local Infrastructure
-
-### Prerequisites
-
-Install Docker with Docker Compose and start the Docker daemon (for example, Docker Desktop). No Java or Node installation is required for infrastructure alone. Backend skeletons require JDK 25.
-
-### Start Infrastructure
-
-From the repository root:
+Use JDK 25, Docker with Compose and a running daemon, Node.js satisfying `^22.22.3 || ^24.15.0 || >=26.0.0`, and npm (repository pins 11.19.0). Maven Wrapper supplies Maven; Python 3 is needed only for validation harnesses. Commands below assume the repository root unless specified.
 
 ```bash
+git clone https://github.com/kyawzintun/insurance-pricing-platform.git
+cd insurance-pricing-platform
+cp .env.example .env
 docker compose up -d
-```
-
-Defaults work without an `.env` file. Optionally copy `.env.example` to `.env` and adjust the ports or development credentials before first startup. `.env` is ignored by Git. The example credentials are public and development-only.
-
-### Check Status
-
-```bash
-docker compose ps
 docker compose ps -a
 docker compose logs kafka-init
 ```
 
-Wait for `postgres` and `kafka` to become healthy and `kafka-init` to exit with code `0`. The one-shot initialization job creates all six topics; `up -d` alone does not mean topic initialization has finished. No application containers run yet.
+Wait for PostgreSQL/Kafka healthy and `kafka-init` exited with code 0. Compose starts **infrastructure only**, with PostgreSQL on `localhost:15432`, Kafka on `localhost:29092`. Applications default to the `local` profile. Defaults work without exporting `.env`; Compose reads it automatically, Maven does not. See [local setup and environment reference](docs/local-development.md) before overriding values.
 
-### Stop Infrastructure
+### Running Services
 
-```bash
-docker compose down
-```
-
-Named volumes are intentionally preserved. Starting again reuses the databases and Kafka data. `docker compose down -v` explicitly deletes these volumes and their data; it is not a normal stop or restart command.
-
-### Local Connections
-
-| Component | Host applications | Containers on the Compose network |
-| --- | --- | --- |
-| PostgreSQL | `localhost:15432` | `postgres:5432` |
-| Kafka bootstrap servers | `localhost:29092` | `kafka:19092` |
-
-Host defaults are PostgreSQL `15432` and Kafka `29092`, consistently used by Compose and the services' local YAML. All applications default to the `local` profile. API Gateway does not connect to PostgreSQL/Kafka, and Auth does not use Kafka. Database-owning services retain separate logical databases. Environment variables can override these defaults; Compose reads `.env`, while Maven-started applications require exported overrides. Kafka's advertised host listener follows `KAFKA_EXTERNAL_PORT`. Container ports remain unchanged (`postgres:5432`, `kafka:19092`); published ports bind to IPv4 loopback only.
-
-PostgreSQL defaults to username `insurance_dev` and password `local_dev_only`, overridden by `POSTGRES_USER` and `POSTGRES_PASSWORD`. The five service databases are:
-
-| Future service | Logical database |
-| --- | --- |
-| Auth Service | `auth_db` |
-| Quote Service | `quote_db` |
-| Pricing Service | `pricing_db` |
-| Notification Service | `notification_db` |
-| Audit Service | `audit_db` |
-
-Each future service must access only its own database. The shared local bootstrap account is an administrative development convenience, not enforcement of service isolation. Phase 3 Flyway migrations now create each service's tables and educational seeds. See the schema inventory below.
-
-Kafka main topics are `insurance.user.events`, `insurance.quote.events`, and `insurance.pricing.events`. Each has a matching `.dlq` topic. All six use **3 partitions and replication factor 1**. DLQ processing, event contracts, and application producers/consumers come later.
-
-See [infrastructure guidance](infrastructure/README.md) for initialization behavior, verification commands, persistence checks, and troubleshooting.
-
-Validation results and the machine-specific port overrides are recorded in [Phase 1 validation](infrastructure/phase-1-validation.md).
-
-## Backend Services
-
-| Service | Port | Database | Current Status |
-| --- | ---: | --- | --- |
-| API Gateway | 8080 | None | Auth/admin Pricing/Quote routing and JWT authorization |
-| Auth Service | 8081 | auth_db | Registration and login |
-| Quote Service | 8082 | quote_db | Creation, snapshots, CUSTOMER ownership and ADMIN retrieval |
-| Pricing Service | 8083 | pricing_db | Internal calculation and ADMIN rule management |
-| Notification Service | 8084 | notification_db | QuotePriced consumer |
-| Audit Service | 8085 | audit_db | QuotePriced audit consumer |
-
-Use JDK 25. The root parent/aggregator pins Spring Boot 4.1.1 and Spring Cloud 2025.1.3 (Gateway 5.0.3). Maven Wrapper 3.3.4 supplies Maven 3.9.16; no separately installed Maven is required.
+Run each command in a separate terminal at the repository root. Start Auth/Pricing and consumers before trying quotes; migrations apply on service startup.
 
 ```bash
-./mvnw clean verify
-docker compose up -d
 ./mvnw -pl services/auth-service spring-boot:run
-```
-
-Auth defaults to the local profile, PostgreSQL port 15432, and a public development-only signing key. No launcher or environment setup is needed for the current local database. Use the module-specific Maven commands in the backend guide for other services. All six expose `/actuator/health`; only health/info are exposed through Actuator. Ports and infrastructure connections support environment overrides. Auth now exposes registration/login backed by its User entity. Gateway now routes Auth requests; Pricing exposes its internal calculation endpoint and protected admin rule APIs. Quote exposes CUSTOMER-only creation and secure CUSTOMER/ADMIN retrieval, and persists QuotePriced intent atomically through its outbox; Notification and Audit consume events idempotently. Database migrations and seeds were implemented in Phase 3.
-
-See [backend startup and dependency guidance](services/README.md) for per-service packages, environment variables, temporary security behavior, test boundaries, and Maven commands.
-
-Phase 2 startup, health, database, and Kafka safety evidence is recorded in [validation results](docs/phase-2-validation.md).
-
-## Phase 3 — Database Foundation and Flyway
-
-Flyway owns all service schemas. Migrations live under `services/<service>/src/main/resources/db/migration/`; Hibernate schema generation remains disabled.
-
-| Database | Tables (excluding Flyway history) |
-| --- | --- |
-| `auth_db` | `users`, `refresh_tokens`, `outbox_events` |
-| `quote_db` | `vehicle_brands`, `vehicle_models`, `quotes`, `quote_drivers`, `quote_vehicles`, `pricing_breakdowns`, `pricing_adjustments`, `outbox_events` |
-| `pricing_db` | `pricing_rules`, `outbox_events` |
-| `notification_db` | `notifications`, `processed_events` |
-| `audit_db` | `audit_records`, `processed_events` |
-
-Starting the five database services with the local profile applies 15 migrations, including four brands, twelve models, and seven learning-only pricing rules. Normal restarts validate existing migrations without duplicating seeds. No user accounts are seeded. Outbox and processed-event tables do not implement messaging behavior.
-
-See [database design](docs/database-design.md), [validation results](docs/phase-3-validation.md), and [intentional local database rebuild instructions](services/README.md#intentional-local-database-rebuild). No database reset is needed for ordinary development. Phase 4 authentication is documented below; Phase 5 adds Gateway Auth routing and JWT validation. Phase 6 adds internal database-driven premium calculation. Phase 7 adds ADMIN-only pricing-rule administration. Phase 8 adds CUSTOMER quote creation and stored pricing snapshots. Phase 9 adds secure quote retrieval and pagination. Phase 10 adds Angular registration/login and a protected dashboard foundation.
-
-## Phase 4 — Authentication Basics
-
-Auth Service now provides `POST /api/v1/auth/register` (201) and `POST /api/v1/auth/login` (200). Registration canonicalizes email, hashes passwords with BCrypt cost 12, and always creates an ACTIVE CUSTOMER. Client-supplied role/status fields are rejected. Login rejects unknown accounts, incorrect passwords, and disabled accounts with the same 401 error.
-
-Current key configuration is described in the Phase 24 section above: Auth receives private and public RSA PEM resources; verifiers receive the public resource only. The earlier symmetric shared-secret setup has been removed.
-
-See [Auth Service documentation](services/auth-service/README.md) for request/response details, required environment values, and explicit local ADMIN creation through registration followed by a manual database promotion. See [Phase 4 validation](docs/phase-4-validation.md) for test and live-database evidence. Phase 5 is documented below.
-
-## Phase 5 — API Gateway and JWT Validation
-
-Run Auth as above, then in a second terminal run:
-
-```bash
+./mvnw -pl services/pricing-service spring-boot:run
+./mvnw -pl services/notification-service spring-boot:run
+./mvnw -pl services/audit-service spring-boot:run
+./mvnw -pl services/quote-service spring-boot:run
 ./mvnw -pl services/api-gateway spring-boot:run
 ```
 
-Normal API calls now use `POST http://localhost:8080/api/v1/auth/register` and `POST http://localhost:8080/api/v1/auth/login`. Gateway forwards `/api/v1/auth/**` to `AUTH_SERVICE_URL` (default `http://localhost:8081`). Only those two POST endpoints and GET health/info are public; other requests require a valid HS256 Bearer token with the expected issuer. Missing/invalid/expired tokens receive safe JSON 401 responses. Phase 7 adds protected ADMIN pricing-rule routes below.
+Check `http://localhost:8080/actuator/health` and individual service health endpoints. Use Ctrl-C for applications and `docker compose down` for infrastructure; named volumes persist. Ordinary startup never needs a database reset.
 
-Current key configuration is described in the Phase 24 section above: Auth receives private and public RSA PEM resources; verifiers receive the public resource only. The earlier symmetric shared-secret setup has been removed.
-
-See [Gateway commands, curl examples, configuration, and limitations](services/api-gateway/README.md) and [Phase 5 validation](docs/phase-5-validation.md). Phase 6 is documented below.
-
-## Phase 6 — Pricing Service MVP
-
-Run Pricing independently with the existing local database on port 15432:
-
-```bash
-./mvnw -pl services/pricing-service spring-boot:run
-```
-
-`POST http://localhost:8083/internal/v1/pricing/calculate` returns an educational THB premium and detailed rule breakdown. It loads enabled/effective rules from `pricing_db`, derives ages using UTC, selects the newest matching rule per category (UUID tie-break), and applies factors in a fixed order with BigDecimal HALF_UP rounding at each step.
-
-This endpoint is internal and temporarily unauthenticated; it is **not routed through Gateway**. Service-to-service authentication is deferred to Phase 25. Calculations do not persist results or write outbox/Kafka events. Existing schemas and seeds are unchanged. Pricing administration is added in Phase 7 below; Quote integration is added in Phase 8 below.
-
-See [Pricing request/response examples and rule semantics](services/pricing-service/README.md), [Phase 6 specification](docs/specs/phase-6-pricing-service-mvp.md), and [validation results](docs/phase-6-validation.md). Phase 7 is documented below.
-
-## Phase 7 — Pricing Administration
-
-ADMIN users can list/get/create/update/enable/disable pricing rules through `http://localhost:8080/api/v1/admin/pricing/rules`. Gateway forwards to configurable `PRICING_SERVICE_URL` (default localhost:8083). Both Gateway and Pricing validate JWTs and enforce ADMIN; CUSTOMER receives 403 and missing/invalid authentication receives 401. Auth, Gateway, and Pricing share the same local key/issuer; non-local environments require configured secrets.
-
-List supports bounded pagination and optional ruleType/enabled filters. PUT and PATCH require the last returned version; stale or concurrent updates return 409. Future-effective rules are allowed, and existing calculation selection/rounding remain unchanged. No deletes, migrations, seed changes, Kafka/outbox events, or UI were added. Internal calculation stays off Gateway; service-to-service authentication remains deferred.
-
-See [Pricing administration guide](services/pricing-service/README.md), [Gateway guide](services/api-gateway/README.md), [Phase 7 specification](docs/specs/phase-7-pricing-administration.md), and [validation results](docs/phase-7-validation.md). Phase 8 is documented below.
-
-## Phase 8 — Quote Service MVP
-
-Start Quote in its own terminal with `./mvnw -pl services/quote-service spring-boot:run`. It defaults to local and PostgreSQL port 15432. With Auth, Pricing, and Gateway also running, CUSTOMER tokens can call `POST http://localhost:8080/api/v1/quotes`. Quote independently validates JWTs and derives customer_id only from the UUID subject. ADMIN-only tokens cannot create quotes.
-
-Quote validates input and active brand/model references, calls Pricing directly over synchronous REST, and atomically stores a PRICED quote with driver, vehicle-name, and pricing snapshots. Expiration is 30 days after creation. Pricing failure returns a safe 502/503 without a partial quote. Quote → Pricing currently has no service credentials; service authentication remains deferred to Phase 25.
-
-Existing schemas and seeds are unchanged. Phase 8 added no retrieval/history, editing, repricing, expiration job, Kafka, or outbox writes. Phase 9 retrieval is described below. See [Quote startup, curl, response, and code guide](services/quote-service/README.md), [specification](docs/specs/phase-8-quote-service-mvp.md), and [validation](docs/phase-8-validation.md). Phase 9 adds secure quote retrieval and pagination. Phase 10 adds Angular registration/login and a protected dashboard foundation.
-
-## Phase 9 — Quote Retrieval and Ownership
-
-`GET /api/v1/quotes/{id}` returns a stored snapshot. CUSTOMER can read only their own quotes; cross-customer and missing IDs return identical 404s. ADMIN can read any quote. `GET /api/v1/quotes?page=0&size=20` lists the customer's own quotes or all quotes for ADMIN, with maximum size 100 and fixed createdAt DESC / ID DESC order. Client customerId/status/sort filters are rejected. Quote validates JWTs and enforces ownership independently of Gateway.
-
-Retrieval uses read-only database queries, with no Pricing call, current catalog lookup, recalculation, status transition, or messaging. A two-step ID-page/snapshot fetch preserves pagination without N+1 queries. All 267 normal tests and seven Quote PostgreSQL integration tests pass; live Gateway ownership checks and temporary-data cleanup passed. Newly built Gateway creation was also validated on temporary ports.
-
-See [Quote API guide](services/quote-service/README.md#phase-9--retrieval-and-ownership), [specification](docs/specs/phase-9-quote-retrieval-and-ownership.md), and [validation](docs/phase-9-validation.md). Phase 10 is documented below.
-
-## Phase 10 — Angular Foundation
-
-Angular 22.2.2 and NgRx 22.0.1 provide registration, login, protected dashboard, role-aware navigation, and local logout. Reactive Forms own fields/validation, Signals own local loading/errors/password visibility, and NgRx owns the shared memory-only session. Angular calls Gateway only. Browser refresh intentionally logs out; refresh tokens and quote UI are deferred.
-
-With infrastructure, Auth (8081), and Gateway (8080) running, start the frontend:
+### Running Frontend
 
 ```bash
 cd frontend
@@ -268,82 +195,66 @@ npm ci
 npm start
 ```
 
-Open http://localhost:4200. Configure the public Gateway URL in `frontend/src/environments/environment.ts`. Run `npm test` and `npm run build` from `frontend/`. See the [frontend setup and code guide](frontend/README.md), [specification](docs/specs/phase-10-angular-foundation.md), and [validation](docs/phase-10-validation.md). Phase 11 is documented below.
+Open `http://localhost:4200`. Browser calls go only to Gateway. API URL is build-time public configuration in `frontend/src/environments/environment.ts`.
 
-## Phase 11 — Angular Quote Flow
+### Running Tests
 
-CUSTOMER navigation now includes New Quote and My Quotes. `/quotes/new` uses database-backed brand/model selection and validated Reactive Forms. Creation through Gateway opens `/quotes/:id`, which displays the stored driver/vehicle/pricing snapshot. `/quotes` lists owned quotes with basic backend pagination. No frontend premium calculation or customerId override exists.
+```bash
+./mvnw verify
+# Docker required for integration profiles:
+./mvnw -Ppostgres-it verify
+./mvnw -Pkafka-it verify
+# In frontend/:
+npm test
+npm run build
+```
 
-Quote Service adds read-only, authenticated GET `/api/v1/vehicles/brands` and `/api/v1/vehicles/brands/{brandId}/models`; Gateway routes them to Quote. Only active rows are exposed as id/name DTOs. No migrations, Auth/Pricing behavior changes, outbox writes or Kafka events were added. Restart Gateway and Quote to load these additions; Auth and Pricing must also run for creation.
+[Validation guide](docs/testing.md) covers faster integration-only invocations, disposable E2E scripts, the performance harness and prerequisites. [Final results](docs/portfolio-validation.md) record checks performed during this polish.
 
-See the [frontend guide](frontend/README.md#phase-11--customer-quote-workflow), [specification](docs/specs/phase-11-angular-quote-flow.md), and [validation](docs/phase-11-validation.md). Phase 12 is documented below.
+### Demo Accounts / Admin Provisioning
 
-## Phase 12 — Basic QuotePriced Kafka Event
+No accounts are seeded. Register your own CUSTOMER in the UI, then log in. To demonstrate ADMIN, register a dedicated local account and follow the [DEV-only SQL promotion procedure](docs/local-development.md#admin-provisioning-dev-only); log in again afterward. There is no public ADMIN-registration endpoint.
 
-After quote persistence commits, Quote Service sends a version 1 JSON QuotePriced envelope to `insurance.quote.events`, keyed by quote ID. Safe request correlation is preserved. Kafka failure is logged without rolling back the quote or changing its successful 201 response. No consumers, custom retry/DLQ behavior or outbox writes are implemented. This direct database/Kafka dual-write gap will be addressed in Phase 16.
+## API Overview
 
-Quote defaults to Kafka on port 29092; run `./mvnw -pl services/quote-service spring-boot:run` without a port override. See [Quote startup/configuration](services/quote-service/README.md#phase-12--quotepriced-producer), [event contract](docs/quote-priced-event.md), [specification](docs/specs/phase-12-quote-priced-event.md), and [validation](docs/phase-12-validation.md). Phase 13 is documented below.
+All browser APIs use Gateway on port 8080; bearer authentication applies except register/login/refresh/logout. Refresh/logout use the refresh cookie.
 
-## Phase 13 — Notification Consumer
+| Area | Routes / operations |
+| --- | --- |
+| Auth | `POST /api/v1/auth/{register,login,refresh,logout}` |
+| Quotes | `POST /api/v1/quotes`; `GET /api/v1/quotes` and `/{id}` |
+| Vehicle references | `GET /api/v1/vehicles/brands` and `/{brandId}/models` |
+| Admin customers | `GET /api/v1/admin/customers` and `/{id}`; `PATCH /{id}/{enable,disable}` |
+| Admin pricing | `GET/POST /api/v1/admin/pricing/rules`; `GET/PUT /{id}`; `PATCH /{id}/{enable,disable}` |
+| Admin audit | `GET /api/v1/admin/audit` and `/{id}` |
+| Admin Operations | `GET /api/v1/admin/operations` |
+| Internal, direct only | Auth `POST /api/v1/auth/service-token`; Pricing `POST /internal/v1/pricing/calculate` |
 
-Notification now consumes QuotePriced v1 from `insurance.quote.events` using its own `notification-service` group and writes a simulated notification after validation. Kafka offsets advance only after the local DB transaction commits. The group defaults to earliest for historical learning events. Invalid events or persistence failures stop consumption; unknown types are intentionally skipped. Existing event ID uniqueness does not provide full idempotency. No processed_events, retries/DLQ, external messaging provider, Audit consumer or Outbox logic is added.
+Admin suffixes are relative to their table row's base path. Service-token issuance is not exposed through Gateway. Full DTOs, filters and curl examples live in [service guides](services/README.md).
 
-See [Notification startup and learning guide](services/notification-service/README.md), [specification](docs/specs/phase-13-notification-consumer.md) and [validation](docs/phase-13-validation.md). Phase 14 is documented below.
+## Event Overview
 
-## Phase 14 — Audit Consumer
+All implemented contracts are v1. Main topics each have three partitions and replication factor one locally, plus a matching `.dlq` topic.
 
-Audit independently consumes QuotePriced v1 from insurance.quote.events in its own audit-service group and stores compact audit records. Notification behavior is unchanged; the two groups independently track offsets. Audit uses earliest for historical records, RECORD acknowledgment after DB commit, and stop-on-failure behavior. A minimal Audit V3 migration widens correlation_id to match the existing 128-character event contract. No idempotency, retry/DLQ, Outbox or Audit REST/UI is implemented.
+| Topic | Events | Producer | Consumers |
+| --- | --- | --- | --- |
+| `insurance.quote.events` | [QuotePriced](docs/quote-priced-event.md), [QuoteExpired](docs/quote-expired-event.md) | Quote | Notification, Audit |
+| `insurance.user.events` | [UserRegistered](docs/user-registered-event.md) | Auth | Notification, Audit |
+| `insurance.user.events` | [UserDisabled, UserEnabled](docs/user-status-events.md) | Auth | Audit; Notification intentionally skips |
+| `insurance.pricing.events` | [PricingRuleCreated, Updated, Enabled, Disabled](docs/pricing-rule-events.md) (each prefixed `PricingRule`) | Pricing | Audit |
 
-Run `./mvnw -pl services/audit-service spring-boot:run` with the same local infrastructure. See [Audit guide](services/audit-service/README.md), [specification](docs/specs/phase-14-audit-consumer.md) and [validation](docs/phase-14-validation.md). Phase 15 is documented below.
+Keys are aggregate UUIDs (quote, user, pricing rule). Ordering is partition-local; no global ordering or exactly-once claim. [Kafka design](docs/kafka-design.md) explains envelope, group and recovery boundaries.
 
-## Phase 15 — Idempotent Consumers
+## Screenshots
 
-Notification and Audit now atomically register eventId plus their stable consumer name in their own processed_events table before business persistence. A duplicate is successful processing with no second business row; original timestamps remain unchanged. PostgreSQL uniqueness handles concurrent duplicates, and legacy rows gain markers lazily when replayed. No schema, producer contract, group/topic or startup-command changes.
+No application screenshots are committed. [Capture checklist](docs/screenshots/README.md) lists real UI views to add manually; no mock images stand in for application evidence. Existing browser validation remains in historical reports.
 
-See [Notification guide](services/notification-service/README.md#phase-15--idempotent-processing), [Audit guide](services/audit-service/README.md#phase-15--idempotent-processing), [specification](docs/specs/phase-15-idempotent-consumers.md) and [validation](docs/phase-15-validation.md). Phase 16 is documented below.
+## Completion, Tradeoffs and Future Improvements
 
-## Phase 16 — Transactional Outbox
+All planned implementation milestones are complete, including Operations, PostgreSQL tuning and SignalStore migration. [Roadmap](docs/implementation-roadmap.md) separates completed work from optional future ideas. Scope intentionally excludes real notification providers, deployment infrastructure, actuarial pricing and production security certification. JWKS/key rotation, mTLS, DLQ replay tooling, cursor pagination, a tracing backend and deployment automation are possible future improvements, not required unfinished work.
 
-Quote Service atomically commits the quote graph and one PENDING QuotePriced envelope. A scheduled publisher sends stored JSON to the existing topic, using quote ID as key, and marks PUBLISHED only after Kafka acknowledgment. HTTP 201 means quote plus event intent are committed, even when Kafka is temporarily unavailable. Event IDs stay unchanged on later attempts; Phase 15 consumers handle duplicate delivery.
+## Portfolio Summary
 
-Local startup commands are unchanged. Polling is enabled locally, defaults to 2000 ms / 50 rows, and can be disabled with `OUTBOX_PUBLISHER_ENABLED=false`. A PostgreSQL session advisory lock excludes competing publishers without holding an open transaction during Kafka I/O. Quote V6 widens only the outbox correlation column to preserve the existing 128-character contract.
+Built a production-style insurance pricing platform using Angular and Spring Boot microservices, with Kafka workflows, transactional outboxes, idempotent consumers, PostgreSQL performance tuning, RS256 authentication and service-to-service security.
 
-See [Quote guide](services/quote-service/README.md), [outbox design](docs/transactional-outbox.md), [specification](docs/specs/phase-16-transactional-outbox.md), and [validation](docs/phase-16-validation.md). Phase 17 is documented below. Earlier phase sections record historical milestones; the Phase 12 direct producer has been removed.
-
-## Phase 17 — Retry and DLQ
-
-Notification and Audit now retry processing failures with three total attempts and fixed 1000 ms backoff, configurable through `KAFKA_CONSUMER_MAX_ATTEMPTS` / `KAFKA_CONSUMER_BACKOFF_MS`. Invalid supported messages go directly to the existing `insurance.quote.events.dlq`; unknown event types still skip, and processed duplicates still succeed.
-
-The original key/value bytes are preserved with safe source-coordinate and consumer-identity headers. Source progress advances only after business success or acknowledged DLQ publication. If the DLQ send fails, the source remains replayable. Both groups fail independently; Quote's outbox and consumer idempotency are unchanged. No schema, topic, partition-count or business API changes.
-
-See [retry/DLQ policy](docs/retry-and-dlq.md), [specification](docs/specs/phase-17-retry-and-dlq.md), and [validation](docs/phase-17-validation.md). Phase 18 — Quote Expiration is implemented; see the [specification](docs/specs/phase-18-quote-expiration.md) and [validation](docs/phase-18-validation.md). No DLQ replay mechanism is implemented.
-
-## Phase 22 — Audit UI
-
-ADMIN users can browse `/admin/audit`, apply exact filters and UTC occurrence ranges, paginate, and inspect safe read-only JSON details. Gateway and Audit Service independently require ADMIN JWTs. No audit mutations or schema changes. See [API/UI specification](docs/specs/phase-22-audit-ui.md) and [validation/file manifest](docs/phase-22-validation.md). Phase 23 — Refresh Tokens is not started.
-
-## Phase 26 — Observability & Resilience
-
-Application logs now carry service/correlation context; all six services expose safe health,
-liveness/readiness and Actuator metrics. Quote uses independent Auth/Pricing HTTP timeouts and
-a Pricing-only circuit breaker, retaining the single 401 refresh and atomic quote/outbox commit.
-No fallback premium, transport retry, event/security contract changes or Phase 27 work.
-Outbox pending/age samples and publish/consumer outcome counters add operational visibility.
-Metrics require ADMIN except Notification's internal numeric endpoint; keep that port private.
-See [specification](docs/specs/phase-26-observability-resilience.md) and
-[validation](docs/phase-26-validation.md) for configuration, readiness meaning and limits.
-
-## Phase 27 — Centralized Operations Dashboard
-
-ADMIN can open `/admin/operations`. Angular calls only Gateway's
-`GET /api/v1/admin/operations`; a focused Gateway component concurrently collects the six
-services' existing Phase 26 health/readiness and curated metrics. Gateway reads its own health
-locally. Per-service failure preserves HTTP 200 and the other cards; overall becomes DEGRADED.
-The fixed DTO excludes internal URLs, raw Actuator data and credentials. ADMIN authorization
-is enforced by Gateway; its existing JWT is relayed only to trusted protected metric endpoints.
-Collection has a configurable 1000 ms deadline per exchange and bounded response bodies.
-Manual refresh and pausable 15-second refresh use NgRx state and local Signals.
-Pricing circuit/latency/errors reuse Quote-owned metrics. Counters reset at restart; no
-history, Prometheus/Grafana stack, database performance work or next phase is included.
-See [specification and configuration](docs/specs/phase-27-centralized-operations.md) and
-[validation](docs/phase-27-validation.md). This supersedes the old Phase 27 performance placeholder.
+[Interview guide](docs/interview-guide.md) provides short explanations and concrete examples for the major engineering decisions.

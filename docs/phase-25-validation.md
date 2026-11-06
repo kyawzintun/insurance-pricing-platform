@@ -1,5 +1,7 @@
 # Phase 25 validation — 23 October 2026
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Phase 25 — Service-to-Service Authentication is complete for the learning platform
 and ready for Phase 26 planning. Phase 26 has not started. Production hardening
 remains deferred as described below.

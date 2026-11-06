@@ -1,5 +1,7 @@
 # Phase 20 — Pricing Events
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Scope: PricingRuleCreated, PricingRuleUpdated, PricingRuleEnabled and
 PricingRuleDisabled v1 only. Each successful existing ADMIN mutation stores a
 compact resulting-state event in the same transaction as the optimistic-lock rule

@@ -1,5 +1,7 @@
 # Phase 27 — PostgreSQL Performance Validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Validated 2026-11-04 (Asia/Bangkok). This performance deliverable coexists with the repository's already implemented Phase 27 Centralized Operations Dashboard. Its specification/report and frontend remain intact. No next phase was started.
 
 ## Method and reproducibility

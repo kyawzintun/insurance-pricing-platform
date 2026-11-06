@@ -1,5 +1,7 @@
 # Phase 22 — Audit UI
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Scope: ADMIN audit browsing only. Phase 23 (Refresh Tokens) is not started.
 
 ```text

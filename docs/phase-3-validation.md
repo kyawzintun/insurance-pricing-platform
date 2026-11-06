@@ -1,5 +1,7 @@
 # Phase 3 Validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Status: Complete, validated on 2026-10-03. Phase 4 — Authentication Basics has not started.
 
 ## Migration Inventory

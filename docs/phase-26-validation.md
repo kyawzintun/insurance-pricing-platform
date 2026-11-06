@@ -1,5 +1,7 @@
 # Phase 26 — Validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Validation date: 2026-11-03 (Asia/Bangkok). Scope is application observability/resilience only.
 No Phase 27 implementation, schema/index changes, frontend behavior, event contracts or
 new infrastructure services were added.

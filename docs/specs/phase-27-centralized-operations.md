@@ -1,5 +1,7 @@
 # Phase 27 — Centralized Operations Dashboard
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Phase 27 is a read-only aggregation/presentation layer over Phase 26. It adds no service,
 business counters, database/history, event contract, mutation API or monitoring infrastructure.
 The next project phase is not started. This phase supersedes the earlier roadmap placeholder

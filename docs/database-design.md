@@ -1,5 +1,25 @@
 # Database Design
 
+## Current Schema Overview
+
+Flyway migrations under each service are authoritative; Hibernate generation is disabled. UUID identities and foreign keys stay within a service. Cross-service SQL access is prohibited. Local bootstrap uses one shared DEV administrator account, not per-service grants.
+
+| Database | Tables | Current migrations |
+| --- | --- | --- |
+| auth_db | users, refresh_tokens, outbox_events | V1–V5 |
+| quote_db | vehicle_brands, vehicle_models, quotes, quote_drivers, quote_vehicles, pricing_breakdowns, pricing_adjustments, outbox_events | V1–V7 |
+| pricing_db | pricing_rules, outbox_events | V1–V4 |
+| notification_db | notifications, processed_events | V1–V2 |
+| audit_db | audit_records, processed_events | V1–V4 |
+
+Quote snapshots preserve historical vehicle names and pricing, with scalar ID pagination then bulk graph fetch. Auth/Quote/Pricing outboxes persist business/event intent atomically. Notification/Audit claim `(event_id, consumer_name)` in the same transaction as the effect. Refresh tokens are digest-only with locked rotation. Pricing version conflicts return 409; customer status changes use row locks.
+
+[Performance evidence](phase-27-postgres-performance-validation.md) covers Audit V4 correlation, Quote V7 ordered global ID history and Auth V5 expression/customer-page indexes, including write costs and deep-offset/count limits. Existing migrations were not rewritten. The sections below retain the schema evolution, seed rationale and original milestone-specific limitations.
+
+## Historical Evolution Notes
+
+> Milestone-specific statements below describe the implementation at that phase. Use the current overview above and the latest applicable milestone for present behavior.
+
 Status: Approved database boundaries recorded; detailed design pending migration from approved planning notes.
 
 All backend services will use PostgreSQL. Each microservice will own its own logical database. Cross-service database access is prohibited.

@@ -1,6 +1,6 @@
 # Local Infrastructure
 
-Phase 1 contains only PostgreSQL, Kafka, and a one-shot Kafka topic initializer. Run commands below from the repository root. See the root [README](../README.md) for connection details and optional `.env` overrides.
+Docker Compose contains only PostgreSQL, Kafka, and a one-shot Kafka topic initializer. The completed applications run separately through Maven; see the [current setup guide](../docs/local-development.md). Run commands below from the repository root. See the root [README](../README.md) for connection details and optional `.env` overrides.
 
 ## Initialization and Ownership
 
@@ -8,7 +8,7 @@ Phase 1 contains only PostgreSQL, Kafka, and a one-shot Kafka topic initializer.
 - `kafka/create-topics.sh` runs after the Kafka metadata health check succeeds. It creates the three domain topics and their DLQs with 3 partitions and replication factor 1. Repeating it is safe; it does not repair incorrectly configured existing topics.
 - `docker/` remains reserved for future shared Docker support.
 - Named volumes store PostgreSQL data and Kafka logs/metadata. Keep the Kafka cluster ID stable with its volume; it is an identifier, not a credential.
-- Future business tables and Flyway migrations belong in the owning Spring Boot service. No cross-service database access is allowed.
+- Business tables and Flyway migrations belong in the owning Spring Boot service. No cross-service database access is allowed.
 
 The pinned images are `postgres:17.11-bookworm` and `apache/kafka:4.1.2`. This is a single-machine learning environment with public development credentials and plaintext Kafka, not a production deployment.
 

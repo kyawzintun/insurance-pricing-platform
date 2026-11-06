@@ -1,5 +1,5 @@
-# Non-Functional Requirements
+# Non-Functional Requirements and Evidence
 
-Status: Planned / pending migration from approved planning notes.
+Implemented engineering boundaries include service-owned databases, independent authorization, durable event intent, idempotent local side effects, bounded HTTP waits/retries, safe errors/logs and observable dependency failures. Real PostgreSQL/Kafka integration tests cover transaction, concurrency and redelivery behavior; Angular tests cover session isolation and asynchronous state.
 
-Detailed non-functional requirements and measurable targets have not been supplied. No performance, availability, or deployment targets are established in Phase 0. Approved architectural constraints are recorded in [architecture.md](architecture.md).
+No production availability, throughput, compliance or disaster-recovery SLA is claimed. [PostgreSQL evidence](phase-27-postgres-performance-validation.md) measures SQL plans on local disposable datasets, not system capacity. [Security](security.md), [testing](testing.md) and [tradeoffs](engineering-tradeoffs.md) state operational limits and scope explicitly.

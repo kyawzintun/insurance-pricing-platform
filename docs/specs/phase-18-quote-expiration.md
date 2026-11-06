@@ -1,5 +1,7 @@
 # Phase 18 — Quote Expiration
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 The 30-day lifetime at quote creation is unchanged. Only stored PRICED quotes with
 `expires_at <= UTC Clock.instant()` are eligible, including equality. FAILED,
 EXPIRED and all other statuses are ignored. No repricing or external service call

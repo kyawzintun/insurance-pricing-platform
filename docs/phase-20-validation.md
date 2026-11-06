@@ -1,5 +1,7 @@
 # Phase 20 — Pricing Events validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Validated 2026-10-19 (Asia/Bangkok). Phase 20 only; Phase 21 is not started.
 
 ## Implementation report

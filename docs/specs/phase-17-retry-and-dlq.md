@@ -1,5 +1,7 @@
 # Phase 17 — Retry and DLQ
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Status: Implementation complete; validation evidence is recorded in [Phase 17 validation](../phase-17-validation.md).
 
 ## Goal and scope

@@ -1,5 +1,7 @@
 # UserDisabled and UserEnabled v1 — Phase 21
 
+> Current platform: complete through PostgreSQL tuning and portfolio polish. Contract details remain useful; phase-specific exclusions and superseded implementation steps are historical. See [current architecture](architecture.md), [security](security.md) and [event inventory](../README.md#event-overview).
+
 Only genuine CUSTOMER status transitions create these events. UserRegistered v1
 is unchanged. All three types share the existing Auth transactional outbox, publisher,
 `insurance.user.events` topic and userId Kafka key. Source/DLQ names still resolve

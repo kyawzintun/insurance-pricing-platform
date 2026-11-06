@@ -1,5 +1,7 @@
 # Phase 16 — Transactional Outbox validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Date: 2026-10-14. Scope: QuotePriced outbox in Quote Service only. No Phase 17 implementation. See [specification](specs/phase-16-transactional-outbox.md) and [design](transactional-outbox.md).
 
 ## Implementation inventory

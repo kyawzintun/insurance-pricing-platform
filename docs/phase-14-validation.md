@@ -1,5 +1,7 @@
 # Phase 14 — Audit Consumer Validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Completed 2026-10-13. Phase 15 is not implemented. No commit created.
 
 ## Automated results

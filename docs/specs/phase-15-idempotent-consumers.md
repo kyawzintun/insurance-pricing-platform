@@ -1,5 +1,7 @@
 # Phase 15 — Idempotent Consumers
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Status: Complete. See [validation evidence](../phase-15-validation.md).
 
 ## Goal and scope

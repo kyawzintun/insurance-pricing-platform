@@ -1,5 +1,7 @@
 # Phase 16 — Transactional Outbox
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Status: Implemented; validation results are recorded in [Phase 16 validation](../phase-16-validation.md).
 
 ## Goal and scope

@@ -1,5 +1,7 @@
 # Phase 11 — Angular Quote Flow
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Status: Complete; see [validation](../phase-11-validation.md). Source: approved Phase 11 request.
 
 ## Scope

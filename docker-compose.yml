@@ -1,4 +1,4 @@
-# Shared local infrastructure only; application services come in later phases.
+# Shared local infrastructure only; run the completed applications separately with Maven.
 services:
   postgres:
     image: postgres:17.11-bookworm

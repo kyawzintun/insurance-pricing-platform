@@ -1,5 +1,7 @@
 # Phase 9 — Quote Retrieval and Ownership
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Source: approved Phase 9 request. Scope: Quote retrieval and Gateway regression coverage; retain Phase 8 creation, schemas, seeds, and infrastructure. No Phase 10 implementation.
 
 ## Goal and endpoints

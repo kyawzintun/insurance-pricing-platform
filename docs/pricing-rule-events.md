@@ -1,5 +1,7 @@
 # Pricing rule events v1 — Phase 20
 
+> Current platform: complete through PostgreSQL tuning and portfolio polish. Contract details remain useful; phase-specific exclusions and superseded implementation steps are historical. See [current architecture](architecture.md), [security](security.md) and [event inventory](../README.md#event-overview).
+
 Successful ADMIN mutations emit exactly one operation-specific event:
 
 | Operation | Event |

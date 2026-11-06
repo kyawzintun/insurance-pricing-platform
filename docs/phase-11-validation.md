@@ -1,5 +1,7 @@
 # Phase 11 — Angular Quote Flow Validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Completed 2026-10-11. Scope: CUSTOMER Angular quote flow and minimal read-only vehicle reference APIs. Phase 12 is not started.
 
 ## Automated validation

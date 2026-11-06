@@ -1,6 +1,8 @@
 # Admin customer management — Phase 21
 
-Auth now independently validates the same HS256 bearer JWT/issuer/expiry/roles
+> Current platform: complete through PostgreSQL tuning and portfolio polish. Contract details remain useful; phase-specific exclusions and superseded implementation steps are historical. See [current architecture](architecture.md), [security](security.md) and [event inventory](../README.md#event-overview).
+
+Auth now independently validates the same RS256 bearer JWT/issuer/expiry/roles
 convention as Gateway and Pricing. Every endpoint below requires an authenticated
 ADMIN with a UUID subject. Missing/invalid bearer credentials return 401; CUSTOMER
 returns 403. A malformed ADMIN UUID is rejected safely with 403, without mutation.

@@ -1,5 +1,7 @@
 # Phase 21 — Admin Customer Management
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Implement ADMIN-only customer list/detail/disable/enable at
 /api/v1/admin/customers, independently authorized by Gateway and Auth. Bounded
 page/size pagination and explicit safe DTOs; CUSTOMER accounts only. Missing target

@@ -1,5 +1,23 @@
 # Kafka Design
 
+## Current Messaging Design
+
+Auth, Quote and Pricing publish versioned stored JSON envelopes through transactional outboxes. Notification and Audit have independent groups and atomic processed-event markers. Consumer retries are bounded, supported invalid input goes directly to DLQ, and source completion waits for successful processing or acknowledged recovery. Unknown event types skip. These are at-least-once semantics; automatic replay and exactly-once delivery are not implemented.
+
+| Topic | Producer | Supported consumer events |
+| --- | --- | --- |
+| insurance.quote.events | Quote | Notification/Audit: QuotePriced, QuoteExpired |
+| insurance.user.events | Auth | Notification: UserRegistered; Audit: UserRegistered, UserDisabled, UserEnabled |
+| insurance.pricing.events | Pricing | Audit: PricingRuleCreated, PricingRuleUpdated, PricingRuleEnabled, PricingRuleDisabled |
+
+Each main topic has three partitions, replication factor one locally and a matching `.dlq` topic. Keys are aggregate UUIDs; groups default to notification-service / audit-service. Committed offsets take precedence over earliest reset. The envelope includes eventId, eventType, eventVersion, aggregateType, aggregateId, occurredAt, correlationId, producer and data; consumers own their DTOs. Correlation IDs use bounded safe text; no credentials enter contracts.
+
+Current details: [outbox](transactional-outbox.md), [retry/DLQ](retry-and-dlq.md), [QuotePriced](quote-priced-event.md), [QuoteExpired](quote-expired-event.md), [registration](user-registered-event.md), [status](user-status-events.md), [pricing](pricing-rule-events.md). The sections below retain evolution notes: the Phase 12 direct publisher was removed in Phase 16, and stopping-only handlers were superseded by retry/DLQ in Phase 17.
+
+## Historical Evolution Notes
+
+> Milestone-specific statements below describe the implementation at that phase. Use the current overview above and the latest applicable milestone for present behavior.
+
 Status: Implemented through Phase 21. Earlier phase sections record historical milestones.
 
 Kafka carries QuotePriced/QuoteExpired, UserRegistered, and pricing-rule mutation events. Quote, Auth and Pricing publish through their local transactional outboxes. Audit consumes all three domains; Notification consumes quote/user events. Consumers reuse idempotency and retry/DLQ handling.

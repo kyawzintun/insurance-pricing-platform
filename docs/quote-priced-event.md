@@ -1,5 +1,7 @@
 # QuotePriced — Version 1
 
+> Current platform: complete through PostgreSQL tuning and portfolio polish. Contract details remain useful; phase-specific exclusions and superseded implementation steps are historical. See [current architecture](architecture.md), [security](security.md) and [event inventory](../README.md#event-overview).
+
 Status: Contract introduced in Phase 12; durable outbox publishing implemented in Phase 16. Producer: Quote Service. Consumers: Notification and Audit.
 
 ## Routing and encoding

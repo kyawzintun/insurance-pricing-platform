@@ -1,5 +1,7 @@
 # Phase 19 — Auth/User Events
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Implement UserRegistered v1 only, following the existing producer outbox and
 consumer idempotency/retry architecture. See [contract](../user-registered-event.md)
 for schema, flow, privacy, configuration, concurrency and failure semantics.

@@ -1,5 +1,7 @@
 # Phase 12 — Basic QuotePriced Kafka Event
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Status: Complete; see [validation](../phase-12-validation.md). Source: approved Phase 12 request.
 
 ## Scope and contract

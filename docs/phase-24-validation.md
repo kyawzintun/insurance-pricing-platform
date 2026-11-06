@@ -1,5 +1,7 @@
 # Phase 24 validation — 23 October 2026
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Phase 24 — Asymmetric JWT is complete. Phase 25 — Service-to-Service Authentication
 is not started. This is the phase-completion assessment for the learning platform;
 production deployment still requires external keys and the existing infrastructure

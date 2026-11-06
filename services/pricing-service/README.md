@@ -1,5 +1,7 @@
 # Pricing Service — Calculation and Administration
 
+> **Current project status: COMPLETE.** Use the [portfolio README](../../README.md), [local run/environment guide](../../docs/local-development.md), [architecture](../../docs/architecture.md), [security](../../docs/security.md) and [testing commands](../../docs/testing.md) for current behavior. The phase sections below preserve implementation evolution and detailed API examples. Earlier HS256, direct-publisher, unauthenticated-internal and deferred-feature statements are historical: current auth is RS256 with service tokens, all three producers use outboxes, and consumers use idempotency plus retry/DLQ.
+
 ## Phase 25 — Service authentication
 
 Quote obtains short-lived RS256 service tokens directly from Auth with its external

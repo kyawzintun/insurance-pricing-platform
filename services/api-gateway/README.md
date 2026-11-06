@@ -1,5 +1,7 @@
 # API Gateway — Auth, Pricing Administration, and Quotes
 
+> **Current project status: COMPLETE.** Use the [portfolio README](../../README.md), [local run/environment guide](../../docs/local-development.md), [architecture](../../docs/architecture.md), [security](../../docs/security.md) and [testing commands](../../docs/testing.md) for current behavior. The phase sections below preserve implementation evolution and detailed API examples. Earlier HS256, direct-publisher, unauthenticated-internal and deferred-feature statements are historical: current auth is RS256 with service tokens, all three producers use outboxes, and consumers use idempotency plus retry/DLQ.
+
 ## Phase 24 — RS256 access JWTs
 
 Auth now signs access JWTs with a private RSA key using **RS256 only**. Auth's admin

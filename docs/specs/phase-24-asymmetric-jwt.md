@@ -1,5 +1,7 @@
 # Phase 24 — Asymmetric JWT
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Access JWTs use **RS256 only**, with one configured RSA pair. Auth owns the private
 signing key and public verification key. Gateway, Quote, Pricing and Audit receive
 only the public key and independently validate each bearer token. Auth's admin

@@ -1,5 +1,7 @@
 # Phase 22 — Audit UI validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Validated 2026-10-20 (Asia/Bangkok). Phase 22 only. Phase 23 — Refresh Tokens has not started.
 
 ## Implementation report

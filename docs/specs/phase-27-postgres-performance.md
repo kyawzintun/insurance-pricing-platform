@@ -1,5 +1,7 @@
 # Phase 27 — PostgreSQL Performance
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Status: implemented and validated on 2026-11-04. Scoped separately from the existing Phase 27 centralized-operations deliverable; no next phase work.
 
 ## Contract

@@ -1,5 +1,7 @@
 # Phase 1 Validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Status: Complete. Executed on 2026-10-02 with Docker 29.8.0 and Docker Compose 5.5.1 on macOS (ARM64 images).
 
 ## Environment

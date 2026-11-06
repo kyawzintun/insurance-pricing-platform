@@ -1,5 +1,7 @@
 # Phase 25 — Service-to-Service Authentication
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 The only existing synchronous backend call, Quote -> Pricing, now uses a focused
 client-credentials-style exchange. No full OAuth2 Authorization Server, database
 client registry, new Kafka event, service refresh token, or Phase 26 work is added.

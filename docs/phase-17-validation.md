@@ -1,5 +1,7 @@
 # Phase 17 — Retry and DLQ validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Date: 2026-10-16. **Complete and ready for Phase 18 — Quote Expiration. Phase 18 has not started.**
 
 ## Scope and files

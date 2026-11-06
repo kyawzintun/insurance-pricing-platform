@@ -1,5 +1,7 @@
 # Consumer Retry and Dead Letter Queue — Phase 17
 
+> Current platform: complete through PostgreSQL tuning and portfolio polish. Contract details remain useful; phase-specific exclusions and superseded implementation steps are historical. See [current architecture](architecture.md), [security](security.md) and [event inventory](../README.md#event-overview).
+
 Notification and Audit use the same policy for QuotePriced consumption. Quote's Phase 16 transactional outbox, the v1 JSON contract, business processing, and Phase 15 idempotency are unchanged.
 
 ## Flow and acknowledgment

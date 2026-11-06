@@ -1,21 +1,12 @@
-# Functional Requirements
+# Functional Requirements — Implemented Scope
 
-Status: High-level planned features recorded from the Phase 0 request; detailed behavior and acceptance criteria pending migration from approved planning notes.
+- CUSTOMER registration/login/logout, session restoration and rotating refresh tokens.
+- Quote creation with immediate database-rule pricing, owned history/detail and immutable historical snapshots.
+- Automatic 30-day PRICED → EXPIRED transition with durable event intent.
+- ADMIN APIs for pricing-rule list/detail/create/update/enable/disable with version conflicts.
+- ADMIN APIs for CUSTOMER list/detail/enable/disable with serialized real transitions.
+- ADMIN Audit UI/API with exact filters, pagination and immutable detail.
+- ADMIN Operations UI/API with concurrent health/curated-metric collection and partial-failure handling.
+- Asynchronous simulated notifications and audit records with outbox publication, idempotency and retry/DLQ.
 
-Planned, not implemented:
-
-- Customer registration and authentication
-- Car insurance quote creation
-- Database-driven pricing rules
-- Quote pricing breakdown
-- Admin pricing-rule management
-- Quote ownership security
-- Kafka-based notifications
-- Kafka-based audit logging
-- 30-day quote expiration
-
-Main users: CUSTOMER and ADMIN. Detailed workflows, validation rules, and expiration semantics remain unspecified.
-
-## Phase 4 Implemented Scope
-
-Auth Service registration/login, canonical email handling, BCrypt passwords, user role/status enforcement, and configurable access-token issuance are implemented. Refresh tokens and all other planned platform features remain deferred. Endpoint contracts are in the [Auth README](../services/auth-service/README.md).
+Pricing/customer administration is API-only. No quote edit/delete/reprice, real notification delivery, admin registration or actuarial model is included. Current contracts are linked from the [README API/event overview](../README.md#api-overview); historical acceptance criteria remain in [specifications](specs/README.md).

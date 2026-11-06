@@ -1,5 +1,7 @@
 # Phase 19 — Auth/User Events validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Validated 2026-10-17 (Asia/Bangkok). Phase 19 only. No Phase 20 implementation.
 
 ## Contract and implementation

@@ -1,5 +1,7 @@
 # Phase 6 — Pricing Service MVP
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Source: approved Phase 6 implementation request. Scope and implementation choices are recorded here for later phases.
 
 ## Goal and scope

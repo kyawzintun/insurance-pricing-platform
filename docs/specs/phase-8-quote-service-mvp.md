@@ -1,5 +1,7 @@
 # Phase 8 — Quote Service MVP
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Source: approved Phase 8 request. Scope: Quote Service and Gateway; preserve existing schemas, seed data, Pricing/Auth behavior, and earlier tests.
 
 ## Goal and API

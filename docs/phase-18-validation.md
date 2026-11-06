@@ -1,5 +1,7 @@
 # Phase 18 — Quote Expiration validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Date: 2026-10-17 (Asia/Bangkok). **Phase 18 complete and ready for Phase 19 —
 Auth/User Events. Phase 19 has not started.**
 

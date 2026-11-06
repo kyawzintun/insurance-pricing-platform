@@ -1,5 +1,7 @@
 # Phase 5 — API Gateway and JWT Validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Status: Complete. Validated locally on 2026-10-04 with Java 25.0.1. Phase 6 has not started.
 
 ## Automated validation

@@ -1,5 +1,7 @@
 # Transactional Outbox — Quote Service
 
+> Current platform: complete through PostgreSQL tuning and portfolio polish. Contract details remain useful; phase-specific exclusions and superseded implementation steps are historical. See [current architecture](architecture.md), [security](security.md) and [event inventory](../README.md#event-overview).
+
 Quote outbox was introduced in Phase 16 and extended for QuoteExpired in Phase 18. Phase 19 adds a service-local Auth outbox publisher for UserRegistered. Phase 20 adds pricing-rule mutation intents and a Pricing publisher. Notification and Audit retain Phase 15 idempotency.
 
 ## Why it is needed

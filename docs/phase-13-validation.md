@@ -1,5 +1,7 @@
 # Phase 13 — Notification Consumer Validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Completed 2026-10-12. Phase 14 has not started. No commit created.
 
 ## Automated results

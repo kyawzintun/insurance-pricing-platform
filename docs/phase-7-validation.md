@@ -1,5 +1,7 @@
 # Phase 7 — Pricing Administration Validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Status: Complete. Validated on 2026-10-07 with Java 25.0.1. Phase 8 — Quote Service MVP has not started.
 
 ## Automated build and tests

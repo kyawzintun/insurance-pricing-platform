@@ -1,5 +1,7 @@
 # Phase 23 — Refresh Tokens
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Implemented using the existing `refresh_tokens` schema; no migration or event changes.
 Phase 24 asymmetric JWT is excluded.
 

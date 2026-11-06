@@ -1,5 +1,7 @@
 # Phase 26 — Observability & Resilience
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Phase 26 adds application-level visibility and bounded failure handling only. Pricing rules,
 event envelopes, JWT architecture, local transaction boundaries, Kafka acknowledgment,
 idempotency, retry/DLQ and outbox advisory locks are unchanged. Phase 27 is not implemented.

@@ -1,5 +1,7 @@
 # UserRegistered v1
 
+> Current platform: complete through PostgreSQL tuning and portfolio polish. Contract details remain useful; phase-specific exclusions and superseded implementation steps are historical. See [current architecture](architecture.md), [security](security.md) and [event inventory](../README.md#event-overview).
+
 New registrations after Phase 19 commit a user and immutable event intent in the
 same Auth PostgreSQL transaction. Existing users are unchanged; no historical
 backfill runs. HTTP 201 means both writes committed, independently of Kafka availability.

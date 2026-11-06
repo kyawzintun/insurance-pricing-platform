@@ -1,5 +1,7 @@
 # Phase 9 — Quote Retrieval and Ownership Validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Status: Complete on 2026-10-10 with Java 25.0.1. Phase 10 — Angular Foundation has not started.
 
 ## Automated Maven validation

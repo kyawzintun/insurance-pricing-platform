@@ -1,5 +1,7 @@
 # Phase 23 validation — 22 October 2026
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Implemented Phase 23 only. No migration, asymmetric JWT, business-service changes,
 new events or outbox semantics were introduced.
 

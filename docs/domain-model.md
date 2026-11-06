@@ -1,11 +1,11 @@
 # Domain Model
 
-Status: Planned / pending migration from approved planning notes.
+| Owner | Main concepts / invariants |
+| --- | --- |
+| Auth | User UUID, CUSTOMER/ADMIN, ACTIVE/DISABLED; BCrypt password; hash-only rotating refresh tokens |
+| Quote | Quote UUID/reference, CUSTOMER owner, PRICED/EXPIRED lifecycle; driver, vehicle and pricing snapshots; quote expiration |
+| Pricing | Effective/enabled pricing rules, fixed premiums/factors, optimistic version; deterministic BigDecimal calculation |
+| Notification | Simulated CREATED notification derived from supported quote/registration events |
+| Audit | Immutable event record with actor, entity, occurrence/correlation and allowlisted JSON metadata |
 
-The approved scope is simple car-insurance quotes and pricing rules, with CUSTOMER and ADMIN users. Detailed entities, attributes, relationships, and lifecycle transitions remain unspecified. No domain implementation or database schema is defined in Phase 0.
-
-## Phase 3 — Relational Foundation
-
-The approved Phase 3 table structures, relationships, reference snapshots, constraints, and educational seeds are now recorded in [database design](database-design.md) and implemented by service-owned Flyway migrations. No Java domain entities or domain behavior have been implemented.
-
-Phase 4 maps Auth users to a JPA entity with CUSTOMER/ADMIN roles and ACTIVE/DISABLED status. Other service entities remain unimplemented.
+No entities or database foreign keys cross service boundaries. Quotes preserve names, selected rule identities/versions and premium results at creation rather than re-reading current pricing on retrieval. Producers own outbox intent; consumers own processed-event markers. See [database design](database-design.md) for actual tables and [event contracts](kafka-design.md) for communication.

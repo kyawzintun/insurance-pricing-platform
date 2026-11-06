@@ -1,35 +1,27 @@
-# Implementation Specifications
+# Implementation Specifications (Historical Milestones)
 
-This directory will hold feature specifications for specification-first, incremental implementation. No implementation specifications are created in Phase 0.
+These files preserve each approved implementation scope. Later milestones supersede older limitations; all planned work is complete. The two Phase 27 scopes retain their original names. Start with the [current README](../../README.md), not an old phase prompt, for present behavior.
 
-Each implementation feature may later have a specification covering:
-
-- Goal
-- Scope
-- Functional behavior
-- API impact
-- Database impact
-- Kafka impact
-- Security considerations
-- Testing requirements
-- Definition of Done
-
-Record approved behavior and identify unresolved questions before implementation. Keep specifications aligned with the current phase and approved architecture.
-
-## Phase 18 — Quote Expiration
-
-Automatic PRICED → EXPIRED transitions use bounded PostgreSQL transactions and the existing outbox. Notification supports QUOTE_EXPIRED; Audit uses a SYSTEM actor. See the [Phase 18 specification](phase-18-quote-expiration.md) for configuration, contract, concurrency and failure semantics. Phase 19 is outside this change.
-
+- [Phase 6 — Pricing Service MVP](phase-6-pricing-service-mvp.md)
+- [Phase 7 — Pricing Administration](phase-7-pricing-administration.md)
+- [Phase 8 — Quote Service MVP](phase-8-quote-service-mvp.md)
+- [Phase 9 — Quote Retrieval and Ownership](phase-9-quote-retrieval-and-ownership.md)
+- [Phase 10 — Angular Foundation](phase-10-angular-foundation.md)
+- [Phase 11 — Angular Quote Flow](phase-11-angular-quote-flow.md)
+- [Phase 12 — Basic QuotePriced Kafka Event](phase-12-quote-priced-event.md)
+- [Phase 13 — Notification Consumer](phase-13-notification-consumer.md)
+- [Phase 14 — Audit Consumer](phase-14-audit-consumer.md)
+- [Phase 15 — Idempotent Consumers](phase-15-idempotent-consumers.md)
+- [Phase 16 — Transactional Outbox](phase-16-transactional-outbox.md)
+- [Phase 17 — Retry and DLQ](phase-17-retry-and-dlq.md)
+- [Phase 18 — Quote Expiration](phase-18-quote-expiration.md)
 - [Phase 19 — Auth/User Events](phase-19-auth-user-events.md)
-
 - [Phase 20 — Pricing Events](phase-20-pricing-events.md)
-
 - [Phase 21 — Admin Customer Management](phase-21-admin-customer-management.md)
-
-- [Phase 22 — Audit UI](phase-22-audit-ui.md): ADMIN-only immutable audit history, bounded exact filters and pagination, safe metadata details.
-
+- [Phase 22 — Audit UI](phase-22-audit-ui.md)
+- [Phase 23 — Refresh Tokens](phase-23-refresh-tokens.md)
 - [Phase 24 — Asymmetric JWT](phase-24-asymmetric-jwt.md)
-
 - [Phase 25 — Service-to-Service Authentication](phase-25-service-authentication.md)
-
-- [Phase 27 — PostgreSQL Performance](phase-27-postgres-performance.md): measured query plans and targeted indexes; coexists with the existing operations dashboard milestone.
+- [Phase 26 — Observability & Resilience](phase-26-observability-resilience.md)
+- [Phase 27 — Centralized Operations Dashboard](phase-27-centralized-operations.md)
+- [Phase 27 — PostgreSQL Performance](phase-27-postgres-performance.md)

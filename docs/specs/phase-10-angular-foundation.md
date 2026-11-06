@@ -1,5 +1,7 @@
 # Phase 10 — Angular Foundation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../../README.md).
+
 Source: approved Phase 10 request. Scope: frontend foundation only. Preserve backend APIs, migrations, infrastructure, and existing tests. No Phase 11 quote UI.
 
 ## Goal and routes

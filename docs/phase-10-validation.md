@@ -1,5 +1,7 @@
 # Phase 10 — Angular Foundation Validation
 
+> Historical milestone record: scope, commands, counts and limitations below describe that revision. For the completed implementation and current run instructions, start with the [root README](../README.md).
+
 Completed on 2026-10-11. Scope: frontend authentication foundation only.
 
 ## Automated checks
